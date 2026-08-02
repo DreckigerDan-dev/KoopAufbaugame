@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/world/Minimap.gd" id="1"]
+
+[node name="MinimapUI" type="CanvasLayer"]
+
+[node name="Panel" type="Panel" parent="."]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -208.0
+offset_top = -208.0
+offset_right = -16.0
+offset_bottom = -16.0
+
+[node name="Minimap" type="Control" parent="Panel"]
+script = ExtResource("1")
+layout_mode = 1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0

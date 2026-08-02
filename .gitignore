@@ -1,0 +1,6 @@
+# Manuelles Backup-Archiv, redundant mit dem versionierten koop-game/-Ordner
+koop-game.7z
+
+# OS-Kram
+.DS_Store
+Thumbs.db

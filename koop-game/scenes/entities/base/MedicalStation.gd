@@ -1,0 +1,12 @@
+extends StaticBody3D
+## Baubares Gebäude: erweitert die Heilzone der eigenen Basis, siehe
+## docs/survivor.md, "Heilung" — Trupps in der Nähe heilen schneller als
+## nur an der Basis. Bewusst schlank: kein HP (wie GuardPost, siehe
+## docs/building.md, "Bekannte Grenzen"), kein Bautimer (anders als
+## GuardPost — hier gibt es kein "fertig gebaut"-Feedback wie Feuern, das
+## eine Baufortschritts-Animation rechtfertigen würde). Gruppe
+## "medical_station" wird über den `.tscn`-Node-Header gesetzt (siehe
+## docs/3d-migration.md für den Grund).
+
+var medical_station_id: int = 0
+var owner_peer_id: int = 1

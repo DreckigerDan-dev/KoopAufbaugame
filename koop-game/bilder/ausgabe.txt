@@ -1,0 +1,15 @@
+
+Embedded window only supports Windowed mode.
+--- Debugging process stopped ---
+--- road_corner (res://assets/road_corner.glb) ---
+  Surface 0: 144 Vertices, Schwerpunkt = (-1.916692, -0.000002, 1.899949)
+  Surface 1: 24 Vertices, Schwerpunkt = (0.0, 0.0, 0.0)
+  GESAMT-Schwerpunkt: (-1.642879, -0.000002, 1.628528) -> Masse liegt Richtung Süd (+Z) / West (-X)
+  (bei road_corner: die zwei offenen Kanten liegen in dieser Ecke;
+   bei road_t: die geschlossene Kante liegt auf der GEGENÜBERLIEGENDEN Seite)
+--- road_t (res://assets/road_t.glb) ---
+  Surface 0: 192 Vertices, Schwerpunkt = (-0.000057, -0.000002, 2.449932)
+  Surface 1: 24 Vertices, Schwerpunkt = (-0.0, 0.0, 0.000001)
+  GESAMT-Schwerpunkt: (-0.000051, -0.000002, 2.177717) -> Masse liegt Richtung Süd (+Z) / West (-X)
+  (bei road_corner: die zwei offenen Kanten liegen in dieser Ecke;
+   bei road_t: die geschlossene Kante liegt auf der GEGENÜBERLIEGENDEN Seite)

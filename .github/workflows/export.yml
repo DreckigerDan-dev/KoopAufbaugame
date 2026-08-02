@@ -1,0 +1,49 @@
+name: Export Windows Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7-stable
+
+jobs:
+  export-windows:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Export Windows build
+        id: export
+        uses: firebelley/godot-export@v8.0.0
+        with:
+          godot_executable_download_url: https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}/Godot_v${{ env.GODOT_VERSION }}_linux.x86_64.zip
+          godot_export_templates_download_url: https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}/Godot_v${{ env.GODOT_VERSION }}_export_templates.tpz
+          relative_project_path: ./koop-game
+          archive_output: true
+          presets_to_export: "Windows Desktop"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: koopgame-windows
+          path: ${{ steps.export.outputs.archive_directory }}
+
+      # Legt/aktualisiert einen einzigen Release "latest-build" mit dem
+      # jeweils neuesten Windows-Build als Anhang — direkt per Link
+      # herunterladbar, ohne GitHub-Login (anders als Workflow-Artifacts,
+      # die einen eingeloggten Account brauchen). Wird bei jedem Push nach
+      # main überschrieben, kein wachsender Release-Verlauf.
+      - name: Publish/update "latest-build" release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest-build
+          name: "Neuester Build"
+          body: "Automatisch gebaut aus dem aktuellen main-Branch. Kein fester Release, wird bei jedem Push überschrieben."
+          allowUpdates: true
+          removeArtifacts: true
+          artifacts: "${{ steps.export.outputs.archive_directory }}/*"

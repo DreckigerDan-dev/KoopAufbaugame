@@ -1,0 +1,495 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scenes/world/World.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/world/PauseMenu.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/world/Minimap.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/world/MapView.tscn" id="7"]
+[ext_resource type="MeshLibrary" path="res://assets/street_tiles.meshlib" id="8"]
+
+[sub_resource type="Environment" id="Environment_day_night"]
+background_mode = 1
+background_color = Color(0.55, 0.75, 0.95, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.75, 0.95, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_ground"]
+size = Vector3(10, 0.2, 10)
+
+[sub_resource type="StandardMaterial3D" id="Material_ground"]
+albedo_color = Color(0.22, 0.32, 0.2, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(10, 0.2, 10)
+
+[sub_resource type="BoxMesh" id="BoxMesh_build_ghost"]
+size = Vector3(1.5, 1.5, 1.5)
+
+[node name="World" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_day_night")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+position = Vector3(0, 10, 0)
+rotation_degrees = Vector3(-50, -30, 0)
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("BoxMesh_ground")
+surface_material_override/0 = SubResource("Material_ground")
+
+[node name="Collision" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("BoxShape3D_ground")
+
+[node name="BuildingSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Buildings")
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="StreetGridMap" type="GridMap" parent="."]
+mesh_library = ExtResource("8")
+cell_size = Vector3(12, 0.2, 12)
+cell_center_y = false
+position = Vector3(0, -0.1, 0)
+
+[node name="VehicleSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Vehicles")
+
+[node name="Vehicles" type="Node3D" parent="."]
+
+[node name="ZombieNestSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../ZombieNests")
+
+[node name="ZombieNests" type="Node3D" parent="."]
+
+[node name="SurvivorSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Survivors")
+
+[node name="Survivors" type="Node3D" parent="."]
+
+[node name="HomeBaseSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../HomeBases")
+
+[node name="HomeBases" type="Node3D" parent="."]
+
+[node name="ZombieSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Zombies")
+
+[node name="Zombies" type="Node3D" parent="."]
+
+[node name="GuardPostSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../GuardPosts")
+
+[node name="GuardPosts" type="Node3D" parent="."]
+
+[node name="WallSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Walls")
+
+[node name="Walls" type="Node3D" parent="."]
+
+[node name="MedicalStationSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../MedicalStations")
+
+[node name="MedicalStations" type="Node3D" parent="."]
+
+[node name="BedSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Beds")
+
+[node name="Beds" type="Node3D" parent="."]
+
+[node name="WorkshopSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Workshops")
+
+[node name="Workshops" type="Node3D" parent="."]
+
+[node name="StorageSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Storages")
+
+[node name="Storages" type="Node3D" parent="."]
+
+[node name="TreeSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Trees")
+
+[node name="Trees" type="Node3D" parent="."]
+
+[node name="CarWreckSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../CarWrecks")
+
+[node name="CarWrecks" type="Node3D" parent="."]
+
+[node name="StonePileSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../StonePiles")
+
+[node name="StonePiles" type="Node3D" parent="."]
+
+[node name="BrickPileSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../BrickPiles")
+
+[node name="BrickPiles" type="Node3D" parent="."]
+
+[node name="FieldSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Fields")
+
+[node name="Fields" type="Node3D" parent="."]
+
+[node name="OutpostSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Outposts")
+
+[node name="Outposts" type="Node3D" parent="."]
+
+[node name="BuildGhost" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("BoxMesh_build_ghost")
+
+[node name="BuildGhostLine" type="Node3D" parent="."]
+
+[node name="Pivot" type="Node3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="Pivot"]
+position = Vector3(0, 10, 10)
+current = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 400.0
+offset_bottom = 120.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 20
+text = "Keine Auswahl"
+
+[node name="BaseChoiceLabel" type="Label" parent="HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 16.0
+offset_right = 260.0
+offset_bottom = 60.0
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 22
+text = "Wähle deine Start-Basis — klicke auf eines der Gebäude"
+
+[node name="StatusLabel" type="Label" parent="HUD"]
+visible = false
+offset_left = 16.0
+offset_top = 128.0
+offset_right = 500.0
+offset_bottom = 156.0
+theme_override_colors/font_color = Color(1, 0.75, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 18
+
+[node name="ResourcesUI" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="Panel" parent="ResourcesUI"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -260.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 290.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ResourcesUI/Panel"]
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 232.0
+offset_bottom = 264.0
+theme_override_constants/separation = 4
+
+[node name="ClockLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
+theme_override_font_sizes/font_size = 16
+text = "00:00"
+
+[node name="TitleLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
+theme_override_font_sizes/font_size = 18
+text = "Ressourcen"
+
+[node name="TabContainer" type="TabContainer" parent="ResourcesUI/Panel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 150)
+
+[node name="Rohstoffe" type="VBoxContainer" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
+theme_override_constants/separation = 4
+
+[node name="BuildCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Baurohstoffe"
+
+[node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
+theme_override_font_sizes/font_size = 16
+text = "—"
+
+[node name="BooksCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Forschungsbücher"
+
+[node name="BooksResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
+theme_override_font_sizes/font_size = 16
+text = "—"
+
+[node name="Ausrüstung" type="VBoxContainer" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
+theme_override_constants/separation = 4
+
+[node name="SurvivalCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Überleben"
+
+[node name="SurvivalResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
+theme_override_font_sizes/font_size = 16
+text = "—"
+
+[node name="GearCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "Ausrüstung"
+
+[node name="GearResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
+theme_override_font_sizes/font_size = 16
+text = "—"
+
+[node name="ZombieCountLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
+theme_override_font_sizes/font_size = 14
+text = "Zombies: 0/200"
+
+[node name="MainTabsUI" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="Panel" parent="MainTabsUI"]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -420.0
+offset_right = 376.0
+offset_bottom = -16.0
+
+[node name="TabContainer" type="TabContainer" parent="MainTabsUI/Panel"]
+layout_mode = 1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+
+[node name="Bauen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+theme_override_constants/separation = 6
+
+[node name="BuildButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Wachposten bauen (30 Holz)"
+
+[node name="WallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Mauer bauen (15 Stein)"
+
+[node name="GateButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Tor bauen (20 Metall)"
+
+[node name="FieldButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Feld bauen (20 Holz)"
+
+[node name="OutpostButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Außenposten bauen (15 Holz, 10 Stein)"
+
+[node name="BuildSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+
+[node name="WorkersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+
+[node name="UpgradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+
+[node name="UpgradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Ausbauen:"
+
+[node name="UpgradeMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Zu Krankenstation ausbauen (25 Ziegel)"
+
+[node name="UpgradeWorkshopButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Zu Werkstatt ausbauen (25 Metall)"
+
+[node name="UpgradeStorageButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Zu Lager ausbauen (30 Holz)"
+
+[node name="UpgradeBedButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Zu Schlafraum ausbauen (20 Holz)"
+
+[node name="Herstellen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+visible = false
+theme_override_constants/separation = 4
+
+[node name="RecipeList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Herstellen"]
+theme_override_constants/separation = 4
+
+[node name="Einheiten" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+visible = false
+theme_override_constants/separation = 4
+
+[node name="GroupRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+
+[node name="SelectGroup1Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+text = "Gruppe 1"
+
+[node name="SelectGroup2Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+text = "Gruppe 2"
+
+[node name="SelectGroup3Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+text = "Gruppe 3"
+
+[node name="UnitsList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+
+[node name="Trupp" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+visible = false
+theme_override_constants/separation = 6
+
+[node name="StatsLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_font_sizes/font_size = 14
+text = "Kein Trupp ausgewählt."
+
+[node name="WeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_constants/separation = 8
+
+[node name="WeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow"]
+theme_override_font_sizes/font_size = 14
+text = "Waffe: keine"
+custom_minimum_size = Vector2(150, 0)
+
+[node name="WeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow"]
+text = "Ausrüsten"
+
+[node name="ArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_constants/separation = 8
+
+[node name="ArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow"]
+theme_override_font_sizes/font_size = 14
+text = "Brustpanzer: keine"
+custom_minimum_size = Vector2(150, 0)
+
+[node name="ArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow"]
+text = "Anziehen"
+
+[node name="HelmetRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_constants/separation = 8
+
+[node name="HelmetStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow"]
+theme_override_font_sizes/font_size = 14
+text = "Helm: keiner"
+custom_minimum_size = Vector2(150, 0)
+
+[node name="HelmetButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow"]
+text = "Anziehen"
+
+[node name="SecondaryWeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_constants/separation = 8
+
+[node name="SecondaryWeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow"]
+theme_override_font_sizes/font_size = 14
+text = "Nahkampfwaffe: keine"
+custom_minimum_size = Vector2(150, 0)
+
+[node name="SecondaryWeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow"]
+text = "Ausrüsten"
+
+[node name="LegArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+theme_override_constants/separation = 8
+
+[node name="LegArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow"]
+theme_override_font_sizes/font_size = 14
+text = "Beinschutz: keiner"
+custom_minimum_size = Vector2(150, 0)
+
+[node name="LegArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow"]
+text = "Anziehen"
+
+[node name="Handel" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+visible = false
+theme_override_constants/separation = 4
+
+[node name="PeerLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+text = "Ziel-Spieler:"
+
+[node name="PeerOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="GiftSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="GiftLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+text = "Schenken"
+
+[node name="GiftRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="GiftResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+custom_minimum_size = Vector2(140, 0)
+
+[node name="GiftAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+min_value = 1.0
+max_value = 99999.0
+value = 10.0
+
+[node name="GiftButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+text = "Schenken"
+
+[node name="TradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="TradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+text = "Tauschen"
+
+[node name="TradeOfferRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="OfferLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+text = "Ich gebe:"
+custom_minimum_size = Vector2(60, 0)
+
+[node name="TradeOfferResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+custom_minimum_size = Vector2(120, 0)
+
+[node name="TradeOfferAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+min_value = 1.0
+max_value = 99999.0
+value = 10.0
+
+[node name="TradeWantRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="WantLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+text = "Ich will:"
+custom_minimum_size = Vector2(60, 0)
+
+[node name="TradeWantResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+custom_minimum_size = Vector2(120, 0)
+
+[node name="TradeWantAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+min_value = 1.0
+max_value = 99999.0
+value = 10.0
+
+[node name="TradeOfferButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel"]
+text = "Angebot senden"
+
+[node name="OffersSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+
+[node name="OffersLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+text = "Angebote"
+
+[node name="OffersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+theme_override_constants/separation = 2
+
+[node name="PauseMenu" parent="." instance=ExtResource("5")]
+
+[node name="MinimapUI" parent="." instance=ExtResource("6")]
+
+[node name="MapViewUI" parent="." instance=ExtResource("7")]
