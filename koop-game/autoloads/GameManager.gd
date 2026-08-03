@@ -18,6 +18,23 @@ const STATE_SCENES := {
 var current_state: GameState = GameState.MAIN_MENU
 
 
+func _ready() -> void:
+	multiplayer.peer_connected.connect(_on_peer_connected)
+
+
+func _on_peer_connected(id: int) -> void:
+	# Späteren Beitritt ermöglichen: der Host schickt jedem neu verbundenen
+	# Peer gezielt seinen AKTUELLEN State (statt dass der Client lokal blind
+	# LOBBY annimmt, siehe MainMenu._on_connection_succeeded()). Ist der Host
+	# schon IN_GAME (egal ob per "Spiel starten", Solo oder Laden dorthin
+	# gekommen), landet der neue Peer direkt in World.tscn und holt sich dort
+	# über request_catch_up()/request_city_zones() den Rest (siehe World.gd,
+	# _ready()).
+	if not multiplayer.is_server():
+		return
+	_rpc_change_state.rpc_id(id, current_state)
+
+
 func change_state(new_state: GameState) -> void:
 	if new_state == current_state:
 		return

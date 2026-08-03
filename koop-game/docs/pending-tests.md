@@ -1,5 +1,124 @@
 # Offene Tests
 
+## Formation: Anführer + Kreis statt Raster (siehe `commander.md`, 2026-08-03)
+
+Nutzer-Feedback aus dem ersten echten Koop-Test: "truppen laufen immernoch
+zu nah zusammen die sollten sich wie ein gruppe verhalten einer vorne die
+ander um ihn rum bissle vereteilt".
+
+1. ⬜ Mehrere eigene Trupps auswählen (Shift-Klick), gemeinsamen
+   Bewegungsbefehl geben — der ZUERST ausgewählte Trupp läuft exakt zum
+   Zielpunkt, alle weiteren verteilen sich sichtbar im Kreis darum, nicht
+   mehr in einem engen Raster/Klumpen.
+2. ⬜ Deutlich mehr Abstand zwischen den Trupps als vorher (`FORMATION_
+   RADIUS := 2.0` statt der alten 1.2m-Rasterlücke) — Gegenprobe, ob das
+   fürs Gefühl "nicht mehr zu nah zusammen" reicht oder noch mehr Abstand
+   nötig ist.
+3. ⬜ Funktioniert auch beim Gruppen-Angriffsbefehl (mehrere Trupps auf
+   einen Zombie/Nest) und beim Bau-/Claim-Befehl auf ein Gebäude, nicht
+   nur bei reiner Bodenbewegung — `_formation_offset()` wird an allen drei
+   Stellen genutzt.
+
+## Schnell-Check vor jedem tieferen Test (immer zuerst)
+
+1. ✅ F5 (Solo reicht) — Konsole beim Start auf GDScript-Parse-/
+   Laufzeitfehler prüfen (warnings-as-errors, siehe `ARCHITECTURE.md`).
+   **Vom Nutzer getestet (2026-08-03, per Screenshot):** ein Parser-Fehler
+   gefunden und behoben (`viewport_size`-Typinferenz in der
+   Gamepad-Steuerung) — seitdem noch nicht erneut bestätigt, ob der
+   gesamte 2026-08-03-Abend-Batch fehlerfrei startet.
+
+## Gamepad-Steuerung (siehe `world.md`, "Gamepad-Steuerung")
+
+**Braucht echte Controller-Hardware zum Testen** (ROG Ally/Steam Deck/
+Xbox-Controller/o.ä.) — kann ohne angeschlossenes Gamepad NICHT
+mitgetestet werden, per Design komplett inaktiv ohne eines.
+
+0. ⬜ **(Neu nach dem Hauptmenü-Bugfix)** Mit angeschlossenem Controller
+   OHNE Maus/Tastatur anzurühren: rechter Stick bewegt den Mauszeiger
+   schon im Hauptmenü sichtbar, A-Taste klickt "Solo"/"Host"/"Join" —
+   kompletter Flow MainMenu → Lobby ("Spiel starten" per Cursor+A) → Welt
+   rein per Controller erreichbar (das war der ursprünglich gemeldete
+   Bug: "konnte kein controller im hauptmenü benutzen").
+1. ⬜ Linker Stick bewegt die Kamera (Pan), genau wie WASD.
+2. ⬜ Rechter Stick bewegt den Mauszeiger sichtbar über den Bildschirm.
+3. ⬜ A-Taste an einem eigenen Trupp klickt/wählt ihn aus, wie ein
+   Linksklick.
+4. ⬜ A-Taste auf leerem Boden mit ausgewähltem Trupp löst einen
+   Bewegungsbefehl aus.
+5. ⬜ Im Baumodus: A-Taste platziert ein Gebäude wie ein Linksklick;
+   bei Mauer/Tor: A HALTEN + rechten Stick bewegen zieht eine Mauerlinie
+   wie Klicken+Halten+Ziehen mit der Maus.
+6. ⬜ B-Taste (kurz getippt) stoppt ausgewählte Einheiten.
+7. ⬜ Linker Trigger HALTEN + rechter Stick dreht/neigt die Kamera statt
+   den Cursor zu bewegen.
+8. ⬜ LB/RB zoomen rein/raus, wiederholt beim Halten.
+9. ⬜ UI-Buttons (Bauen-Tab, Tab-Wechsel Bauen/Herstellen/Einheiten/Trupp/
+   Handel) lassen sich mit Cursor+A genauso anklicken wie mit der Maus.
+10. ⬜ Start-Taste öffnet/schließt das Pause-Menü.
+11. ⬜ Back/View-Taste öffnet/schließt die Kartenansicht; ein Klick
+    (Cursor+A) darin springt die Kamera dorthin und schließt sie wieder.
+12. ⬜ Y-Taste lässt einen gefahrenen Trupp aus dem Fahrzeug aussteigen.
+13. ⬜ Maus/Tastatur funktionieren an einem NICHT angeschlossenen Gamepad
+    weiterhin unverändert (Gegenprobe: kein Regressionsrisiko).
+14. ⬜ Test auf dem ROG Ally des Freundes: Spiel startet, Fenster/UI
+    skaliert vernünftig auf dem kleineren Handheld-Bildschirm.
+
+## Kartenansicht-Legende + Gebäude-Farbcode (siehe `world.md`)
+
+**Vom Nutzer bestätigt (2026-08-03):** "map legende passt auch".
+
+## Kartenansicht zoombar (siehe `world.md`, "Kartenansicht zoombar", 2026-08-03)
+
+**Vom Nutzer bestätigt (2026-08-03):** "map passt".
+
+1. ✅ Mausrad in der Kartenansicht (`M`) zoomt rein/raus, Symbole
+   (Gebäude/Einheiten/Zombies) bleiben dabei an ihrer korrekten relativen
+   Position.
+2. ✅ Beim Öffnen (`M`) ist die Karte immer wieder auf volle Übersicht UND
+   auf die eigene aktuelle Position zentriert — kein alter Zoom-/Pan-Stand
+   vom letzten Mal.
+3. ✅ Rechtsklick verschiebt den Kartenausschnitt (ohne die 3D-Kamera zu
+   bewegen, ohne die Karte zu schließen) — funktioniert auch beim
+   Reingezoomt-Sein zur Navigation.
+4. ✅ Linksklick reist weiterhin wie bisher zur geklickten Stelle UND
+   schließt die Karte (unverändert, auch beim Reingezoomt-Sein — springt
+   dann korrekt zur tatsächlich angeklickten Weltposition, nicht zur
+   ungezoomten).
+5. ✅ Symbole außerhalb des sichtbaren Kartenausschnitts (beim
+   Reingezoomt-Sein) verschwinden sauber am Panelrand, keine
+   Überzeichnung außerhalb des Kartenpanels.
+6. ⬜ Mit Gamepad: LB/RB zoomen die Kartenansicht rein/raus, SOLANGE sie
+   offen ist (nicht die 3D-Kamera); B (Rechtsklick) verschiebt den
+   Ausschnitt, A (Linksklick) reist hin + schließt — alles ohne Maus
+   bedienbar. Noch nicht explizit mit Controller bestätigt (nur "map
+   passt" allgemein, unklar ob mit Maus oder Controller getestet).
+
+## Benchmark: mehr Gebäude/Bäume/Ressourcen (siehe `status.md`, 2026-08-03)
+
+**Vom Nutzer bestätigt (2026-08-03):** "fps gehen mit den häusern auch".
+
+1. ✅ FPS/Frametime im normalen Spielverlauf (nicht F9-Zombie-Stresstest)
+   mit den neuen, deutlich höheren Zahlen (1050 Gebäude, 400 Wald-Bäume,
+   verdoppelte Wildnis-Ressourcen) — bestätigt unauffällig, kein genauer
+   Messwert genannt (siehe `docs/benchmarks.md` für künftige konkrete
+   Zahlen, falls der Nutzer welche nachreicht).
+2. ✅ Karte wirkt spürbar dichter bebaut/bewaldet, keine sichtbaren
+   Overlaps trotz der höheren Dichte (Straßen-Raster/Mindestabstand
+   sollten das weiterhin verhindern).
+
+1. ✅ In der Kartenansicht (`M`) zeigt ein neues Panel oben links vier
+   Farbfelder (Nahrung orange, Medizin grün, Ausrüstung rot, Bücher lila)
+   mit Beschriftung plus eine fünfte Zeile für den gelben "Loot
+   verfügbar"-Rahmen.
+2. ✅ Unbesetzte Gebäude zeigen die Farbe ihrer Loot-Kategorie statt des
+   alten einheitlichen Grautons — z. B. Apotheke/Klinik grün, Bibliothek/
+   Universität lila.
+3. ⬜ Sobald ein Gebäude geclaimt ist, überschreibt die Besitzer-Farbe
+   (eigen/verbündet) wieder die Kategorie-Farbe.
+4. ✅ Minimap bleibt unverändert (kein Farbcode/keine Legende dort,
+   bewusste Entscheidung wegen Platzmangel).
+
 Abhakbare Checkliste für Features, die umgesetzt, aber noch nicht (oder nur
 teilweise) vom Nutzer bestätigt getestet sind — Ergänzung zu
 [`status.md`](status.md) (dort steht das ausführliche "was wurde gebaut und
@@ -109,17 +228,19 @@ Gate, könnte beim erneuten Ausprobieren also anders aussehen als erwartet
 
 **Erster Schritt, Nutzer wollte danach gezielt Detail-Feedback geben** —
 diese Liste ist eher eine Grundfunktions-Checkliste als final abgehakte
-Punkte.
+Punkte. **Vom Nutzer pauschal bestätigt (2026-08-03):** "ui passt alles
+soweit auch mit anzeige tab von ausrüstung etc., truppen ui passt auch" —
+Detail-Teilschritte unten auf Basis dieser Aussage mit abgehakt:
 
-1. ⬜ Unten links ein Panel mit drei Reitern (Bauen/Herstellen/Einheiten)
+1. ✅ Unten links ein Panel mit drei Reitern (Bauen/Herstellen/Einheiten)
    statt der früheren drei Einzel-Panels.
-2. ⬜ Reiter-Wechsel per Klick funktioniert, Inhalt tauscht korrekt (keine
+2. ✅ Reiter-Wechsel per Klick funktioniert, Inhalt tauscht korrekt (keine
    Buttons aus dem falschen Tab sichtbar/klickbar).
-3. ⬜ "Herstellen"-Reiter ist ohne eigene Werkstatt komplett ausgeblendet,
+3. ✅ "Herstellen"-Reiter ist ohne eigene Werkstatt komplett ausgeblendet,
    erscheint sobald eine gebaut ist.
-4. ⬜ Minimap sitzt jetzt direkt in der unteren rechten Ecke (vorher mit
+4. ✅ Minimap sitzt jetzt direkt in der unteren rechten Ecke (vorher mit
    Lücke darüber).
-5. ⬜ Ressourcen-Panel (oben rechts) funktioniert unverändert wie vorher,
+5. ✅ Ressourcen-Panel (oben rechts) funktioniert unverändert wie vorher,
    keine Überlappung mit dem Tab-Panel. (Das Trupp-Detailfenster war hier
    ursprünglich ein eigenes Panel links mittig — seit 2026-08-03 selbst ein
    Tab im selben `MainTabsUI`-Panel, siehe eigener Abschnitt "Trupp-
@@ -150,8 +271,11 @@ Kein Auftrag für jetzt.
 ## Handel (siehe `trading.md`)
 
 **Vom Nutzer bestätigt (2026-08-01):** "passt tauschen und schenken
-funktioniert". Detail-Teilschritte unten bleiben ohne explizite
-Einzelbestätigung stehen:
+funktioniert". **Erneut vom Nutzer bestätigt (2026-08-03):** "handel
+funktioniert komplett alles" — pauschale Bestätigung, verbleibende
+Detail-Teilschritte (Edge Cases wie Ablehnen/Zurückziehen/Ressourcen-
+Mangel beim Annehmen) auf Basis dieser Aussage mit abgehakt, keine
+Einzelbestätigung pro Punkt:
 
 1. ✅ Ziel-Spieler-Dropdown im "Handel"-Tab zeigt den jeweils anderen
    verbundenen Spieler (Name + Peer-ID), bleibt bei laufender Auswahl über
@@ -159,7 +283,7 @@ Einzelbestätigung stehen:
 2. ✅ Schenken: Ressource + Menge wählen, "Schenken" klicken — Absender
    verliert die Menge sofort, Empfänger bekommt sie sofort gutgeschrieben,
    beide sehen eine Status-Meldung.
-3. ⬜ Schenken ohne genug eigene Ressourcen: Status "Nicht genug Ressourcen
+3. ✅ Schenken ohne genug eigene Ressourcen: Status "Nicht genug Ressourcen
    zum Verschenken.", nichts wird abgezogen/gutgeschrieben.
 4. ✅ Tauschen: Angebot ("Ich gebe"/"Ich will") erstellen und senden —
    erscheint beim Empfänger als eingehendes Angebot mit Annehmen/Ablehnen,
@@ -167,16 +291,19 @@ Einzelbestätigung stehen:
 5. ✅ Angebot annehmen: beide Seiten tauschen gleichzeitig (Anbieter
    verliert "Ich gebe"-Menge, bekommt "Ich will"-Menge; Empfänger
    umgekehrt), Angebot verschwindet danach bei beiden aus der Liste.
-6. ⬜ Angebot ablehnen (durch den Empfänger) UND zurückziehen (durch den
+6. ✅ Angebot ablehnen (durch den Empfänger) UND zurückziehen (durch den
    Ersteller) — beide Fälle entfernen das Angebot bei beiden Seiten, ohne
    Ressourcen zu bewegen.
-7. ⬜ Annehmen, wenn der Anbieter zwischenzeitlich nicht mehr genug hat
+7. ✅ Annehmen, wenn der Anbieter zwischenzeitlich nicht mehr genug hat
    (z. B. inzwischen anderweitig verbraucht): Status-Meldung, kein Tausch,
    Angebot wird entfernt.
-8. ⬜ Annehmen, wenn der Empfänger selbst nicht genug für die "Ich will"-
+8. ✅ Annehmen, wenn der Empfänger selbst nicht genug für die "Ich will"-
    Gegenleistung hat: Status "Nicht genug eigene Ressourcen zum Annehmen.",
    Angebot bleibt bestehen (nicht entfernt, kann später erneut versucht
    werden).
+
+**Neues Feedback (2026-08-03):** Handel-UI-Panel ist "ein bisschen zu
+groß" — reine Politur, kein Bug, siehe neuer Abschnitt unten.
 
 ## Straßen-Raster + Gebäudereihen (siehe `world.md`, "Straßen-Raster + Gebäudereihen")
 
@@ -307,17 +434,21 @@ Erst-Test nötig, nicht nur Detail-Nachtest.
 2. ⬜ "Zu Schlafraum ausbauen"-Button erscheint beim Anklicken eines
    eigenen, geclaimten Gebäudes (Kosten 20 Holz), Ausbauen ersetzt das
    Gebäude durch einen Schlafraum an derselben Stelle.
-3. ⬜ Trupp in der Nähe (~5m) eines eigenen Schlafraums: Müdigkeit UND
+3. ✅ Trupp in der Nähe (~5m) eines eigenen Schlafraums: Müdigkeit UND
    Moral steigen wieder (`REST_RATE` 10/s), OHNE Ressourcenverbrauch.
+   **Vom Nutzer bestätigt (2026-08-03):** "müdigkeit und moral gingen beim
+   schlafplatz hoch, passt".
 4. ⬜ Trupp OHNE Schlafraum in der Nähe (nur an der Home-Base stehend):
    Müdigkeit/Moral erholen sich NICHT (bewusst kein Home-Base-Grundwert,
    anders als Hunger/Heilung — Gegenprobe zum vorigen Punkt).
-5. ⬜ Bei niedriger Müdigkeit (≤30): Bewegung sichtbar langsamer
-   (`FATIGUE_SPEED_FACTOR` 0.7).
-6. ⬜ Bei niedriger Moral (≤30): Angriffsschaden (Angriffsbefehl, Nah- UND
+5. ✅ Bei niedriger Müdigkeit (≤30): Bewegung sichtbar langsamer
+   (`FATIGUE_SPEED_FACTOR` 0.7). **Vom Nutzer bestätigt (2026-08-03):**
+   "minus stats bei müdigkeit ... ist auch [passt]".
+6. ✅ Bei niedriger Moral (≤30): Angriffsschaden (Angriffsbefehl, Nah- UND
    Fernkampf) sichtbar geringer (Zombie-HP sinkt langsamer pro Treffer,
    `MORALE_DAMAGE_FACTOR` 0.7) — passiver Gegenschaden bei einem
-   Zombie-Angriff bleibt davon unberührt.
+   Zombie-Angriff bleibt davon unberührt. **Vom Nutzer bestätigt
+   (2026-08-03):** "minus stats bei ... moral ist auch [passt]".
 7. ⬜ Speichern/Laden: Müdigkeit/Moral bleiben nach einem Ladevorgang
    erhalten (nicht auf 100 zurückgesetzt).
 8. ⬜ (Mit einem später beitretenden zweiten Client) Catch-up: ein schon
@@ -338,6 +469,24 @@ Erst-Test nötig, nicht nur Detail-Nachtest.
    unabhängig vom gewürfelten Gebäudetyp.
 5. ⬜ Speichern/Laden: das schon ausgewürfelte Loot eines Gebäudes bleibt
    nach dem Laden exakt erhalten (kein Neu-Würfeln).
+
+## Zehn weitere Gebäudetypen (siehe `scavenging.md`, 2026-08-03)
+
+1. ⬜ Beim Durchsuchen mehrerer Gebäude in einer Stadt-Zone tauchen jetzt
+   sichtbar mehr unterschiedliche Fassadenfarben/-Größen auf als vorher
+   (14 statt 4 Typen).
+2. ⬜ Bibliothek/Universität liefern zuverlässig mindestens 1 Buch beim
+   Durchsuchen (garantierter Hauptloot, nicht nur Nebenloot-Chance).
+3. ⬜ Klinik liefert deutlich mehr Medizin als eine normale Apotheke.
+4. ⬜ Militärbasis/Privatbunker liefern zuverlässig 1 Waffe + spürbar
+   häufiger zusätzlich Munition/Rüstung als der normale Waffenladen.
+5. ⬜ Garten-Center liefert eine Nahkampfwaffe, Camping-Laden Beinschutz —
+   beide als garantierten Hauptloot.
+6. ⬜ Feuerwehrstation liefert Rüstung als Hauptloot.
+7. ⬜ Weiterhin NIE Holz/Metall/Stein/Ziegel aus irgendeinem der neuen
+   Gebäudetypen (Gegenprobe zur bestehenden Regel).
+8. ⬜ Rekrutierung (Gebäude mit Survivor) funktioniert bei allen neuen
+   Typen genauso wie bei den ursprünglichen vier.
 
 ## Haupt-/Sekundärwaffe + Beinschutz (siehe `survivor.md`, "Haupt-/Sekundärwaffe", "Dritter Rüstungs-Slot: Beinschutz")
 
@@ -385,9 +534,11 @@ Erst-Test nötig, nicht nur Detail-Nachtest.
 **Braucht zwei Clients zum Testen** — Spieler A wird angegriffen, Spieler B
 soll den Alarm sehen.
 
-1. ⬜ Spieler A lässt sich von einem Zombie angreifen (z. B. Trupp
+1. ✅ Spieler A lässt sich von einem Zombie angreifen (z. B. Trupp
    ungeschützt stehen lassen) — Spieler B bekommt eine Statusmeldung
    ("... wird angegriffen! Hilfe gebraucht."), Spieler A selbst NICHT.
+   **Vom Nutzer bestätigt (2026-08-03):** "signal wenn koop partner
+   angegriffen wird geht auch".
 2. ⬜ Bei Spieler B erscheint ein pulsierender roter Ring auf der Minimap
    UND in der Kartenansicht (`M`) an der ungefähren Angriffsposition.
 3. ⬜ Der Ring bleibt ~20s sichtbar und verschwindet danach von selbst,
@@ -446,15 +597,204 @@ temporär auf 1 senken, nach dem Test wieder zurückstellen.
 
 ## Trupp-Detailfenster als fünfter Tab (siehe `world.md`, "Fünfter Tab: Trupp-Detailfenster")
 
-1. ⬜ Kein separates, frei schwebendes Trupp-Panel mehr sichtbar — bei
+**Vom Nutzer pauschal bestätigt (2026-08-03):** "ui passt alles soweit auch
+mit anzeige tab von ausrüstung etc." — Detail-Teilschritte unten auf Basis
+dieser Aussage mit abgehakt:
+
+1. ✅ Kein separates, frei schwebendes Trupp-Panel mehr sichtbar — bei
    Trupp-Auswahl erscheint stattdessen ein fünfter Tab "Trupp" im
    MainTabsUI-Panel (neben Bauen/Herstellen/Einheiten/Handel).
-2. ⬜ Der "Trupp"-Tab ist NUR anwählbar, wenn genau ein eigener Survivor
+2. ✅ Der "Trupp"-Tab ist NUR anwählbar, wenn genau ein eigener Survivor
    ausgewählt ist — bei keiner/mehrfacher Auswahl oder einem ausgewählten
    Fahrzeug verschwindet er wieder aus der Tab-Leiste.
-3. ⬜ Zeigt weiterhin alle fünf Ausrüstungszeilen (Hauptwaffe/Brustpanzer/
+3. ✅ Zeigt weiterhin alle fünf Ausrüstungszeilen (Hauptwaffe/Brustpanzer/
    Helm/Sekundärwaffe/Beinschutz) mit funktionierenden Ausrüsten-Buttons.
-4. ⬜ Kein automatischer Tab-Wechsel beim Auswählen eines Trupps — man
+4. ✅ Kein automatischer Tab-Wechsel beim Auswählen eines Trupps — man
    muss selbst auf "Trupp" klicken, genau wie bei den anderen Tabs.
-5. ⬜ Keine Überlappung mehr mit irgendeinem anderen Panel, auch bei
+5. ✅ Keine Überlappung mehr mit irgendeinem anderen Panel, auch bei
    kleineren Fenstergrößen/Auflösungen (der ursprüngliche Bug-Auslöser).
+
+## Nachjoinen-Fix (siehe `status.md`, 2026-08-03, "Nachjoinen + Laden im Multiplayer gefixt")
+
+**Braucht zwei Clients zum Testen**, idealerweise beide Szenarien.
+**Vom Nutzer bestätigt (2026-08-03):** "nachjoinen geht auch", "speicher
+laden und dann rejoinen geht auch", "zweiter spieler kann units wechsel
+das geht" — alle vier Punkte abgehakt.
+
+1. ✅ Spieler B verbindet sich, WÄHREND Spieler A (Host) noch in der Lobby
+   wartet (normaler Fall) — Spieler B landet wie bisher in der Lobby, sieht
+   Spieler A in der Liste, Host kann normal starten.
+2. ✅ Spieler B verbindet sich, NACHDEM Spieler A (Host) schon "Spiel
+   starten" gedrückt hat (echtes Nachjoinen) — Spieler B landet direkt in
+   `World.tscn`, sieht die schon existierende Welt (Zonen/Straßen/Gebäude/
+   Zombies/ggf. schon existierende Trupps von Spieler A) statt einer leeren
+   Karte, kann danach normal seine Start-Basis wählen.
+3. ✅ Gleiches wie Punkt 2, aber Spieler A ist über "Laden" (nicht "Spiel
+   starten") in `World.tscn` gekommen — Spieler B sieht den geladenen
+   Spielstand korrekt (nicht nur eine frische Welt).
+4. ✅ Spieler 2 kann nach dem Nachjoinen ganz normal Einheiten auswählen/
+   wechseln (Retest des ursprünglich gemeldeten "konnte keine Units
+   umwechseln" — Verdacht war, dass es am Nachjoin-Bug lag, kein eigener
+   Fund im Code).
+
+## Gruppen-Angriff verteilt sich (siehe `status.md`, 2026-08-03)
+
+1. ⬜ Mehrere Einheiten auswählen, auf einen Zombie klicken, während
+   mehrere Zombies in ca. 10m Umkreis stehen — die Einheiten greifen jetzt
+   MEHRERE verschiedene Zombies an (den jeweils nächsten pro Einheit)
+   statt sich alle auf denselben zu stürzen.
+2. ⬜ Gegenprobe: nur EIN Zombie weit und breit — Verhalten bleibt wie
+   vorher (alle ausgewählten Einheiten greifen ihn gemeinsam an).
+3. ⬜ Klick auf ein Zombie-Nest mit mehreren Einheiten funktioniert
+   weiterhin normal (Nest zählt als möglicher Verteil-Kandidat mit).
+
+## Maus-Invertieren-Einstellung (siehe `status.md`, 2026-08-03)
+
+1. ⬜ Neue Checkbox "Maus invertieren (Kamera-Neigung)" im
+   Einstellungen-Overlay (Hauptmenü UND Pause-Menü), Zustand bleibt nach
+   Neustart erhalten.
+2. ⬜ Bei aktivierter Checkbox kehrt sich NUR die vertikale Kamera-Neigung
+   (Rechtsklick-Ziehen hoch/runter) um — die horizontale Rotation bleibt
+   unverändert.
+
+## Handel-UI verkleinert (siehe `status.md`, 2026-08-03)
+
+1. ⬜ Handel-Tab wirkt spürbar kompakter/weniger überladen als vorher,
+   alle Dropdowns (Schenken/Ich gebe/Ich will) bleiben trotzdem gut
+   lesbar und bedienbar (keine abgeschnittenen Ressourcennamen).
+
+## Bauen ohne Zonen-Restriktion (siehe `status.md`/`zones.md`/`building.md`, 2026-08-03)
+
+**Nutzerwunsch, komplett entfernt statt nur vergrößert (siehe Rückfrage
+im Chat).** **Vom Nutzer bestätigt (2026-08-03):** "bau begrenzung ist
+auch weg passt auch".
+
+1. ✅ Ghost-Preview beim Bauen (Wachposten/Mauer/Tor/Feld) ist grün, egal
+   wie weit weg von der eigenen Home-Base/einem geclaimten Gebäude man
+   klickt — auch am gegenüberliegenden Kartenrand.
+2. ✅ Tatsächlicher Bauversuch weit weg von der eigenen Zone gelingt
+   (Ressourcen werden abgezogen, Gebäude entsteht), kein "Zu weit von der
+   eigenen Zone entfernt."-Fehler mehr möglich.
+3. ⬜ Fehlermeldung bei zu wenig Ressourcen ("Nicht genug Ressourcen.")
+   erscheint weiterhin korrekt, unabhängig von der Bauposition.
+4. ⬜ Claimen von Gebäuden (unverändert, hatte nie eine Abstandsprüfung)
+   funktioniert weiterhin normal — keine Regression durch den Umbau.
+5. ⬜ Ausbauen (Krankenstation/Werkstatt/Lager/Bett auf einem eigenen
+   geclaimten Gebäude) funktioniert weiterhin normal (nutzt `_can_build_at()`
+   nicht, sollte also ohnehin unberührt sein — Gegenprobe).
+
+## Fahrzeug-Mitfahrer (siehe `status.md`/`vehicle.md`, 2026-08-03)
+
+**Vom Nutzer bestätigt (2026-08-03):** "zwei truppen konnten einsteigen
+und aussteigen".
+
+1. ✅ Mehrere eigene Trupps auswählen (bis zur Sitzkapazität, z. B. 3 beim
+   Auto), auf ein unbesetztes Fahrzeug klicken — ALLE steigen ein (nicht
+   nur einer), Statusmeldung pro Trupp ("Auto bestiegen." mehrfach).
+   Getestet mit zwei Trupps, volle Kapazität (3+) noch nicht ausprobiert.
+2. ⬜ Mehr Trupps ausgewählt als Sitze frei sind — die ersten (bis zur
+   Kapazität) steigen ein, der Rest bleibt sichtbar draußen stehen (kein
+   Fehler/Crash).
+3. ⬜ Motorrad: weiterhin nur 1 Sitz (kein Mitfahrer möglich), Auto 3,
+   LKW 5 Sitze gesamt (inkl. Fahrer).
+4. ✅ F-Taste (nur vom Fahrer/bei ausgewähltem Fahrzeug ausgelöst) lässt
+   die GESAMTE Besatzung gleichzeitig aussteigen, alle sichtbar und
+   einzeln wieder auswählbar, keiner davon im Fahrzeug-Mesh
+   versunken/überlappend mit einem anderen.
+5. ⬜ Fahrzeug wird von Zombies zerstört, während mehrere Trupps drinsitzen
+   — Fahrer UND alle Mitfahrer sterben (Permadeath), nicht nur der Fahrer.
+6. ⬜ Nur der Fahrer kann das Fahrzeug bewegen/stoppen — ein Mitfahrer hat
+   keine Steuerungsmöglichkeit (kein eigener Test-Button dafür nötig,
+   ergibt sich daraus, dass Mitfahrer nicht separat auswählbar sind).
+
+## Trupp-Art umschalten für Nicht-Host-Spieler (siehe `status.md`, 2026-08-03)
+
+**Braucht zwei Clients zum Testen** (Bug betraf nur Nicht-Host-Peers, beim
+Host selbst sah es schon immer korrekt aus). **Vom Nutzer bestätigt
+(2026-08-03):** "zweiter spieler kann units wechsel das geht".
+
+1. ✅ Als NICHT-Host-Spieler (Client, nicht der Host) einen eigenen Trupp
+   in der Einheiten-Liste auf "→Bau" klicken — Text wechselt sichtbar auf
+   "Bau", Button-Beschriftung auf "→Feld", Einheiten-Farbe ändert sich
+   (siehe "Sättigung/Helligkeit"-Zweitsignal, `Survivor._unit_base_color()`).
+2. ✅ Zurück auf "→Feld" klicken — wechselt genauso sichtbar zurück.
+3. ⬜ Umgeschalteter Bautrupp kann tatsächlich abbauen (Baum/Auto/Stein/
+   Ziegel), nicht mehr suchen/claimen/angreifen (Gegenprobe, dass die
+   serverseitige Fähigkeit schon vorher funktionierte, jetzt aber auch die
+   UI korrekt mitzieht).
+4. ⬜ Host selbst weiterhin unverändert funktionsfähig (keine Regression
+   durch den Fix).
+
+## Banditen-Restloot (siehe `scavenging.md`, 2026-08-03, Punkt 23 der Gesamtliste)
+
+**Erst-Test dauert mindestens 3 Minuten Echtzeit** (`BANDIT_RESTOCK_INTERVAL`)
+und braucht mindestens ein schon geplündertes, unbesetztes Gebäude zu
+diesem Zeitpunkt.
+
+1. ⬜ Nach genügend Wartezeit färbt sich ein bereits geplündertes,
+   unbesetztes Gebäude golden (gleicher Ton wie ein markierter Baum).
+2. ⬜ Klick mit einem Feldtrupp auf dieses golden gefärbte Gebäude löst
+   erneut `order_search()` aus (Trupp läuft hin, sucht kurz) statt sofort
+   zu claimen.
+3. ⬜ Nach der Suche: kleine Menge (3-8) einer Ressource (Nahrung/Medizin/
+   Munition) gutgeschrieben, Gebäude fällt zurück auf normales Grau —
+   danach wieder normal claim-/abreißbar wie jedes andere geplünderte
+   Gebäude.
+4. ⬜ Vollmap-Ansicht (`M`) zeigt für ein golden gefärbtes Gebäude
+   ebenfalls den gelben "Loot verfügbar"-Rahmen.
+5. ⬜ Ein BEREITS geclaimtes Gebäude (`owner_peer_id != 0`) bekommt nie
+   Banditen-Restloot (Gegenprobe — nur unbesetzte, geplünderte Gebäude
+   sind Kandidaten).
+6. ⬜ (Nach einem Speichern/Laden-Durchlauf) ein gerade aktiver
+   Banditen-Restock bleibt nach dem Laden erhalten (golden, einsammelbar),
+   kein stiller Reset auf normales Grau.
+
+## Erweiterte Krankenstation (siehe `building.md`, 2026-08-03, Punkt 24 der Gesamtliste)
+
+1. ⬜ Mit eigener, normaler Krankenstation erscheint im "Bauen"-Tab ein
+   neuer Button "Erweiterte Krankenstation erforschen (Buch: Medizinische
+   Praxis)" — disabled ohne das Buch im Ressourcen-Pool.
+2. ⬜ Mit Buch im Pool ist der Button klickbar, Klick verbraucht 1× das
+   Buch, Button wechselt danach zu "Krankenstation erweitern (15 Ziegel,
+   3 Medizin)".
+3. ⬜ Klick auf "erweitern" mit genug Ressourcen: Kosten werden abgezogen,
+   Button verschwindet danach (keine eigene unerweiterte Krankenstation
+   mehr übrig).
+4. ⬜ Trupp in der Nähe der jetzt erweiterten Krankenstation heilt sichtbar
+   schneller als vorher (HP steigt schneller pro Sekunde) — Gegenprobe:
+   eine normale (nicht erweiterte) Krankenstation heilt weiterhin mit der
+   alten Rate.
+5. ⬜ Ohne genug Ressourcen beim Erweitern: Status "Nicht genug
+   Ressourcen.", nichts abgezogen, Button bleibt in "erweitern"-Zustand.
+6. ⬜ Das neue Buch "Medizinische Praxis" droppt gelegentlich bei
+   Zombie-Tod UND als Sekundärloot in Stadt-Gebäuden (wie die anderen vier
+   Bücher), zeigt sich korrekt im Ressourcen-Panel unter "Forschungsbücher".
+7. ⬜ (Nach einem Speichern/Laden-Durchlauf) eine bereits erweiterte
+   Krankenstation bleibt nach dem Laden erweitert (schnellere Heilung
+   weiterhin aktiv) — bekannte Ausnahme: der Forschungs-Status selbst
+   ("medical_upgrade" erforscht?) bleibt NICHT erhalten (bestehende Lücke,
+   betrifft auch die vier ursprünglichen Rezepte gleichermaßen).
+
+## Echter Wachturm (siehe `building.md`, 2026-08-03, Punkt 25 der Gesamtliste)
+
+1. ⬜ Neuer Button "Wachturm bauen (30 Holz, 20 Metall)" im "Bauen"-Tab,
+   Ghost-Preview beim Platzieren zeigt eine erkennbar hohe, schlanke Säule
+   (nicht die 1,5³-Box der anderen Einzelklick-Typen), steht komplett auf
+   dem Boden statt darin zu versinken.
+2. ⬜ Nach dem Bauen steht der Wachturm sichtbar korrekt auf dem Boden
+   (kein Versinken/Schweben), Kosten wurden abgezogen.
+3. ⬜ Nach kurzer Zeit (nächster Fog-of-War-Takt, `FOG_UPDATE_INTERVAL`
+   1s) ist auf Minimap UND Kartenansicht (`M`) ein deutlich größerer
+   Bereich um den Wachturm dauerhaft aufgedeckt als um eine einzelne
+   Einheit — spürbar mehr als der bisherige Aufdeck-Radius.
+4. ⬜ Zombies, die vorher im Nebel unsichtbar wirkten (weil kein Terrain-
+   Kontext erkennbar war), sind jetzt im neu aufgedeckten Bereich um den
+   Turm klar im Kontext (Straßen/Gebäude) sichtbar — waren als reine
+   Punkte technisch auch vorher schon da, wirken jetzt aber nutzbar.
+5. ⬜ Wachturm hat keinerlei Kampf-/Worker-Funktion (kein "Arbeiter
+   schicken"-Button wie beim Wachposten, greift keine Zombies an, wird
+   von Zombies nicht als Ziel behandelt wie ein geclaimtes Gebäude).
+6. ⬜ (Mit einem später beitretenden zweiten Client) Catch-up zeigt einen
+   schon gebauten Wachturm eines anderen Spielers korrekt.
+7. ⬜ (Nach einem Speichern/Laden-Durchlauf) ein gebauter Wachturm bleibt
+   erhalten, liefert nach dem Laden weiterhin seinen Sichtbonus.

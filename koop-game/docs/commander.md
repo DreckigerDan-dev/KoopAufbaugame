@@ -91,10 +91,15 @@ angehoben, siehe [`docs/survivor.md`](survivor.md)).
 
 Ohne Kollision/Pathfinding (siehe [`docs/survivor.md`](survivor.md),
 "Bekannte Grenzen") würden mehrere gleichzeitig befohlene Einheiten sonst
-exakt übereinander laufen. `_formation_offset(index, count)` verteilt sie
-stattdessen in einem einfachen Raster (`FORMATION_SPACING := 1.2`) um den
-eigentlichen Zielpunkt — Spaltenzahl `ceil(sqrt(count))`, Reihen daraus
-abgeleitet, zentriert um den Zielpunkt.
+exakt übereinander laufen. Ursprünglich ein einfaches Raster
+(Spaltenzahl `ceil(sqrt(count))`, zentriert um den Zielpunkt) —
+2026-08-03 nach Nutzer-Feedback im ersten echten Koop-Test ("Trupps laufen
+immer noch zu nah zusammen, sollten sich wie eine Gruppe verhalten: einer
+vorne, die anderen um ihn rum verteilt") auf eine Anführer-plus-Kreis-
+Formation umgestellt: die zuerst ausgewählte Einheit (Index 0) läuft exakt
+zum Zielpunkt, alle weiteren verteilen sich gleichmäßig auf einem Kreis
+mit `FORMATION_RADIUS := 2.0` darum (ersetzt die alte, jetzt gelöschte
+`FORMATION_SPACING`-Konstante).
 
 ## Kontrollgruppen
 
@@ -139,6 +144,6 @@ gehen. Details siehe [`docs/networking.md`](networking.md).
 Debug → Customize Run Instances → 2 → F5, Host + Join, "Spiel starten".
 Kamera mit WASD schwenken, rechte Maustaste ziehen zum Rotieren/Neigen,
 Mausrad zoomen. Mehrere Trupps auswählen (Shift-Klick), gemeinsam
-bewegen — sollten sich im Formation-Raster verteilen, nicht
-übereinanderlaufen. Eine Gruppe per Strg+1 zuweisen, mit 1 wieder
-auswählen.
+bewegen — der zuerst ausgewählte Trupp läuft zum Zielpunkt, die anderen
+verteilen sich im Kreis darum, nicht übereinanderlaufen. Eine Gruppe per
+Strg+1 zuweisen, mit 1 wieder auswählen.

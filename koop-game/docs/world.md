@@ -655,6 +655,12 @@ der Kartenplanungs-Session nachgeholt.
   erkundet markiert. **Dauerhaft, kein Vergessen** ("geteilte Aufklärung"
   heißt permanent aufgedeckt, nicht nur "aktuell in Sicht") —
   `_explored_cells` wird nur ergänzt, nie geleert.
+- **Wachturm-Sichtbonus (2026-08-03, Punkt 25 der Gesamtliste):**
+  `_reveal_around()` hat seit dem einen optionalen `radius`-Parameter
+  (Standard weiterhin `FOG_VISION_RADIUS`) — `_update_fog_of_war()` ruft
+  ihn zusätzlich für jeden `"watchtower"` mit `WATCHTOWER_VISION_RADIUS :=
+  350.0` auf, deutlich mehr als die 130 für Einheiten/Home-Base. Details
+  in [`building.md`](building.md), "Echter Wachturm".
 - **`is_cell_explored(world_pos)`**: öffentliche Abfrage, von
   `Minimap.gd`/`MapView.gd` über `get_tree().current_scene` gelesen
   (gleiches Zugriffsmuster wie dort schon für `MAP_SIZE`/`pivot`
@@ -731,6 +737,14 @@ kommt nie so nah an einzelne Einheiten heran wie es bei uns möglich war) —
 Default-Start-Zoom (`_zoom_distance := 12.0`), sonst wäre der Startwert
 beim ersten Frame außerhalb des gültigen Bereichs.
 
+**2026-08-03 nachjustiert** (Nutzerwunsch: "kamera wie sie rausgezoomt
+ist auf standard machen und bisschen mehr rauszoomen"): `ZOOM_MAX` von
+`60.0` auf `80.0` angehoben, `_zoom_distance`-Startwert von `12.0` auf
+`25.0` — vorher startete jede Partie fast komplett reingezoomt (knapp
+über dem damaligen `ZOOM_MIN`), jetzt näher an der Mitte des jetzt auch
+größeren Bereichs (10-80) für einen brauchbareren Überblick direkt beim
+Start.
+
 **Bewusst als reine Stil-/Gameplay-Entscheidung geklärt, KEINE
 Performance-Maßnahme:** `_apply_zoom()`/`_zoom()` verschieben die Kamera
 nur als Positions-Offset zum `Pivot` — keine Level-of-Detail-Logik, kein
@@ -784,11 +798,182 @@ Entscheidung, unabhängig vom Zoom-Level jederzeit aufrufbar.
   deshalb ohne Sichtbarkeits-Check auskommt), spart das unnötige
   Neuzeichnungen, während die Karte geschlossen ist.
 
-**Grundmodell vom Nutzer bestätigt** ("passt das Grundmodel"). **Backlog,
-kein Bugfix:** Nutzerwunsch "später sollten wir das schöner machen" —
-noch ganz offen, was genau (Icons statt Farbrahmen? Layout? Beschriftung?),
-erst angehen, wenn der Nutzer konkretisiert. Siehe
-[`pending-tests.md`](pending-tests.md), "Vollbild-Kartenansicht".
+**Grundmodell vom Nutzer bestätigt** ("passt das Grundmodel"). Der Backlog-
+Wunsch "später sollten wir das schöner machen" ist mit der Loot-Kategorie-
+Farbcodierung + Legende (siehe unten) teilweise umgesetzt — Layout/
+Beschriftung bleiben weiterhin offen für spätere Politur.
+
+## Kartenansicht zoombar (2026-08-03)
+
+Nutzerwunsch: "die eine idee mit map reinzoomen das kann man jetzt
+machen wichtig alles muss mit controller stuerbar sein" — vorher zeigte
+`MapView.gd` immer zwingend die komplette Karte (`_to_map()` skalierte
+`MAP_SIZE` fix auf die Panelgröße), kein Rein-/Rauszoomen möglich.
+
+- **`_zoom_level`** (1.0 = ganze Karte, bis `MAP_ZOOM_MAX := 8.0`) +
+  **`_view_center`** (Welt-X/Z, das in der Panelmitte liegt) ersetzen die
+  bisherige feste Skalierung — `_to_map()`/neue `_from_map()` (Umkehrung)
+  rechnen jetzt beide relativ zu diesen beiden Werten statt fix zur ganzen
+  Karte.
+- **`MapView.reset_view(world_center)`** — von `World.toggle_map_view()`
+  beim ÖFFNEN aufgerufen, setzt Zoom auf 1.0 zurück UND zentriert auf die
+  aktuelle 3D-Kameraposition (`pivot.position`) statt auf den
+  Kartenmittelpunkt — jede Sitzung mit der Karte startet vorhersehbar bei
+  voller Übersicht, zentriert dort, wo man gerade ist.
+- **Drei Bedienelemente in `_gui_input()`:** Linksklick reist weiterhin
+  hin + schließt (unverändert). NEU: Rechtsklick verschiebt nur den
+  Kartenausschnitt (`_view_center`), OHNE die 3D-Kamera zu bewegen oder
+  die Karte zu schließen — sonst könnte man beim Reingezoomt-Sein gar
+  nicht navigieren. Mausrad zoomt (`zoom_in()`/`zoom_out()`, multiplikativ
+  wie der 3D-Kamera-Zoom).
+- **`clip_contents = true`** auf dem `MapView`-Control (siehe
+  `MapView.tscn`) — nötig, weil `_to_map()` beim Reingezoomt-Sein nicht
+  mehr auf die Panelgröße clamped (das würde beim Zoomen falsch aussehen,
+  Symbole würden an den Rand "kleben" statt zu verschwinden); Godot
+  schneidet die Zeichenausgabe jetzt stattdessen sauber am Panel-Rand ab.
+- **Kompletter Controller-Support (explizite Nutzer-Vorgabe):** Linksklick/
+  Rechtsklick laufen automatisch über den globalen virtuellen Cursor
+  (`GamepadCursor.gd`, A/B synthetisieren echte Klicks) — kein
+  Zusatzcode nötig. Einzige Ergänzung: `World._handle_gamepad_input()`
+  leitet LB/RB auf `map_view.zoom_in()`/`zoom_out()` um, SOLANGE die
+  Kartenansicht offen ist (`map_view_ui.visible`), sonst zoomen sie wie
+  gewohnt die 3D-Kamera — kontextabhängige Doppelbelegung derselben zwei
+  Tasten.
+
+**Noch nicht vom Nutzer getestet.**
+
+## Gebäude-Farbcode nach Loot-Kategorie + Legende (2026-08-03)
+
+Nutzerwunsch: "färbe die gebäude typen ein zu den jeweiligen lootarten,
+krankenhaus heilung grün etc." — vorher zeigten unbesetzte Gebäude auf der
+Karte alle dieselbe neutrale graue Farbe (`UNCLAIMED_BUILDING_COLOR`),
+obwohl die 14 Gebäudetypen (siehe `docs/scavenging.md`) inzwischen sehr
+unterschiedlichen Loot liefern.
+
+- **`World.LOOT_CATEGORY_BY_RESOURCE`** ordnet jede `main_loot.resource`
+  (siehe `BUILDING_TYPES`) einer von vier Kategorien zu: `food` (Nahrung),
+  `medicine` (Medizin), `equipment` (Waffen/Rüstung/Munition/Nahkampfwaffe/
+  Beinschutz), `books` (Forschungsbücher). Bewusst aus `main_loot`
+  ABGELEITET statt einem redundanten Extra-Feld pro `BUILDING_TYPES`-
+  Eintrag — eine Quelle der Wahrheit.
+- **`Building.loot_category: String`** — einmalig beim Spawn gesetzt
+  (`_loot_category_for_template()`), läuft über dieselben optionalen
+  Catch-up-/Speicherstand-Zusatzfelder wie `is_looted`/`owner_peer_id`/
+  `hp`/`has_bandit_loot`.
+- **`MapView.LOOT_CATEGORY_COLORS`** (Nahrung orange, Medizin grün —
+  genau wie vom Nutzer vorgegeben, Ausrüstung rot, Bücher lila) —
+  `_draw_buildings()` nutzt das jetzt als NEUTRALFARBE für unbesetzte
+  Gebäude statt des generischen Grautons. Sobald ein Gebäude geclaimt ist,
+  hat weiterhin die Besitzer-Farbe (eigen/verbündet) Vorrang — an dem
+  Punkt ist "wem gehört das" die wichtigere Information als der Typ.
+- **`MapView._draw_legend()`** — neues, festes Panel oben links (nur in
+  der großen Kartenansicht, NICHT auf der Minimap — zu wenig Platz dort)
+  mit vier Farbfeldern + Beschriftung sowie einer fünften Zeile für den
+  gelben "Loot verfügbar"-Rahmen. Reiner `draw_rect()`/`draw_string()`-
+  Ansatz mit dem Theme-Standardfont, kein neuer `.tscn`-Node nötig.
+- **Bewusst NICHT auf der Minimap** — die ist zu klein für eine sinnvolle
+  Legende und dient eher der groben Orientierung, nicht der detaillierten
+  Gebäude-Typ-Erkennung (dafür gibt's ja die große Kartenansicht).
+
+**Noch nicht vom Nutzer getestet.**
+
+## Gamepad-Steuerung (2026-08-03, Nutzerwunsch: Controller/Steam-Deck-Support)
+
+Nutzerwunsch: "controller und steamdeck support wäre ganz net dann könnte
+mein andere freund auch testen der hat ein rog alloy" — volle
+Gamepad-Steuerung gewählt (Alternative wäre nur Touch-Emulation auf dem
+Handheld-Bildschirm gewesen, siehe Rückfrage im Chat). Komplett additiv.
+
+> [!warning] Zwei Bugfixes direkt nach dem ersten echten Test (2026-08-03,
+> Nutzer-Report mit Screenshot + PS5-Controller)
+> 1. **Parser-Fehler, Spiel startete gar nicht erst:** `var viewport_size :=
+>    get_viewport().size` — bekannte GDScript-Variant-Inferenz-Falle (siehe
+>    `docs/ARCHITECTURE.md`), `get_viewport().size` lässt sich nicht auf
+>    einen festen Typ inferieren. Fix: explizit `Vector2i` typisiert statt
+>    `:=`.
+> 2. **"Konnte den Controller im Hauptmenü nicht benutzen"** — die
+>    ursprüngliche erste Fassung lebte komplett in `World.gd`, funktionierte
+>    also erst, NACHDEM man `World.tscn` schon erreicht hatte. Ohne Maus/
+>    Tastatur kam man aber nie dorthin (MainMenu/Lobby hatten kein
+>    Gamepad-Handling). **Fix: Cursor-Bewegung + A/B-Klicks in ein neues
+>    Autoload `autoloads/GamepadCursor.gd` ausgelagert** (in
+>    `project.godot` registriert) — läuft dadurch dauerhaft unter `/root`,
+>    unabhängig vom Szenenwechsel, MainMenu/Lobby/World funktionieren jetzt
+>    alle automatisch mit. `World.gd` behält nur noch den wirklich
+>    weltspezifischen Teil (Kamera-Pan/-Rotation/-Zoom, Pause/Kartenansicht/
+>    Fahrzeug-Ausstieg) und steuert `GamepadCursor.cursor_suspended`, damit
+>    sich Kamera-Rotation (linker Trigger gehalten) und Cursor-Bewegung
+>    nicht um denselben rechten Stick streiten. `GamepadCursor._process()`
+>    setzt `cursor_suspended` jedes Frame zuerst auf `false` zurück, BEVOR
+>    `World._handle_gamepad_input()` (läuft laut Baum-Reihenfolge danach)
+>    es bei Bedarf wieder auf `true` setzt — verhindert, dass der Wert
+>    "hängen bleibt", falls `World.tscn` ausgerechnet bei gehaltenem
+>    Trigger verlassen wird (z. B. übers Pause-Menü zurück ins Hauptmenü).
+> PS5-Controller (DualSense) funktioniert dabei ohne Sonderfall — Godots
+> `JOY_BUTTON_A`/`_B`/etc.-Konstanten sind Xbox-Layout-benannt, meinen aber
+> bei jedem Controllertyp die jeweils layoutgleiche physische Taste
+> (Cross=A, Circle=B, ...), keine Plattform-spezifische Anpassung nötig.
+
+- **Kern-Trick: virtueller Cursor = echter Fenster-Mauszeiger.** Statt RTS-
+  Klickauswahl/Bau-UI/Tabs komplett für Gamepad-Navigation neu zu bauen
+  (Risiko: doppelte Logik, die auseinanderlaufen kann), bewegt der rechte
+  Stick über `Input.warp_mouse()` den TATSÄCHLICHEN Mauszeiger, A/B
+  synthetisieren über `Input.parse_input_event()` echte
+  `InputEventMouseButton`-Klicks an der aktuellen Cursor-Position. Dadurch
+  reagieren ALLE bestehenden mausbasierten Systeme unverändert: MainMenu-/
+  Lobby-Buttons, Welt-Klick-Auswahl (`_select_at()`), Mauer-Ziehen
+  (Klicken+Halten+Ziehen), jeder UI-Button/Tab (Bauen/Herstellen/Einheiten/
+  Trupp/Handel), sogar der Klick-zum-Hinreisen in der Kartenansicht
+  (`MapView._gui_input()`) — ganz ohne eigene Gamepad-Menünavigation.
+  **Lebt als Autoload `GamepadCursor.gd`** (siehe Bugfix-Kasten oben), nicht
+  in `World.gd` — nur dadurch funktioniert es schon im Hauptmenü.
+- **Tastenbelegung** (Xbox-Layout, passt auf ROG Ally/Steam Deck/normale
+  Controller):
+  - Linker Stick → Kamera-Pan (additiv in `_handle_pan()`, WASD bleibt
+    unverändert funktionsfähig).
+  - Rechter Stick → virtueller Cursor (Standard).
+  - Linker Trigger GEHALTEN + rechter Stick → Kamera-Rotation/-Neigung
+    (Analogon zum gehaltenen Rechtsklick+Ziehen bei Maus; direkte
+    `pivot.rotate_y()`/`_tilt_angle`-Manipulation, keine synthetischen
+    Events nötig).
+  - A → Linksklick (Auswahl/Bauen/Mauer-Ziehen-Start, press+release wie
+    ein echter Klick — Halten reproduziert also auch das Mauer-Ziehen).
+  - B → Rechtsklick-Tap (stoppt ausgewählte Einheiten, über denselben
+    Klick-vs.-Ziehen-Unterscheidungscode wie bei der Maus).
+  - LB/RB → Zoom rein/raus (diskrete Schritte, wiederholt alle
+    `GAMEPAD_ZOOM_REPEAT_INTERVAL` beim Halten, wie Mausrad-Ticks).
+  - Start → Pause-Menü (`ESC`-Äquivalent).
+  - Back/View → Kartenansicht (`M`-Äquivalent).
+  - Y → Aus Fahrzeug aussteigen (`F`-Äquivalent).
+- **Strikt additiv, kein Regressionsrisiko für Maus/Tastatur:** sowohl
+  `GamepadCursor._process()` als auch `World._handle_gamepad_input()`
+  brechen sofort ab, wenn `Input.get_connected_joypads()` leer ist — ohne
+  angeschlossenes Gamepad läuft exakt derselbe Code wie vorher, kein
+  einziger bestehender Pfad wurde verändert oder umgeleitet.
+- **Button-"gerade gedrückt"/"gerade losgelassen"-Erkennung** über ein
+  Vorframe-Vergleichs-Dictionary (`GamepadCursor._button_state` für A/B,
+  `World._gamepad_button_state` für Start/Back/Y, gleiches Prinzip in
+  beiden) — `Input.is_joy_button_pressed()` allein ist Level-getriggert,
+  ohne InputMap-Action gibt es kein eingebautes "just pressed".
+- **Bewusst NICHT umgesetzt: Kontrollgruppen (1-9) per Gamepad** — ein
+  Standard-Controller hat keine zehn frei belegbaren Tasten dafür, eine
+  D-Pad/Face-Button-Kombination wäre für den Nutzen unverhältnismäßig
+  komplex geworden. Mit angeschlossener Tastatur (bei einem Windows-
+  Handheld wie ROG Ally jederzeit möglich, z. B. per Bluetooth) weiterhin
+  normal nutzbar.
+- **Bekannte Einschränkung:** hält man B (Rechtsklick-Tap) UND bewegt
+  gleichzeitig den rechten Stick OHNE den linken Trigger zu halten, kann
+  kurzzeitig ungewollt die Kamera rotieren (das synthetische Rechtsklick-
+  Event setzt `_rotating = true`, solange B gehalten wird, und der dann
+  ebenfalls dispatchte Cursor-Bewegungs-Event trifft auf den bestehenden
+  Rechtsklick-Dreh-Zweig in `_unhandled_input()`) — seltener Randfall
+  (ungewöhnliche Eingabe-Kombination), behebt sich sofort beim Loslassen
+  von B, nicht extra abgefangen.
+
+**Noch nicht vom Nutzer getestet** (insbesondere nicht auf echter
+Handheld-Hardware — Design/Code basiert auf Godots Standard-Gamepad-API,
+kein Steam-spezifischer Input, sollte auf ROG Ally/Steam Deck/jedem
+Xbox-artigen Controller gleich funktionieren).
 
 ## Bekannte Grenzen (noch nicht gelöst)
 

@@ -111,12 +111,12 @@ zweite, in der Vision genannte Funktion: ein kürzerer Rückweg beim
 Scavenging ("Rückweg zur Basis (oder zum Außenposten zum Zwischenlagern)",
 `Infos/01 Architektur.md`, "Trage-Kapazität").
 
-- **Einziger Bautyp ohne Zonen-Prüfung:** `_can_build_at()` überspringt
-  `is_within_own_zone()` für `BuildType.OUTPOST` (neuer, optionaler `type`-
-  Parameter, Standard `GUARD_POST` für alle bestehenden Aufrufer, die die
-  Prüfung weiterhin brauchen) — das ist die "Ausnahme von der
-  Zusammenhang-Regel" aus der Vision, ein Außenposten lässt sich buchstäblich
-  überall auf der Karte platzieren.
+- **Ursprünglich einziger Bautyp ohne Zonen-Prüfung** — das war die
+  "Ausnahme von der Zusammenhang-Regel" aus der Vision, ein Außenposten
+  ließ sich schon immer überall platzieren. Seit dem Wegfall der
+  Zonen-Abstandsprüfung für ALLE Bautypen (2026-08-03, siehe "Zonen-Prüfung"
+  unten) ist das kein Sonderfall mehr, gilt inzwischen für jeden Bautyp
+  gleichermaßen.
 - **Kein eigener Ressourcen-Pool.** `Outpost.add_resources(delta)` ist eine
   einfache Methode (KEIN `@rpc`, anders als `HomeBase.add_resources()`), die
   intern `World._find_home_base_for_peer(owner_peer_id)` sucht und dorthin
@@ -183,22 +183,22 @@ geplünderten UND vom Spieler selbst geclaimten Gebäudes (siehe
   noch nicht gibt, bewusst zurückgestellt wie im ursprünglichen
   Roadmap-Punkt "Lager + Betten".
 
-## Zonen-Prüfung (`_can_build_at()`)
+## Zonen-Prüfung (`_can_build_at()`) — Abstandsteil entfernt (2026-08-03)
 
 ```gdscript
 func _can_build_at(peer_id: int, build_position: Vector3, cost: Dictionary, type: BuildType = BuildType.GUARD_POST) -> bool:
-    if type != BuildType.OUTPOST and not is_within_own_zone(peer_id, build_position):
-        return false
     return _can_afford(peer_id, cost)
 ```
 
-`is_within_own_zone()` ist public (auch von Mauer-Placement und
-Claim-Validierung genutzt) und prüft `BUILD_RADIUS` (8 Weltmeter) um die
-eigene Home-Base **oder** um jedes bereits geclaimte Gebäude dieses
-Spielers — Details und die Design-Begründung dazu in
-[`docs/zones.md`](zones.md). Seit dem Außenposten (siehe oben) optionaler
-`type`-Parameter, der genau diese Prüfung für `BuildType.OUTPOST`
-überspringt — die einzige bisherige Ausnahme von der Zonen-Regel.
+Prüft seit einem Nutzerwunsch (`test.txt`: "man kann nicht überall bauen
+können das sollte man") nur noch die Bezahlbarkeit — die frühere
+Abstandsprüfung `is_within_own_zone()`/`BUILD_RADIUS` (8 Weltmeter um
+Home-Base oder geclaimte Gebäude) ist komplett aus `World.gd` gelöscht,
+Details zur alten Regel und Design-Begründung (jetzt historisch) in
+[`docs/zones.md`](zones.md). Bauen ist seitdem überall auf der Karte
+möglich — der Außenposten (siehe oben, ehemals "die einzige Ausnahme von
+der Zonen-Regel") ist dadurch kein Sonderfall mehr, der `type`-Parameter
+bleibt aber für mögliche künftige typspezifische Regeln erhalten.
 
 ## Werkstatt-Rabatt
 
@@ -308,6 +308,123 @@ Ressourcen-Verbrauch analog zu allen anderen Systemen hier.
   "X erforschen (Buch: ...)"-Button. Nicht erforscht, kein Buch → derselbe
   Button, aber `disabled = true` (sichtbar, damit Spieler wissen, was es
   gibt, aber nicht klickbar).
+
+**Noch nicht vom Nutzer getestet.**
+
+## Erweiterte Krankenstation (2026-08-03, Punkt 24 der Gesamtliste)
+
+Die Vision meint mit Forschungsbüchern eigentlich primär GEBÄUDE-
+Ausbaustufen (`Infos/02 Item-Liste.md`, "Forschungsbücher & Progression":
+Bücher wie "Elektrik 101"/"Landwirtschaft & Anbau"/"Verteidigungsanlagen"
+schalten Stromgenerator/Garten-Anlage/Palisaden frei), nicht primär
+Crafting-Rezepte wie Punkt 13 oben. Erste (und bewusst einzige, siehe
+"Bewusst zurückgestellt" unten) konkrete Ausbaustufe: Erweiterte
+Krankenstation, gleiche Buch-Mechanik wie oben, aber am Ende steht ein
+Gebäude-Upgrade statt eines Items.
+
+- **`World.BUILDING_RESEARCH: Array[Dictionary]`** — eigene, kleine Liste
+  parallel zu `CRAFTING_RECIPES`, bewusst GETRENNT (kein "cost"/"yield",
+  `request_craft()` würde sonst bei versehentlichem/böswilligem Aufruf mit
+  dieser ID einen `KeyError` werfen). Aktuell ein Eintrag: `{"id":
+  "medical_upgrade", "name": "Erweiterte Krankenstation"}`.
+- **`World.request_research()` generalisiert** — prüft jetzt `_find_recipe()`
+  ODER `_find_building_research()`, davon abgesehen unverändert (gleicher
+  Buch-Verbrauch, gleiches `HomeBase.unlocked_recipes`-Dictionary als
+  gemeinsamer Speicher für BEIDE Systeme). Neue Ressource `book_medical_upgrade`
+  in `BOOK_LOOT_TYPES`/`BOOK_TABLE` (droppt also genau wie die anderen vier
+  Bücher aus Zombie-Kills UND als Gebäude-Sekundärloot).
+- **`MedicalStation.is_advanced: bool`** (statt eines zweiten Gebäudetyps)
+  — `upgrade_to_advanced()` (`@rpc("authority", "call_local", "reliable")`)
+  setzt es dauerhaft, kein Zurückbauen. Funktional einziger Unterschied:
+  `Survivor._handle_healing()` nutzt `ADVANCED_MEDICAL_STATION_HEAL_RATE`
+  (`HEAL_RATE * 3.0`) statt `MEDICAL_STATION_HEAL_RATE` (`* 2.0`), wenn die
+  gefundene Station `is_advanced` ist. Kein visueller Unterschied (bewusst
+  schlank, wie schon der Rest von `MedicalStation.gd`).
+- **`World.request_upgrade_medical_station(requesting_peer_id)`**
+  (`@rpc("any_peer", "call_local", "reliable")`) — ANDERS als
+  `request_upgrade_building()` (Building → MedicalStation/Werkstatt/...,
+  ersetzt einen Node durch einen anderen) wird hier eine BESTEHENDE
+  MedicalStation in-place erweitert, kein Gebäudetausch. Kosten
+  `MEDICAL_UPGRADE_COST := {"brick": 15, "medicine": 3}` (Vision: "5×
+  Baumaterial + 3× Medizin", Ziegel als nächstliegender Baurohstoff analog
+  zu `MEDICAL_STATION_COST`). Braucht: erforscht + eigene, noch nicht
+  erweiterte Krankenstation (`_find_own_basic_medical_station()`) +
+  bezahlbar.
+- **UI: eigene Sektion im "Bauen"-Tab**, NICHT an eine Gebäude-Auswahl
+  gebunden (anders als die "Ausbauen"-Buttons für claimte `Building`-Nodes)
+  — sichtbar, sobald der Spieler mindestens eine eigene, nicht erweiterte
+  Krankenstation besitzt. Ein Button, zwei Zustände: nicht erforscht →
+  "Erweiterte Krankenstation erforschen (Buch: Medizinische Praxis)"
+  (disabled ohne Buch), erforscht → "Krankenstation erweitern (15 Ziegel,
+  3 Medizin)".
+- **Catch-up + Speichern/Laden für `is_advanced`** ergänzt, gleiches
+  optionales-Zusatzfeld-Muster wie `Building.is_looted`/`owner_peer_id`/
+  `hp` (`_catch_up_medical_station()`/`_collect_save_data()`/
+  `_load_game_state()`/`_create_medical_station()`). **`unlocked_recipes`
+  selbst** (also OB "medical_upgrade" erforscht ist) hat weiterhin KEIN
+  Catch-up/keine Persistenz — bestehende, schon dokumentierte Lücke seit
+  Punkt 13 (siehe oben), gilt jetzt für beide Systeme gleichermaßen.
+- **Bewusst zurückgestellt** (Scope-Entscheidung, um Punkt 24 nicht zu
+  einer Fünf-Gebäude-Marathon-Aufgabe zu machen): Stromgenerator,
+  Garten-Anlage (deckt sich großteils mit dem schon existierenden `Field.gd`
+  ohne Buch-Gate), Palisaden/Falle-Module. Wachturm ist explizit ein
+  eigener Listenpunkt (25, "Echter Wachturm mit Sichtweiten-Bonus").
+
+**Noch nicht vom Nutzer getestet.**
+
+## Echter Wachturm (Sichtweiten-Gebäude, 2026-08-03, Punkt 25 der Gesamtliste)
+
+**Wichtige Begriffs-Klärung, um Verwechslung mit dem bestehenden
+`GuardPost.gd` zu vermeiden:** die Vision unterscheidet explizit zwei
+verschiedene Gebäude — "Wachposten" (Kampf, deckt `GuardPost.gd` ab) und
+"Wachturm" (reine Sicht, "Erweiterte Sicht auf die Map, Zombie-
+Früherkennung", `Infos/02 Item-Liste.md`). Verwirrend: `GuardPost.tscn`
+nutzt seit "Wachturm + Holzmauer (eigene 3D-Assets)" oben zufällig ein
+3D-Asset namens `wachturmtest.glb` als Modell, ist aber weiterhin
+funktional der KAMPF-Wachposten. Dieser Abschnitt hier beschreibt das
+NEUE, separate `Watchtower.gd`/`Watchtower.tscn` — reine Sichtweiten-
+Funktion, kein Kampf, kein Worker-Slot.
+
+- **Neue, eigene Entität** (`scenes/entities/watchtower/Watchtower.gd`,
+  bewusst schlank wie `Outpost.gd`/`MedicalStation.gd`: kein HP, kein
+  Bautimer, kein Ressourcen-Pool) — `watchtower_id`/`owner_peer_id`, sonst
+  nichts. Platzhalter-Box (1,2×5×1,2, schiefergrauer Ton) statt eines
+  echten Assets — 5m Höhe bewusst deutlich höher als die übrigen 1,5³-
+  Bautypen, sichtbar als "Turm" erkennbar.
+- **Freies Platzieren wie Wachposten/Feld/Außenposten** — vierter Button
+  im "Bauen"-Tab (`WatchtowerButton`), gleicher Baumodus-/Ghost-Preview-
+  Ablauf (`request_build_structure()`, `BuildType.WATCHTOWER` neu im
+  Enum). Kosten `WATCHTOWER_COST := {"wood": 30, "metal": 20}` (Vision:
+  "12× Holz + 8× Stahlrahmen", Stahlrahmen auf Metall umgehängt, gleiche
+  Umhängungs-Logik wie bei Außenposten/Lager). **Bewusst OHNE
+  Forschungsbuch-Gate** (Vision nennt zwei Bücher, "Verteid." + "Elektrik")
+  — zwei neue Bücher nur für ein einziges Gebäude wären für den aktuellen
+  Umfang unverhältnismäßig, siehe Scope-Entscheidung bei Punkt 24 oben.
+- **Eigene Boden-Y + eigene Ghost-Mesh** (`WATCHTOWER_GROUND_Y := 2.5`,
+  `WATCHTOWER_MESH_SIZE`) — bei 5m Höhe hätte der rohe Boden-Raycast-Y-Wert
+  (wie bei den 1,5³-Typen) den Turm zum Großteil im Boden versinken lassen.
+- **Sichtweiten-Bonus über das bestehende Fog-of-War-System** (siehe
+  [`world.md`](world.md), "Fog of War") — `World._reveal_around()` bekommt
+  einen optionalen `radius`-Parameter (Standard `FOG_VISION_RADIUS`),
+  `_update_fog_of_war()` ruft ihn für jeden Wachturm zusätzlich mit
+  `WATCHTOWER_VISION_RADIUS := 350.0` auf (vs. 130 für Einheiten/Home-Base)
+  — deutlich größerer, dauerhaft aufgedeckter Bereich, kein neuer
+  Mechanismus nötig.
+- **"Zombie-Früherkennung" ist strukturell schon erfüllt, ohne eigenen
+  Code:** Zombies werden auf Minimap/Kartenansicht bereits IMMER
+  gezeichnet, unabhängig vom Fog-of-War-Stand (`Minimap.gd`/`MapView.gd`,
+  `_draw_zombies()`, keine `is_cell_explored()`-Prüfung dort) — der
+  Wachturm liefert einfach mehr aufgedecktes Terrain drumherum, in dem
+  diese ohnehin schon sichtbaren Zombie-Punkte in Kontext (Straßen/
+  Gebäude) erscheinen, statt im grauen Nebel zu schweben.
+- **Kein eigener Kartenmarker** — Wachtürme werden (wie Wachposten/
+  Außenposten/Krankenstation/Werkstatt/Lager) NICHT auf Minimap/
+  Kartenansicht gezeichnet, nur Buildings/Home-Bases/"living"/Zombies
+  haben eigene Marker. Bestehende, akzeptierte Einschränkung, kein neuer
+  Rückschritt.
+- **Catch-up + Speichern/Laden** vollständig (gleiches Muster wie
+  Außenposten: `_catch_up_watchtower()`, `watchtowers`-Array in
+  `_collect_save_data()`/`_load_game_state()`, `next_ids["watchtower"]`).
 
 **Noch nicht vom Nutzer getestet.**
 

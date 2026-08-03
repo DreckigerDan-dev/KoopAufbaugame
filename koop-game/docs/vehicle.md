@@ -54,7 +54,13 @@ periodisch an, "lauter als ein Trupp" war explizit Teil der Konzept-Idee.
   (`Survivor._board()`) und dabei gar nicht looten kann — Kapazität bleibt
   ausschließlich `Survivor.CARRY_CAPACITY`, geloottet wird zu Fuß nach dem
   Aussteigen. Ein echter Kapazitäts-Bonus bräuchte ein eigenes
-  Fahrzeug-Inventar-System, das hier bewusst nicht mitgebaut wurde.
+  Fahrzeug-Inventar-System, das hier bewusst nicht mitgebaut wurde. (Das
+  ist eine ANDERE Kapazität als die Sitzplatz-Kapazität weiter unten —
+  "mehr Leute reinpassen" betrifft nur Sitze, nicht Loot-Tragfähigkeit.)
+- **Mehrere Sitzplätze pro Fahrzeug** (Nutzerwunsch 2026-08-03, `test.txt`:
+  "autos mehr läute rein passen") — `VEHICLE_STATS[...]["seats"]`: Auto 3,
+  Motorrad 1 (kein Soziussitz), LKW 5. Siehe "Einsteigen"/"Aussteigen"
+  unten, ersetzt die vorherige "nur ein Fahrersitz"-Grenze.
 - Spielstand speichert `vehicle_type` jetzt mit (`_collect_save_data()`/
   `_load_game_state()`), Catch-up für spät beitretende Peers ebenfalls
   (`_catch_up_vehicle()` bekommt `vehicle_type` als fünften Parameter).
@@ -70,26 +76,40 @@ aussagekräftig — die tatsächliche `Survivor`-Node-Referenz muss nicht
 über das Netzwerk). `is_occupied()` prüft deshalb bewusst
 `owner_peer_id != 0`, nicht `driver != null`.
 
-## Einsteigen (`enter()`)
+## Einsteigen (`enter()`) — jetzt mit Mitfahrern
 
 Host-seitig von `Survivor._enter_vehicle()` aufgerufen, nachdem dort schon
-geprüft wurde, dass das Fahrzeug noch unbesetzt ist — kein eigenes RPC
-nötig, gleiches Cross-Node-Muster wie `GuardPost.request_worker()` →
-`Survivor.order_station()`. Setzt `owner_peer_id`/`driver`, repliziert per
-`_sync_owner.rpc()`. Der einsteigende Trupp wird währenddessen unsichtbar
-und aus `"selectable"`/`"living"` entfernt (siehe
+geprüft wurde, dass das Fahrzeug noch nicht VOLL ist (`is_full()`, siehe
+unten) — kein eigenes RPC nötig, gleiches Cross-Node-Muster wie
+`GuardPost.request_worker()` → `Survivor.order_station()`. Erster
+einsteigender Trupp wird **Fahrer** (`owner_peer_id`/`driver` gesetzt,
+repliziert per `_sync_owner.rpc()`, hat als einziger Steuerungsrechte für
+`order_move()`/`order_stop()`/`request_exit()`), jeder weitere bis zur
+`seats`-Kapazität wird **Mitfahrer** (`passengers`-Array, KEINE eigenen
+Steuerungsrechte). `World._select_at()` schickt beim Klick auf ein
+unbesetztes Fahrzeug jetzt ALLE ausgewählten eigenen Trupps gleichzeitig
+als Einsteige-Versuch (statt nur den ersten), `enter()` weist sie
+entsprechend zu, überzählige (wenn mehr Trupps ausgewählt waren als Sitze
+frei sind) laufen einfach ins Leere — `enter()` gibt dafür `bool` zurück
+(`false` = kein Platz mehr). Jeder einsteigende Trupp wird währenddessen
+unsichtbar und aus `"selectable"`/`"living"` entfernt (siehe
 `Survivor._board()`, [`docs/survivor.md`](survivor.md)) — das Fahrzeug
-übernimmt seine Rolle als auswählbare/befehligbare Einheit.
+übernimmt die Rolle als auswählbare/befehligbare Einheit für die ganze
+Besatzung.
 
-## Aussteigen (`request_exit()`)
+## Aussteigen (`request_exit()`) — ganze Besatzung auf einmal
 
 Ausgelöst über die **F-Taste** (`World._exit_selected_vehicles()`), kein
 eigener UI-Button — analog zu den Kontrollgruppen-Tasten.
 `@rpc("any_peer", "call_local", "reliable")`, weil der Aufruf (anders als
-`enter()`) von jedem Peer selbst kommen kann, nicht nur host-intern. Ruft
-`driver.exit_vehicle(position)` auf (setzt den Trupp wieder sichtbar, 1
-Einheit neben dem Fahrzeug versetzt), setzt `owner_peer_id = 0`, leert die
-Wegpunkte, repliziert `_sync_owner.rpc(0)`.
+`enter()`) von jedem Peer selbst kommen kann, nicht nur host-intern. Nur
+der **Fahrer** kann das auslösen (`owner_peer_id`-Check) — steigt er aus,
+ruft `request_exit()` `exit_vehicle(position)` für den Fahrer UND alle
+Mitfahrer auf (jeder mit leicht versetzter Position, damit sie nicht
+exakt übereinanderstehen), leert `driver`/`passengers`, setzt
+`owner_peer_id = 0`, leert die Wegpunkte, repliziert `_sync_owner.rpc(0)`.
+**Mitfahrer können nicht einzeln aussteigen** — kein eigenständiges
+Aussteigen einzelner Passagiere ohne den Fahrer, siehe "Bekannte Grenzen".
 
 ## Bewegung + Blocking
 
@@ -121,9 +141,9 @@ aufgerufen. Bei `hp <= 0`:
   Zombie zerstört.")` — nur, wenn `owner_peer_id != 0` (ein längst
   unbesetztes Fahrzeug hat niemanden, der informiert werden müsste; in
   der Praxis ohnehin nur noch besetzte Fahrzeuge erreichbar, siehe oben).
-- **Permadeath:** war ein `driver` gesetzt, ruft `take_damage()`
-  `driver.vehicle_destroyed()` auf — der Trupp stirbt mit dem Fahrzeug,
-  kein Rauswurf in letzter Sekunde (Konzept, `ARCHITECTURE.md`).
+- **Permadeath:** `take_damage()` ruft `vehicle_destroyed()` für den
+  Fahrer UND alle Mitfahrer auf — die ganze Besatzung stirbt mit dem
+  Fahrzeug, kein Rauswurf in letzter Sekunde (Konzept, `ARCHITECTURE.md`).
 - `_die.rpc()` entfernt den Node.
 
 ## Replikation
@@ -155,7 +175,22 @@ strukturell statt durch eine von Hand gewählte Koordinate.
 
 - **Kein Nachspawnen nach der Weltgenerierung, kein Reparieren** — feste
   Anzahl pro Zone bei Weltstart.
-- **Nur ein Fahrersitz** pro Fahrzeug — Mitfahrer nicht möglich.
+- **Mitfahrer können nicht einzeln aussteigen** — nur der Fahrer kann
+  `request_exit()` auslösen, dann steigt die ganze Besatzung zusammen aus
+  (siehe "Aussteigen" oben). Kein Weg, gezielt nur EINEN Mitfahrer
+  rauszulassen, während der Rest weiterfährt.
+- **Kein Boarding über Peer-Grenzen hinweg** — man kann nur die eigenen
+  ausgewählten Trupps gemeinsam einsteigen lassen, nicht als Mitfahrer bei
+  einem schon von einem ANDEREN Spieler besetzten Fahrzeug zusteigen
+  (`World._select_at()` erlaubt den Einsteige-Branch nur bei
+  `hit.owner_peer_id == 0`, ein bereits besetztes fremdes Fahrzeug bleibt
+  wie bisher nur anklickbar/nicht befehligbar).
+- **Kein Nachträglich-Zusteigen zum eigenen, schon fahrenden Fahrzeug** —
+  wer schon Fahrer ist und später weitere eigene Trupps als Mitfahrer
+  dazuholen will, muss das Fahrzeug dafür erneut zusammen mit den neuen
+  Trupps anklicken (aktuell nicht unterstützt, da ein Klick auf das
+  EIGENE, schon besetzte Fahrzeug es nur auswählt statt neue Mitfahrer
+  aufzunehmen).
 - **Pathing folgt Straßen nur INNERHALB von Stadt-Zonen** (siehe
   "Fahrzeug-Pathing" in [`world.md`](world.md), umgesetzt 2026-08-01) —
   `order_move()` berechnet über `World.find_vehicle_path()` einen Weg

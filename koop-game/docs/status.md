@@ -1,3 +1,300 @@
+## Weitere Nutzerwünsche direkt im Anschluss (2026-08-03)
+
+Vier kleinere Punkte im selben Zug nach dem Koop-Testdurchlauf:
+
+- **HUD-Zeile oben links entfernt** ("das mit trupp 1 hp 100 kann weg")
+  — die Pro-Trupp-Statuszeile in `_update_hud()` war redundant zur
+  Einheiten-Liste/zum Trupp-Detailfenster. Fahrzeug-Ausstiegs-Hinweis
+  ("F: Aussteigen") bleibt, steht nirgendwo sonst.
+- **Deutlich mehr Gebäude/Bäume/Ressourcen für Benchmark-Zwecke**
+  ("in die stadt viel mehr gebäude zum benchmark und mehr bäume im wald
+  und allgemein mehr ressourcen") — `BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE`
+  100/50 → 300/150 (Summe 1050 statt 350), `TREES_PER_FOREST_ZONE` 40 → 80,
+  `TREES_TOTAL`/`CAR_WRECKS_TOTAL`/`STONE_PILES_TOTAL`/`BRICK_PILES_TOTAL`
+  jeweils verdoppelt (400/160/200/200). Reiner Stresstest, keine
+  Balancing-Entscheidung — Performance danach noch nicht gemessen (siehe
+  [`benchmarks.md`](benchmarks.md) für künftige Messwerte).
+- **Kamera-Zoom nachjustiert** ("auf standard machen und bisschen mehr
+  rauszoomen") — `ZOOM_MAX` 60→80, Start-`_zoom_distance` 12→25. Details
+  in [`world.md`](world.md), "Kamera-Zoom-Bereich".
+- **Kartenansicht zoombar** — siehe [`world.md`](world.md), "Kartenansicht
+  zoombar", inkl. vollem Controller-Support (LB/RB zoomen die Karte statt
+  der 3D-Kamera, solange sie offen ist).
+
+**Vom Nutzer bestätigt (2026-08-03):** "map passt, fps gehen mit den
+häusern auch, hud passt auch sehr gut" — Kartenzoom, Benchmark-Zahlen
+(FPS unauffällig trotz 1050 Gebäude) und die entfernte HUD-Zeile sind
+damit alle drei bestätigt. Gamepad-Bedienung der Kartenansicht (LB/RB/A/B)
+dabei nicht explizit erwähnt, bleibt offen (siehe `pending-tests.md`).
+Kamera-Zoom-Nachjustierung nicht separat erwähnt, vermutlich im "map
+passt" mit eingeschlossen.
+
+## Erster echter Koop-Testdurchlauf: großteils bestätigt, ein Fix (2026-08-03)
+
+Nutzer hat den kompletten 2026-08-03-Abend-Batch zu zweit im Koop
+getestet. Bestätigt (Details in `pending-tests.md`, jeweiliger Abschnitt):
+Nachjoinen, Speichern/Laden+Rejoin, Trupp-Art-Wechsel als Nicht-Host-
+Spieler, Fahrzeug-Mitfahrer (zwei Trupps ein-/ausgestiegen), Bauen ohne
+Zonen-Restriktion, Kartenansicht-Legende. Banditen-Restloot und die zehn
+neuen Gebäudetypen noch nicht mitgetestet (brauchen Zeit/Zufall).
+
+**Ein echter Fund:** Formation bei Gruppenbefehlen wirkte "zu nah
+zusammen" — auf Anführer-plus-Kreis-Formation umgestellt (siehe
+[`commander.md`](commander.md), "Formation").
+
+**Zwei Ideen für später notiert** (nicht umgesetzt, siehe Roadmap-Memory):
+Markier-Baumodus mit skalierender Bauzeit je nach Anzahl Bautrupps, und
+eine zoombare Kartenansicht.
+
+## Gamepad-Bugfixes nach erstem echten Test (2026-08-03, Nutzer-Report mit Screenshot + PS5-Controller)
+
+Erster echter Test der neuen Gamepad-Steuerung (siehe unten) — zwei echte
+Probleme gefunden und behoben:
+
+1. **Spiel startete gar nicht** — `var viewport_size := get_viewport().size`
+   ließ sich nicht typisieren (bekannte GDScript-Variant-Inferenz-Falle,
+   siehe `docs/ARCHITECTURE.md`), Parser-Fehler blockierte den kompletten
+   Start. Fix: explizit `Vector2i` typisiert.
+2. **"Konnte den Controller im Hauptmenü nicht benutzen"** — die
+   Gamepad-Logik lebte komplett in `World.gd`, funktionierte also erst
+   NACH dem Hauptmenü/der Lobby, die man ohne Maus/Tastatur nie erreichen
+   konnte. Fix: Cursor-Bewegung + A/B-Klicks in ein neues Autoload
+   `autoloads/GamepadCursor.gd` ausgelagert (dauerhaft unter `/root`,
+   unabhängig vom Szenenwechsel) — MainMenu/Lobby/World funktionieren
+   dadurch jetzt alle automatisch mit Controller. `World.gd` behält nur
+   noch den weltspezifischen Teil (Kamera-Rotation/-Zoom, Pause/
+   Kartenansicht/Fahrzeug-Ausstieg).
+
+Details im Bugfix-Kasten in [`world.md`](world.md), "Gamepad-Steuerung".
+**Noch nicht erneut vom Nutzer getestet.**
+
+## Gamepad-Steuerung + Kartenansicht-Legende ergänzt (2026-08-03)
+
+Zwei weitere Nutzerwünsche im selben Zug: **volle Gamepad-Steuerung**
+("controller und steamdeck support... das können wir jetzt machen", Freund
+mit ROG Ally soll mittesten können) — Kern-Trick ist ein virtueller Cursor
+über `Input.warp_mouse()` + synthetisierte Maus-Klicks über
+`Input.parse_input_event()`, dadurch reagieren ALLE bestehenden
+mausbasierten Systeme (Welt-Auswahl, Bauen, UI-Buttons/Tabs) unverändert,
+ganz ohne eigene Gamepad-Menünavigation. Komplett additiv, nur aktiv mit
+angeschlossenem Gamepad. Kontrollgruppen (1-9) bewusst nicht per Gamepad
+belegt (zu wenig Tasten). Details in [`world.md`](world.md),
+"Gamepad-Steuerung".
+
+**Kartenansicht-Legende + Gebäude-Farbcode** ("färbe die gebäude typen ein
+zu den jeweiligen lootarten, krankenhaus heilung grün etc.") — unbesetzte
+Gebäude zeigen jetzt eine von vier Loot-Kategorie-Farben (Nahrung/Medizin/
+Ausrüstung/Bücher) statt eines einheitlichen Grautons, neues Legende-Panel
+in der großen Kartenansicht erklärt die Farben. Bewusst nur in der großen
+Ansicht, nicht auf der Minimap (zu wenig Platz). Details ebenfalls in
+[`world.md`](world.md).
+
+**Beides noch nicht vom Nutzer getestet** — Gamepad-Test braucht echte
+Controller-Hardware.
+
+## Zehn weitere Gebäudetypen ergänzt (2026-08-03, Vision-Gap-Analyse-Nachtrag)
+
+Nutzerwunsch nach der Vision-Gap-Analyse: "die 10 gebäude können auf
+jeden Fall rein". `World.BUILDING_TYPES` von 4 auf 14 Einträge erweitert
+— Klinik, Militärbasis, Privatbunker, Feuerwehrstation, Restaurant/Kneipe,
+Tankstelle, Bibliothek, Universität, Garten-Center, Camping-Laden, alle
+mit `main_loot`/`secondary_loot` aus ausschließlich schon existierenden
+Ressourcenarten (kein neuer Ressourcentyp nötig). Bibliothek/Universität
+sind der erste Gebäudetyp mit garantiertem Buch als Hauptloot. Bewusst
+weiterhin NICHT übernommen: Baumarkt/Werkstatt/Auto-Werkstatt/
+Elektronikgeschäft (bräuchten Ressourcenarten, die es hier nicht gibt,
+oder würden die Baurohstoff-Regel verletzen). Details in
+[`scavenging.md`](scavenging.md). **Noch nicht vom Nutzer getestet.**
+
+## Echter Wachturm ergänzt (2026-08-03, Punkt 25 der Gesamtliste — LETZTER Punkt der 25er-Liste)
+
+Neue, eigene Entität `Watchtower.gd`/`Watchtower.tscn` — rein Sichtweiten-
+Funktion, kein Kampf (Vision unterscheidet das explizit vom bestehenden
+`GuardPost.gd`/"Wachposten", das zufällig ein Asset namens
+`wachturmtest.glb` nutzt, siehe `building.md` für die Begriffs-Klärung).
+Frei platzierbar wie Wachposten/Feld/Außenposten (30 Holz + 20 Metall,
+bewusst ohne Forschungsbuch-Gate). Kern-Effekt: `World._reveal_around()`
+bekommt einen `radius`-Parameter, Wachtürme decken mit
+`WATCHTOWER_VISION_RADIUS := 350.0` (vs. 130 für Einheiten) dauerhaft
+einen deutlich größeren Kartenbereich auf. "Zombie-Früherkennung" ist
+strukturell schon erfüllt (Zombies werden auf Minimap/Karte ohnehin immer
+gezeichnet, unabhängig vom Fog-Stand) — der Turm liefert einfach den
+Terrain-Kontext drumherum. Catch-up + Speichern/Laden vollständig, gleiches
+Muster wie Außenposten. Details in [`building.md`](building.md), "Echter
+Wachturm". **Noch nicht vom Nutzer getestet.**
+
+**Damit sind alle 25 Punkte der festen Gesamtliste umgesetzt** (siehe
+Roadmap-Memory) — als Nächstes braucht es entweder neues Nutzer-Feedback
+(z. B. aus einem erneuten Testdurchlauf) oder eine explizite Entscheidung,
+welchen der zurückgestellten Punkte (15: Survivor-Rollen; Vision-Backlog:
+Stromgenerator/Garten-Anlage/Palisaden/Werkzeuge) man als Nächstes angeht.
+
+## Erweiterte Krankenstation ergänzt (2026-08-03, Punkt 24 der Gesamtliste)
+
+Forschungsbücher erweitert: schalten jetzt auch Gebäude-Ausbaustufen frei,
+nicht mehr nur die vier Crafting-Rezepte aus Punkt 13. Neues Buch
+"Medizinische Praxis" (`book_medical_upgrade`, droppt wie die anderen vier)
+schaltet über dasselbe `HomeBase.unlocked_recipes`-Dictionary eine
+Erweiterte-Krankenstation-Ausbaustufe frei (`MedicalStation.is_advanced`,
+kein neuer Gebäudetyp) — kostet danach 15 Ziegel + 3 Medizin, heilt
+Trupps in der Nähe mit `HEAL_RATE * 3.0` statt `* 2.0`. Eigene UI-Sektion
+im "Bauen"-Tab (nicht an eine Gebäude-Auswahl gebunden, anders als die
+bestehenden Ausbauen-Buttons). Bewusst NUR diese eine Ausbaustufe umgesetzt
+— Stromgenerator/Garten-Anlage/Palisaden aus der Vision zurückgestellt,
+Wachturm ist eigener Listenpunkt (25). Details in
+[`building.md`](building.md), "Erweiterte Krankenstation". **Noch nicht
+vom Nutzer getestet.**
+
+## Banditen-Restloot ergänzt (2026-08-03, Punkt 23 der Gesamtliste)
+
+Nächster Schritt der festen 25-Punkte-Roadmap nach dem `test.txt`-
+Bugfixing-Batch: aus dem Vision-Ideenbacklog (`Infos/01 Architektur.md`)
+— bereits geplünderte, unbesetzte Gebäude bekommen alle 3 Minuten
+Echtzeit-Chance auf einen kleinen Restloot (Nahrung/Medizin/Munition,
+3-8), golden eingefärbt, einmalig durchsuchbar, danach zurück auf normal.
+Reine Loot-Mechanik, keine echten Banditen-NPCs. Details in
+[`scavenging.md`](scavenging.md), "Banditen-Restloot". **Noch nicht vom
+Nutzer getestet** (Erst-Test dauert mind. 3 Minuten).
+
+## Test-Feedback-Sammlung vom Nutzer (2026-08-03 Abend, `test.txt`)
+
+Nutzer hat einen kompletten Testdurchlauf (2 Spieler) in einer `test.txt`
+zusammengefasst statt einzelner Chat-Nachrichten. Bestätigungen daraus sind
+oben in den jeweiligen Abschnitten bzw. in
+[`pending-tests.md`](pending-tests.md) einsortiert (Handel komplett ✅,
+UI-Overhaul + Trupp-Tab ✅, Fog of War weiterhin ✅, SOS-Signal ✅,
+Bett-Erholung + Fatigue/Moral-Malus ✅). Folgende **neue Bugs/Wünsche**
+sind NEU und noch nicht bearbeitet:
+
+- **Bug: Speichern/Laden geht nicht im Multiplayer** — bisher nur solo
+  getestet bestätigt (siehe `save_load.md`). Noch nicht diagnostiziert.
+- **Bug: Spieler können nicht nachjoinen** — späterer Beitritt (nach
+  Host-Start) funktioniert nicht. Noch nicht diagnostiziert.
+- **Bug: Spieler 2 konnte keine Einheiten umschalten/wechseln** — Ursache
+  noch offen, evtl. Selektionslogik hart auf einen Peer verdrahtet.
+- **Bug/Feature: keine unterschiedlichen Farben pro Einheit/Spieler** —
+  aktuell nur Farbcodierung nach Trupp-Art (Feld/Bau), keine Spieler-Farbe.
+  Nicht klar, ob "pro Spieler" oder "pro Einheit" gemeint ist — vor
+  Umsetzung beim Nutzer nachfragen.
+- **Bug: Einheiten in einer Gruppe greifen nur einen Zombie an** —
+  Formation/Gruppen-Angriffslogik prüfen.
+- **Feature-Wunsch: mehr Sitzplätze pro Fahrzeug** — aktuell strukturell
+  nur ein Insasse (`owner_peer_id`).
+- **Feature-Wunsch: Maus-Invertieren-Option** in den Einstellungen.
+- **Design-Frage: überall bauen können** — widerspricht der bisherigen
+  bewussten Zonen-Restriktion (siehe `zones.md`), vor Umsetzung mit dem
+  Nutzer klären, wie weit das gehen soll.
+- **Politur: Handel-UI-Panel etwas zu groß.**
+- **Wunsch (evtl. schon erledigt):** "mehr Häuser in den Städten" — am
+  selben Tag wurde `BUILDINGS_PER_LARGE_ZONE`/`BUILDINGS_PER_SMALL_ZONE`
+  bereits von 60/30 auf 100/50 erhöht (siehe Abschnitt "Mehr Gebäude..."
+  unten) — unklar ob `test.txt` vor oder nach diesem Fix geschrieben
+  wurde, beim Nutzer nachfragen statt weiter zu erhöhen.
+
+**Direkt im Anschluss bearbeitet (2026-08-03, gleiche Session):**
+
+- **Nachjoinen + Laden im Multiplayer gefixt (gleiche Ursache):**
+  `MainMenu._on_connection_succeeded()` schickte JEDEN frisch verbundenen
+  Client bedingungslos nach `LOBBY`, unabhängig davon, ob der Host schon
+  `IN_GAME` war — ein RPC-Broadcast beim Spielstart erreicht nur die zu dem
+  Zeitpunkt schon verbundenen Peers, ein später Beitretender bekam ihn nie
+  und hing für immer in der Lobby fest (Kommentar in `MainMenu.gd` bei
+  `_on_solo_pressed()` behauptete fälschlich, das funktioniere schon).
+  Fix: `GameManager._on_peer_connected()` (neu, `autoloads/GameManager.gd`)
+  schickt jedem neu verbundenen Peer gezielt (`rpc_id`) den AKTUELLEN
+  State — Client wartet jetzt in `MainMenu.gd` einfach ab, statt selbst zu
+  raten. Damit landet ein später Beitretender direkt in `World.tscn`, egal
+  ob der Host über "Spiel starten", Solo oder Laden dorthin kam. Zusätzlich
+  einen zweiten, latenten Bug vorab gefixt: der bestehende Catch-up-Push
+  (`World._spawn_for_peer()`, ausgelöst über `NetworkManager.player_connected`)
+  hätte bei einem späten Beitritt genau dieselbe PUSH-vor-Node-existiert-
+  Race gehabt wie der frühere Straßen-Geometrie-Bug (siehe "Straßen-
+  Geometrie" oben) — als Fix zusätzlich `World.request_catch_up()` als
+  PULL ergänzt (Client fragt selbst an, sobald sein eigenes `_ready()`
+  läuft, gleiches Muster wie `request_city_zones()`). **Noch nicht vom
+  Nutzer mit zwei Clients erneut getestet.**
+- **Gruppen-Angriff verteilt sich jetzt auf mehrere Zombies:** Klick auf
+  einen Zombie mit mehreren ausgewählten Einheiten gab bisher ALLEN
+  Einheiten exakt dasselbe Ziel (bewusstes altes Design, "Nahkampf-
+  Cluster"). Nutzer-Feedback: sollen sich aufteilen. Neue
+  `World._nearby_enemies()`/`_nearest_enemy()` sammeln alle Zombies/Nester
+  im 10m-Umkreis um den angeklickten Feind, jede Einheit greift jetzt den
+  ihr jeweils nächsten davon an (bei nur einem Zombie in der Nähe
+  unverändertes Verhalten). **Noch nicht vom Nutzer getestet.**
+- **Maus-Invertieren-Einstellung ergänzt:** neue Checkbox in
+  `SettingsMenu`, `SettingsManager.invert_mouse_y` (persistiert), kehrt das
+  Vorzeichen der vertikalen Kamera-Neigung (Rechtsklick-Ziehen) in
+  `World._unhandled_input()` um. Nur die Neigung (Y), nicht die horizontale
+  Rotation — Nutzerwunsch war unspezifisch ("Maus invertieren oder selber
+  was einstellen"), Standard-FPS/RTS-Interpretation gewählt. **Noch nicht
+  vom Nutzer getestet.**
+- **Handel-UI-Panel verkleinert:** `custom_minimum_size` der drei
+  Ressourcen-Dropdowns im Handel-Tab (`GiftResourceOption` 140→110,
+  `TradeOfferResourceOption`/`TradeWantResourceOption` 120→100) reduziert —
+  das gemeinsame `MainTabsUI/Panel` selbst (gilt für alle fünf Tabs, laut
+  Nutzer sonst überall "passt") bleibt unverändert. **Noch nicht vom
+  Nutzer getestet.**
+- **"Spieler 2 konnte keine Einheiten umschalten"** — erste Code-Recherche
+  ergab keinen eigenen Bug in der Selektionslogik (generisch, nicht hart
+  auf einen Peer verdrahtet, nur keine "nächste Einheit"-Funktion). Nutzer
+  hat danach präzisiert: gemeint war **Trupp-ART umschalten (Feld↔Bau)**,
+  nicht Einheiten-Selektion — siehe eigener Fund unten, echter Bug
+  gefunden und behoben.
+- **ECHTER BUG gefunden + behoben: Trupp-Art-Umschalten (Feld↔Bau)
+  funktionierte für Nicht-Host-Spieler nie sichtbar** (Nutzer-Präzisierung:
+  "spieler 2 kann die units nicht umwandeln in bau truppen").
+  `Survivor.set_troop_type()` (`@rpc("any_peer", "call_local", "reliable")`)
+  setzte `troop_type` bisher NUR innerhalb des `if not
+  multiplayer.is_server(): return`-Gates, also ausschließlich auf der
+  Host-Instanz — ohne jeden Broadcast an andere Peers. Beim Host selbst
+  fiel das nie auf, weil seine eigene UI dieselbe Node-Instanz liest, die
+  der Server direkt mutiert (Sonderfall: Host = Server = lokaler Spieler).
+  Bei jedem NICHT-Host-Spieler blieb die eigene, lokal repräsentierte
+  Kopie des Trupps für immer auf dem alten `troop_type` stehen — der
+  Button-Klick änderte den Wert zwar tatsächlich serverseitig (Bautrupp-
+  Fähigkeiten hätten server-seitig sogar funktioniert), aber weder Text
+  ("Feld"/"Bau") noch Button-Beschriftung noch (seit dem Farb-Fix weiter
+  oben) die Einheiten-Farbe aktualisierten sich je lokal — sah aus wie
+  "Umschalten geht nicht". **Fix:** `Survivor._sync_state()` (der
+  periodische Voll-Sync-RPC, der ohnehin schon Position/HP/Ausrüstung an
+  alle Peers verteilt) überträgt jetzt zusätzlich `troop_type` als
+  weiteren Parameter, self-korrigiert sich dadurch jeden Frame wie alle
+  anderen Felder auch. **Noch nicht vom Nutzer mit zwei Clients erneut
+  getestet.**
+**Rückfrage beim Nutzer beantwortet, direkt umgesetzt:**
+
+- **Farbe pro Einheit (nicht pro Spieler):** `Survivor._update_color()`/
+  neue `_unit_base_color()` leiten den Farbton jetzt deterministisch aus
+  `trupp_id` ab (goldener Schnitt für gute Verteilung, kein neuer
+  Netzwerk-State nötig — auf allen Peers identisch berechenbar). Die
+  bisherige Weiß/Orange-Unterscheidung nach Trupp-Art entfällt als
+  PRIMÄRES Farbsignal (Trupp-Art steht ohnehin schon als Text in
+  Einheiten-Liste/Detailfenster), bleibt aber als schwächeres
+  Sättigung/Helligkeit-Signal erhalten (Bautrupp gedeckter, bewaffneter
+  Feldtrupp kräftiger). **Noch nicht vom Nutzer getestet.**
+- **Zonen-Restriktion beim Bauen komplett entfernt** (nicht nur
+  vergrößert, siehe Rückfrage): `_can_build_at()` prüft nur noch
+  Bezahlbarkeit, `is_within_own_zone()`/`BUILD_RADIUS` sind komplett aus
+  `World.gd` gelöscht (keine tote Funktion stehen gelassen), inkl.
+  Aufräumen der Kommentare/Fehlermeldungen in `_report_build_failure()`
+  und der betroffenen Doku (`zones.md`, `building.md`). Claimen war davon
+  nie betroffen (hatte nie eine Abstandsprüfung). **Noch nicht vom Nutzer
+  getestet.**
+- **Mehr Sitzplätze in Fahrzeugen umgesetzt** (Nutzer wollte das sofort,
+  nicht zurückgestellt): `Vehicle.gd` bekommt `passengers: Array` neben
+  dem bisherigen `driver`, `VEHICLE_STATS[...]["seats"]` (Auto 3, Motorrad
+  1 — bewusst kein Soziussitz, LKW 5) definiert die Kapazität pro Typ.
+  `enter()` gibt jetzt `bool` zurück (Fahrer wird der erste Einsteigende,
+  jeder weitere bis zur Kapazität Mitfahrer, `false` wenn voll).
+  `World._select_at()` schickt beim Klick auf ein unbesetztes Fahrzeug
+  jetzt ALLE ausgewählten eigenen Trupps als Einsteige-Versuch (vorher nur
+  `selected[0]`). `request_exit()`/Permadeath (`take_damage()`) wirken
+  jetzt auf Fahrer UND alle Mitfahrer gleichzeitig — Mitfahrer können
+  nicht einzeln aussteigen, das ganze Kapitel Cross-Peer-Mitfahren
+  (bei einem fremden, schon besetzten Fahrzeug zusteigen) bewusst NICHT
+  umgesetzt, siehe `vehicle.md`, "Bekannte Grenzen". **Noch nicht vom
+  Nutzer getestet.**
+
 ## UI-Überlappung behoben: Trupp-Detailfenster als fünfter Tab (2026-08-03)
 
 Nutzer-Report: "die ui sind übereinander das truppen ui und alles andere",

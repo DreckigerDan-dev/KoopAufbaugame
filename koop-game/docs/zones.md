@@ -1,5 +1,18 @@
 # Zonen-System (Claimen)
 
+**Update 2026-08-03 (Nutzerwunsch, `test.txt`: "man kann nicht überall
+bauen können das sollte man"):** die Bau-Abstandsprüfung
+(`is_within_own_zone()`/`BUILD_RADIUS`, weiter unten in diesem Dokument
+noch ausführlich beschrieben) ist komplett entfernt — Bauen geht jetzt
+überall auf der Karte, unabhängig von Home-Base/geclaimten Gebäuden. Das
+**Claimen selbst** war ohnehin schon immer ohne Abstandsprüfung (siehe
+"Warum Claimen ohne Abstandsprüfung" unten) — dieser Unterschied zwischen
+Bauen und Claimen existiert jetzt also nicht mehr, beides ist
+uneingeschränkt. Die Abschnitte unten beschreiben den historischen Stand
+VOR diesem Fix, größtenteils weiterhin relevant fürs Claimen-Konzept
+selbst (Gebäude wird Anker, nur einmal claimbar etc.), nur die
+Bau-Abstandsregel ist überholt.
+
 Erklärt die Zonen-/Claiming-Ergänzungen in `scenes/world/Building.gd`,
 `scenes/world/World.gd` und `scenes/entities/survivor/Survivor.gd`.
 Konzept siehe `ARCHITECTURE.md`, "Zone erweitern" — sowie das ausführliche
@@ -84,13 +97,13 @@ Nachbarschaftsregel könnte also **kein einziges** weitere Gebäude je
 geclaimt werden, das erste "angrenzende" gäbe es nie.
 
 **Lösung:** `World.claim_building()` prüft bewusst **nur** drei Dinge —
-geplündert, noch niemandem gehörend, bezahlbar (`_can_afford()`) — **ohne**
-`is_within_own_zone()`. Das eigentliche Bauen (`request_build_structure()`/
-`request_build_wall_line()`) nutzt weiterhin `is_within_own_zone()` samt
-Abstandsprüfung, jetzt aber inklusive aller geclaimten Gebäude als
-zusätzliche Anker (siehe unten) — die "Zusammenhang bleibt"-Idee greift
-also erst **ab dem zweiten** Claim (ein zweites Gebäude nahe genug an
-einem schon geclaimten braucht dann keinen Sonderfall mehr).
+geplündert, noch niemandem gehörend, bezahlbar (`_can_afford()`) — nie mit
+einer Abstandsprüfung. Das eigentliche Bauen
+(`request_build_structure()`/`request_build_wall_line()`) hatte zwischen-
+zeitlich eine eigene Abstandsprüfung (`is_within_own_zone()`, inklusive
+aller geclaimten Gebäude als zusätzliche Anker) — die ist seit 2026-08-03
+ebenfalls komplett entfernt (siehe Update-Hinweis ganz oben), Claimen und
+Bauen sind seitdem beide uneingeschränkt.
 
 ## `Building.gd`
 
@@ -158,16 +171,15 @@ fehl, zeigt `report_status()` "Nicht genug Ressourcen." (kein
 `_report_build_failure()` — das würde fälschlich eine
 Zonen-Abstandsmeldung prüfen, die hier gar nicht zutrifft).
 
-## `is_within_own_zone()` — jetzt auch für geclaimte Gebäude
+## `is_within_own_zone()` — entfernt (2026-08-03)
 
-`_can_build_at()` (siehe `docs/building.md`) nutzt weiterhin
-`is_within_own_zone(peer_id, position)` für Wachposten/Mauer/Tor/
-Krankenstation/Werkstatt — die Funktion prüft jetzt **zwei** Anker statt
-nur einem: `BUILD_RADIUS` um die eigene Home-Base **ODER** um jedes
-bereits geclaimte Gebäude dieses Spielers (`get_tree().get_nodes_in_group
-("searchable")`, gefiltert auf `owner_peer_id == peer_id`). Ein geclaimtes
-Gebäude erweitert die Bauzone also organisch — baubar ist ab dann auch in
-der Stadt selbst, nicht mehr nur um die weit entfernte Home-Base.
+Gab es früher (siehe historische Beschreibung oben im Update-Hinweis) —
+`_can_build_at()` (siehe `docs/building.md`) prüft seit dem Wegfall der
+Bau-Abstandsprüfung nur noch, ob genug Ressourcen da sind, egal wo auf der
+Karte gebaut wird. Die Funktion selbst sowie die Konstante `BUILD_RADIUS`
+sind aus `World.gd` gelöscht (keine tote Funktion stehen gelassen).
+Geclaimte Gebäude bleiben trotzdem sinnvoll (Ressourcen-Loot, Ausbauen zu
+Krankenstation/Werkstatt/Lager/Bett), sind nur kein Bauzonen-Anker mehr.
 
 ## Bekannte Grenzen (noch nicht gelöst)
 
@@ -210,8 +222,6 @@ Debug → Customize Run Instances → 2 → F5, Host + Join, "Spiel starten".
 Ein Gebäude durchsuchen lassen (siehe `docs/scavenging.md`), danach
 denselben Trupp nochmal draufklicken — sollte jetzt hinlaufen und
 "claimen" statt nochmal zu suchen, das Gebäude sollte sich bläulich
-färben und 15 Stein abziehen. Danach in der Nähe DIESES Gebäudes
-(nicht der Home-Base) versuchen, einen Wachposten zu bauen — Ghost-Preview
-sollte grün sein, obwohl die Home-Base weit weg ist. Ein zweites,
-benachbartes Gebäude claimen — sollte auch ohne Sonderfall funktionieren,
-weil das erste Gebäude jetzt selbst als Zonen-Anker zählt.
+färben und 15 Stein abziehen. Ghost-Preview beim Bauen sollte seit 2026-08-03 überall auf der Karte
+grün sein, auch weit weg von jeder eigenen Basis/jedem Claim (siehe
+`docs/pending-tests.md`, "Bauen ohne Zonen-Restriktion").

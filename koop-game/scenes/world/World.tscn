@@ -140,6 +140,11 @@ spawn_path = NodePath("../Outposts")
 
 [node name="Outposts" type="Node3D" parent="."]
 
+[node name="WatchtowerSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Watchtowers")
+
+[node name="Watchtowers" type="Node3D" parent="."]
+
 [node name="BuildGhost" type="MeshInstance3D" parent="."]
 visible = false
 mesh = SubResource("BoxMesh_build_ghost")
@@ -303,6 +308,9 @@ text = "Feld bauen (20 Holz)"
 [node name="OutpostButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
 text = "Außenposten bauen (15 Holz, 10 Stein)"
 
+[node name="WatchtowerButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+text = "Wachturm bauen (30 Holz, 20 Metall)"
+
 [node name="BuildSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
 
 [node name="WorkersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen"]
@@ -329,6 +337,13 @@ text = "Zu Lager ausbauen (30 Holz)"
 [node name="UpgradeBedButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
 visible = false
 text = "Zu Schlafraum ausbauen (20 Holz)"
+
+[node name="AdvancedMedicalSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+
+[node name="AdvancedMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+visible = false
+text = "Erweiterte Krankenstation erforschen (Buch: Med. Praxis)"
 
 [node name="Herstellen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
 visible = false
@@ -434,7 +449,7 @@ text = "Schenken"
 [node name="GiftRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
 
 [node name="GiftResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
-custom_minimum_size = Vector2(140, 0)
+custom_minimum_size = Vector2(110, 0)
 
 [node name="GiftAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
 min_value = 1.0
@@ -456,7 +471,7 @@ text = "Ich gebe:"
 custom_minimum_size = Vector2(60, 0)
 
 [node name="TradeOfferResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
-custom_minimum_size = Vector2(120, 0)
+custom_minimum_size = Vector2(100, 0)
 
 [node name="TradeOfferAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
 min_value = 1.0
@@ -470,7 +485,7 @@ text = "Ich will:"
 custom_minimum_size = Vector2(60, 0)
 
 [node name="TradeWantResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
-custom_minimum_size = Vector2(120, 0)
+custom_minimum_size = Vector2(100, 0)
 
 [node name="TradeWantAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
 min_value = 1.0

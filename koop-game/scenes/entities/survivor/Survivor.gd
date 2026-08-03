@@ -31,6 +31,9 @@ const HEAL_RATE := 5.0
 # eigene, größere Heilzone mit höherer Rate als nur an der Basis.
 const MEDICAL_STATION_HEAL_RADIUS := 5.0
 const MEDICAL_STATION_HEAL_RATE := HEAL_RATE * 2.0
+# Erweiterte Krankenstation (Punkt 24 der Gesamtliste, siehe
+# docs/building.md) — gleicher Radius, nur schnellere Heilrate.
+const ADVANCED_MEDICAL_STATION_HEAL_RATE := HEAL_RATE * 3.0
 const HUNGER_DECAY_RATE := 1.5
 const HUNGER_LOW_THRESHOLD := 30.0
 const HUNGER_SPEED_FACTOR := 0.5
@@ -246,7 +249,7 @@ func _process(delta: float) -> void:
 	_handle_eating(delta)
 	_handle_resting(delta)
 	_handle_carried_loot()
-	_sync_state.rpc(position, hp, hunger, fatigue, morale, carried_loot, is_armed, is_wearing_armor, has_helmet, secondary_weapon, has_leg_armor)
+	_sync_state.rpc(position, hp, hunger, fatigue, morale, carried_loot, is_armed, is_wearing_armor, has_helmet, secondary_weapon, has_leg_armor, troop_type)
 
 
 func _current_move_speed() -> float:
@@ -468,7 +471,20 @@ func _finish_search() -> void:
 	_searching = false
 	var building := get_node_or_null(_pending_building_path)
 	_pending_building_path = NodePath()
-	if building == null or building.is_looted:
+	if building == null:
+		return
+	if building.has_bandit_loot:
+		# Banditen-Restloot (siehe docs/scavenging.md, "Banditen-Restloot") —
+		# einzige Ausnahme vom sonst endgültigen is_looted-Gate unten, ein
+		# schon geplündertes Gebäude ist NUR durchsuchbar, solange dieses
+		# Flag gesetzt ist. Kein mark_looted() nötig (ist es schon), keine
+		# erneute Rekrutierung (die passierte, falls überhaupt, beim ersten
+		# Durchsuchen).
+		_pick_up_loot(building.bandit_loot)
+		building.clear_bandit_loot.rpc()
+		_return_to_base()
+		return
+	if building.is_looted:
 		return
 	building.mark_looted.rpc()
 	_pick_up_loot(building.loot)
@@ -569,11 +585,12 @@ func _enter_vehicle() -> void:
 	# host-seitig (siehe docs/vehicle.md).
 	var vehicle := get_node_or_null(_pending_vehicle_path)
 	_pending_vehicle_path = NodePath()
-	if vehicle == null or vehicle.owner_peer_id != 0:
-		# Inzwischen (von wem auch immer) schon besetzt — zu spät, kein
+	if vehicle == null or vehicle.is_full():
+		# Inzwischen (von wem auch immer) schon voll besetzt — zu spät, kein
 		# Feedback, gleiches Muster wie ein schon geplündertes Gebäude.
 		return
-	vehicle.enter(self, owner_peer_id)
+	if not vehicle.enter(self, owner_peer_id):
+		return
 	_board.rpc(true)
 	# Nutzer-Feedback (siehe docs/vehicle.md, "Differenzierte Fahrzeugtypen")
 	# — sonst ist Motorrad/LKW/Auto nur an der Farbe/Größe im 3D-Blick
@@ -718,10 +735,14 @@ func _handle_healing(delta: float) -> void:
 	var heal_rate := HEAL_RATE
 	var in_range := global_position.distance_to(base.global_position) <= HEAL_RADIUS
 	if not in_range:
-		if _find_nearby_medical_station() == null:
+		var station := _find_nearby_medical_station()
+		if station == null:
 			return
 		in_range = true
-		heal_rate = MEDICAL_STATION_HEAL_RATE
+		# Erweiterte Krankenstation (siehe docs/building.md, Punkt 24 der
+		# Gesamtliste) heilt schneller — einziger funktionaler Unterschied
+		# zur normalen Krankenstation.
+		heal_rate = ADVANCED_MEDICAL_STATION_HEAL_RATE if station.is_advanced else MEDICAL_STATION_HEAL_RATE
 	if base.resources.get("medicine", 0) <= 0:
 		return
 	_heal_accumulator += heal_rate * delta
@@ -1061,7 +1082,7 @@ func _die() -> void:
 
 
 @rpc("authority", "call_local", "unreliable_ordered")
-func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fatigue: float, new_morale: float, new_carried_loot: Dictionary, new_is_armed: bool, new_is_wearing_armor: bool, new_has_helmet: bool, new_secondary_weapon: bool, new_has_leg_armor: bool) -> void:
+func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fatigue: float, new_morale: float, new_carried_loot: Dictionary, new_is_armed: bool, new_is_wearing_armor: bool, new_has_helmet: bool, new_secondary_weapon: bool, new_has_leg_armor: bool, new_troop_type: TroopType) -> void:
 	# Kombiniert Position/HP/Hunger/Müdigkeit/Moral/Loot/Waffen-/Rüstungs-
 	# Status in einem RPC (unreliable_ordered: gelegentlicher Verlust
 	# unproblematisch, jeder Frame schickt ohnehin den kompletten aktuellen
@@ -1071,7 +1092,12 @@ func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fati
 	# new_is_armed/new_is_wearing_armor/new_has_helmet/new_secondary_weapon/
 	# new_has_leg_armor (siehe docs/survivor.md, "Waffensystem"/
 	# "Rüstungssystem") sind der einzige Weg, wie andere Peers/die eigene UI
-	# den aktuellen Status sehen.
+	# den aktuellen Status sehen. new_troop_type ebenso (Bugfix 2026-08-03,
+	# Nutzer-Report "Spieler 2 kann Units nicht in Bautrupp umwandeln") —
+	# set_troop_type() änderte troop_type bisher NUR auf der Host-Instanz,
+	# ohne Broadcast an andere Peers; beim Host selbst fiel das nie auf,
+	# weil seine eigene UI dieselbe Node-Instanz liest, die der Server
+	# direkt mutiert.
 	position = new_position
 	hp = new_hp
 	hunger = new_hunger
@@ -1083,6 +1109,7 @@ func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fati
 	has_helmet = new_has_helmet
 	secondary_weapon = new_secondary_weapon
 	has_leg_armor = new_has_leg_armor
+	troop_type = new_troop_type
 	_update_color()
 
 
@@ -1091,19 +1118,29 @@ func _update_color() -> void:
 	if mesh == null:
 		return
 	var ratio: float = float(hp) / float(MAX_HP)
-	# Bautrupp bekommt einen eigenen Grundton (Arbeits-Orange statt Weiß),
-	# damit er auch aus der Ferne sofort vom Feldtrupp unterscheidbar ist
-	# (siehe docs/survivor.md, "Trupp-Arten") — HP-Verlauf Richtung Rot
-	# bleibt für beide Typen gleich, läuft nur über den jeweiligen
-	# Grundton statt fest über Weiß. Ein bewaffneter Feldtrupp bekommt
-	# zusätzlich einen stahlblauen Ton statt reinem Weiß (Nutzer-Feedback:
-	# ohne jeden optischen Unterschied war nicht erkennbar, ob ein Trupp
-	# überhaupt eine Waffe trägt).
-	var base_color := Color.WHITE
-	if troop_type == TroopType.BUILD:
-		base_color = Color(0.9, 0.6, 0.15)
-	elif is_armed:
-		base_color = Color(0.55, 0.75, 1.0)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = base_color.lerp(Color.RED, 1.0 - ratio)
+	mat.albedo_color = _unit_base_color().lerp(Color.RED, 1.0 - ratio)
 	mesh.set_surface_override_material(0, mat)
+
+
+func _unit_base_color() -> Color:
+	# Jede Einheit bekommt eine eigene, aus trupp_id abgeleitete Farbe
+	# (Nutzerwunsch 2026-08-03: "unterschiedliche Farben pro Unit", explizit
+	# PRO EINHEIT statt pro Spieler gewählt) — rein deterministisch aus der
+	# ohnehin schon netzwerksynchronen trupp_id berechnet, kein
+	# zusätzlicher State/RPC nötig, auf allen Peers identisch. Schritt um
+	# den goldenen Schnitt sorgt für gut verteilte, unterscheidbare
+	# Farbtöne auch bei aufeinanderfolgenden IDs.
+	var hue := fmod(trupp_id * 0.6180339887, 1.0)
+	# Trupp-Art (Feld/Bau) ist ohnehin schon als Text in der Einheiten-Liste
+	# und im Detailfenster sichtbar (siehe World.gd) — Farbe hier ersetzt
+	# NICHT mehr die Trupp-Art-Unterscheidung, sondern macht zusätzlich
+	# Sättigung/Helligkeit als schwaches Zweit-Signal (Bautrupp gedeckter,
+	# bewaffneter Feldtrupp kräftiger), Haupt-Signal bleibt der Farbton
+	# selbst zur Einheiten-Unterscheidung.
+	var saturation := 0.55 if troop_type == TroopType.BUILD else 0.75
+	var value := 0.75 if troop_type == TroopType.BUILD else 0.9
+	if troop_type == TroopType.FIELD and is_armed:
+		saturation = 0.85
+		value = 1.0
+	return Color.from_hsv(hue, saturation, value)

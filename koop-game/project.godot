@@ -21,6 +21,7 @@ GameManager="*res://autoloads/GameManager.gd"
 NetworkManager="*res://autoloads/NetworkManager.gd"
 SettingsManager="*res://autoloads/SettingsManager.gd"
 SaveManager="*res://autoloads/SaveManager.gd"
+GamepadCursor="*res://autoloads/GamepadCursor.gd"
 
 [display]
 

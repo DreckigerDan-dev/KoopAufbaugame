@@ -30,6 +30,10 @@ var has_survivor: bool = false
 # wiederhergestelltes, noch unlooted/ungeclaimtes Gebäude dieselbe Farbe
 # zurückbekommt statt grau zu wirken.
 var default_color: Color = Color(0.45, 0.38, 0.3)
+# Kartenansicht-Legende (siehe World.LOOT_CATEGORY_BY_RESOURCE/MapView.gd,
+# LOOT_CATEGORY_COLORS) — "food"/"medicine"/"equipment"/"books", aus der
+# BUILDING_TYPES-Vorlage abgeleitet, einmalig beim Spawn gesetzt.
+var loot_category: String = "food"
 # Zonen-Zentrum, zu dem dieses Gebäude gehört (siehe docs/zones.md,
 # "Start-Basis wählen") — request_choose_start_base() braucht das, um die
 # Home-Base von der ZONEN-Mitte weg zu platzieren statt vom Weltursprung
@@ -40,6 +44,16 @@ var zone_center: Vector3 = Vector3.ZERO
 var is_looted: bool = false
 var owner_peer_id: int = 0  # 0 = nicht geclaimt
 var hp: int = MAX_HP
+# Banditen-Restloot (Vision-Ideenbacklog, Punkt 23 der Gesamtliste,
+# `Infos/01 Architektur.md`: "gelegentlich hinterlassen Banditen-Camps
+# kleinen Restloot in bereits geplünderten Gebäuden — Grund für
+# gelegentliches Zurückkehren, ohne vollen Loot-Respawn"). Komplett
+# unabhängig vom ursprünglichen `loot` (der bleibt unverändert, aber
+# irrelevant, sobald is_looted true ist) — World._spawn_bandit_restock()
+# würfelt periodisch EIN bereits geplündertes, unbesetztes Gebäude aus und
+# befüllt diese beiden Felder neu.
+var has_bandit_loot: bool = false
+var bandit_loot: Dictionary = {}
 
 
 @rpc("authority", "call_local", "reliable")
@@ -49,6 +63,29 @@ func mark_looted() -> void:
 	if is_looted:
 		return
 	is_looted = true
+	_update_visual()
+
+
+@rpc("authority", "call_local", "reliable")
+func grant_bandit_loot(new_bandit_loot: Dictionary) -> void:
+	# Von World._spawn_bandit_restock() aufgerufen (host-seitig, siehe dort)
+	# — macht ein bereits geplündertes, unbesetztes Gebäude EINMALIG wieder
+	# durchsuchbar (Survivor._finish_search() prüft has_bandit_loot als
+	# Ausnahme vom sonst endgültigen is_looted-Gate). Parameter bewusst
+	# NICHT `loot` genannt — würde das gleichnamige Member-Feld oben
+	# (ursprünglicher, einmaliger Erst-Loot) verschatten.
+	has_bandit_loot = true
+	bandit_loot = new_bandit_loot
+	_update_visual()
+
+
+@rpc("authority", "call_local", "reliable")
+func clear_bandit_loot() -> void:
+	# Von Survivor._finish_search() aufgerufen, nachdem der Restloot
+	# eingesammelt wurde — Gebäude fällt danach zurück auf den normalen
+	# "geplündert, unbesetzt"-Zustand (claim-/abreißbar wie zuvor).
+	has_bandit_loot = false
+	bandit_loot = {}
 	_update_visual()
 
 
@@ -96,6 +133,12 @@ func _update_visual() -> void:
 		# Geclaimt — bläulicher Ton, deutlich unterscheidbar vom neutralen
 		# Grau eines nur geplünderten, noch niemandem gehörenden Gebäudes.
 		mat.albedo_color = Color(0.3, 0.5, 0.75)
+	elif has_bandit_loot:
+		# Banditen-Restloot verfügbar — goldener Ton, gleiche Farbsprache wie
+		# ein markierter Baum/Autowrack (siehe Tree.gd/CarWreck.gd,
+		# "Markier-System"), damit auf einen Blick klar ist: hier lohnt sich
+		# nochmal ein Besuch.
+		mat.albedo_color = Color(0.85, 0.7, 0.15)
 	elif is_looted:
 		# Dunkelt beim Abreißen zusätzlich nach (gleiches Prinzip wie
 		# Tree/CarWreck/StonePile/BrickPile/ZombieNest) — bleibt bei vollem

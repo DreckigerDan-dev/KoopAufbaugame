@@ -24,6 +24,7 @@ const WORKSHOP_SCENE := preload("res://scenes/entities/base/Workshop.tscn")
 const STORAGE_SCENE := preload("res://scenes/entities/base/Storage.tscn")
 const FIELD_SCENE := preload("res://scenes/entities/field/Field.tscn")
 const OUTPOST_SCENE := preload("res://scenes/entities/base/Outpost.tscn")
+const WATCHTOWER_SCENE := preload("res://scenes/entities/watchtower/Watchtower.tscn")
 const TREE_SCENE := preload("res://scenes/entities/tree/Tree.tscn")
 const CAR_WRECK_SCENE := preload("res://scenes/entities/wreck/CarWreck.tscn")
 const STONE_PILE_SCENE := preload("res://scenes/entities/pile/StonePile.tscn")
@@ -50,9 +51,28 @@ const ZOOM_MIN := 10.0
 # gegenüber der alten 40 (die selbst schon mal von 25 hochgesetzt wurde,
 # damals noch für die 160er-Karte) für etwas mehr Übersicht — Navigation
 # über größere Distanzen läuft über die Minimap (siehe Minimap.gd), nicht
-# übers Rauszoomen.
-const ZOOM_MAX := 60.0
+# übers Rauszoomen. 2026-08-03 (Nutzerwunsch: "bisschen mehr rauszoomen")
+# von 60 auf 80 nochmal angehoben.
+const ZOOM_MAX := 80.0
 const RAY_LENGTH := 1000.0
+# Gamepad-Steuerung, weltspezifischer Teil (2026-08-03, Nutzerwunsch:
+# "controller und steamdeck support", getestet auf ROG Ally) — siehe
+# docs/world.md, "Gamepad-Steuerung" für die vollständige Tastenbelegung/
+# Design-Begründung. Cursor-Bewegung + A/B-Klicks laufen zentral im
+# Autoload `GamepadCursor.gd` (funktioniert dadurch auch in MainMenu/
+# Lobby) — hier nur Kamera-Rotation/-Neigung/Zoom + die drei Welt-Aktionen
+# Pause/Kartenansicht/Fahrzeug-Ausstieg. Bewusst additiv: alles hier läuft
+# NUR, wenn tatsächlich ein Gamepad verbunden ist (siehe
+# _handle_gamepad_input()), Maus/Tastatur bleiben davon komplett
+# unberührt — kein Eingriff in bestehende Input-Pfade.
+const GAMEPAD_DEADZONE := 0.2
+# Linker Trigger gehalten schaltet den rechten Stick von Cursor-Bewegung
+# (Standard, siehe GamepadCursor.gd) auf Kamera-Rotation/-Neigung um
+# (Analogon zum gehaltenen Rechtsklick+Ziehen bei Maus).
+const GAMEPAD_TRIGGER_THRESHOLD := 0.5
+const GAMEPAD_ROTATE_SENSITIVITY := 2.5  # rad/s bei vollem Stick-Ausschlag
+const GAMEPAD_TILT_SENSITIVITY := 1.5
+const GAMEPAD_ZOOM_REPEAT_INTERVAL := 0.15  # Sekunden zwischen Zoom-Schritten bei gehaltener Schulter-Taste
 # Kartengröße (siehe docs/world.md, "Kartengröße") — EINZIGE Quelle der
 # Wahrheit für die Bodenfläche: Ground/Mesh und Ground/Collision in
 # World.tscn haben nur noch einen trivialen Platzhalter-Wert, ihre echte
@@ -320,7 +340,7 @@ const BRUTE_LOOT_AMOUNT := {"ammo": 10, "medicine": 8, "weapon": 1, "armor": 1, 
 # unabhängiger, deutlich selteneren Zusatz-Wurf bei jedem Zombie-Tod, egal
 # ob der Haupt-Loot-Wurf (ZOMBIE_LOOT_DROP_CHANCE) überhaupt trifft.
 const BOOK_DROP_CHANCE := 0.08
-const BOOK_TABLE := ["book_weapon", "book_armor", "book_helmet", "book_ammo"]
+const BOOK_TABLE := ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]
 
 # Start-Trupps pro Peer (2026-08-03 von 2 auf 5 angehoben, Nutzerwunsch
 # "5 truppen start") — bewusster Kompromiss von vor der In-Game-
@@ -343,13 +363,8 @@ const START_SURVIVOR_SPACING := 1.5
 ## sie entstehen jetzt ausschließlich durchs Ausbauen eines bereits
 ## geplünderten UND geclaimten eigenen Gebäudes, siehe docs/building.md,
 ## "Ausbauen".
-enum BuildType { GUARD_POST, WALL, GATE, MEDICAL_STATION, WORKSHOP, FIELD, STORAGE, OUTPOST, BED }
+enum BuildType { GUARD_POST, WALL, GATE, MEDICAL_STATION, WORKSHOP, FIELD, STORAGE, OUTPOST, BED, WATCHTOWER }
 
-# Gilt für alle Bautypen (Wachposten/Mauer/Tor/Krankenstation/Werkstatt)
-# UND fürs Claimen von Gebäuden (siehe docs/zones.md) — derselbe Radius um
-# die eigene Home-Base ODER um jedes bereits geclaimte Gebäude definiert
-# die eigene Bauzone, siehe is_within_own_zone().
-const BUILD_RADIUS := 8.0
 # Feste Boden-Y statt der Y-Koordinate eines Anker-Gebäudes zu übernehmen
 # (Bug, gefunden bei der Ressourcenknoten-Überarbeitung) — seit der
 # Gebäudehöhen-Skalierung (siehe docs/world.md) liegt building.position.y
@@ -364,10 +379,12 @@ const STONE_PILE_GROUND_Y := 0.4
 const BRICK_PILE_GROUND_Y := 0.35
 
 # Gebäude-Typen (siehe docs/world.md, "Kartengröße" + docs/building.md,
-# "Gebäude-Typen + Loot-Tabellen" — Punkt 17 der Gesamtliste). Ersetzen die
-# früheren zwölf ANONYMEN Vorlagen (gleiche Struktur, nur Größe/Loot/Farbe
-# unterschiedlich) durch vier ECHTE, aus der Vision benannte Gebäudetypen
-# (Infos/01 Architektur.md, "Loot-Tabellen je Gebäudetyp") mit einer echten
+# "Gebäude-Typen + Loot-Tabellen" — Punkt 17 der Gesamtliste, seit
+# 2026-08-03 um zehn weitere erweitert, siehe Kommentar direkt vor den
+# neuen Einträgen unten). Ersetzen die früheren zwölf ANONYMEN Vorlagen
+# (gleiche Struktur, nur Größe/Loot/Farbe unterschiedlich) durch ECHTE, aus
+# der Vision benannte Gebäudetypen (Infos/02 Item-Liste.md,
+# "Gebäude-Fundorte") mit einer echten
 # Loot-TABELLE statt eines einzigen festen Werts: `main_loot` (garantiert,
 # Betrag als Bereich) + `secondary_loot` (unabhängige Chancen), ausgerollt
 # bei jedem Gebäude-Spawn (siehe _roll_building_loot()). Wichtige
@@ -388,7 +405,7 @@ const BRICK_PILE_GROUND_Y := 0.35
 # UNABHÄNGIGE Eigenschaft (siehe _generate_city_zone()): pro Zone bekommt
 # GENAU einer der dort platzierten Plätze `has_survivor = true`, egal
 # welcher Typ dort gezogen wurde.
-const BOOK_LOOT_TYPES := ["book_weapon", "book_armor", "book_helmet", "book_ammo"]
+const BOOK_LOOT_TYPES := ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]
 const BUILDING_TYPES: Array[Dictionary] = [
 	{
 		"name": "Wohnhaus",
@@ -430,7 +447,141 @@ const BUILDING_TYPES: Array[Dictionary] = [
 			{"resource": "helmet", "chance": 0.3, "amount": Vector2i(1, 1)},
 		],
 	},
+	# Zehn weitere Gebäudetypen (2026-08-03, Nutzerwunsch nach der Vision-
+	# Gap-Analyse: "die 10 gebäude können auf jeden Fall rein") — aus
+	# `Infos/02 Item-Liste.md`, "Gebäude-Fundorte". Bewusst NICHT
+	# übernommen: Baumarkt/Werkstatt, Auto-Werkstatt, Elektronikgeschäft —
+	# deren Vision-Hauptloot (Baumaterial/Stahlrahmen/Ersatzteile/
+	# Elektronik-Items) bräuchte entweder neue Ressourcenarten, die es hier
+	# nicht gibt, oder würde die etablierte Regel "keine Baurohstoffe aus
+	# Stadt-Gebäude-Loot" verletzen (siehe survivor.md, "Ressourcen
+	# abbauen"). Alle zehn hier nutzen ausschließlich schon existierende
+	# Ressourcenarten, nur mit anderer Gewichtung/Menge.
+	{
+		"name": "Klinik",
+		"size": Vector3(2.0, 3.6, 2.2),
+		"default_color": Color(0.55, 0.55, 0.58),
+		"main_loot": {"resource": "medicine", "amount": Vector2i(15, 25)},
+		"secondary_loot": [
+			{"resource": "medicine", "chance": 0.4, "amount": Vector2i(4, 8)},
+			{"resource": "book", "chance": 0.2, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Militärbasis",
+		"size": Vector3(2.8, 4.0, 3.0),
+		"default_color": Color(0.3, 0.35, 0.22),
+		"main_loot": {"resource": "weapon", "amount": Vector2i(1, 1)},
+		"secondary_loot": [
+			{"resource": "ammo", "chance": 0.7, "amount": Vector2i(15, 30)},
+			{"resource": "armor", "chance": 0.5, "amount": Vector2i(1, 1)},
+			{"resource": "helmet", "chance": 0.4, "amount": Vector2i(1, 1)},
+			{"resource": "book", "chance": 0.2, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Privatbunker",
+		"size": Vector3(2.0, 3.0, 2.0),
+		"default_color": Color(0.2, 0.2, 0.22),
+		"main_loot": {"resource": "weapon", "amount": Vector2i(1, 1)},
+		"secondary_loot": [
+			{"resource": "ammo", "chance": 0.8, "amount": Vector2i(10, 20)},
+			{"resource": "armor", "chance": 0.6, "amount": Vector2i(1, 1)},
+			{"resource": "book", "chance": 0.3, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Feuerwehrstation",
+		"size": Vector3(2.6, 3.8, 2.8),
+		"default_color": Color(0.6, 0.15, 0.12),
+		"main_loot": {"resource": "armor", "amount": Vector2i(1, 1)},
+		"secondary_loot": [
+			{"resource": "medicine", "chance": 0.5, "amount": Vector2i(3, 6)},
+			{"resource": "helmet", "chance": 0.3, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Restaurant/Kneipe",
+		"size": Vector3(2.2, 3.2, 2.4),
+		"default_color": Color(0.55, 0.3, 0.2),
+		"main_loot": {"resource": "food", "amount": Vector2i(3, 6)},
+		"secondary_loot": [
+			{"resource": "medicine", "chance": 0.2, "amount": Vector2i(2, 4)},
+		],
+	},
+	{
+		"name": "Tankstelle",
+		"size": Vector3(1.6, 2.8, 1.6),
+		"default_color": Color(0.65, 0.55, 0.15),
+		"main_loot": {"resource": "food", "amount": Vector2i(2, 4)},
+		"secondary_loot": [
+			{"resource": "medicine", "chance": 0.3, "amount": Vector2i(2, 4)},
+		],
+	},
+	{
+		"name": "Bibliothek",
+		"size": Vector3(2.4, 3.6, 2.6),
+		"default_color": Color(0.42, 0.3, 0.2),
+		"main_loot": {"resource": "book", "amount": Vector2i(1, 2)},
+		"secondary_loot": [
+			{"resource": "book", "chance": 0.4, "amount": Vector2i(1, 1)},
+			{"resource": "medicine", "chance": 0.2, "amount": Vector2i(2, 4)},
+		],
+	},
+	{
+		"name": "Universität",
+		"size": Vector3(3.0, 4.2, 3.2),
+		"default_color": Color(0.5, 0.42, 0.3),
+		"main_loot": {"resource": "book", "amount": Vector2i(1, 2)},
+		"secondary_loot": [
+			{"resource": "book", "chance": 0.5, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Garten-Center",
+		"size": Vector3(2.2, 3.0, 2.4),
+		"default_color": Color(0.3, 0.5, 0.25),
+		"main_loot": {"resource": "melee_weapon", "amount": Vector2i(1, 1)},
+		"secondary_loot": [
+			{"resource": "book", "chance": 0.2, "amount": Vector2i(1, 1)},
+		],
+	},
+	{
+		"name": "Camping-Laden",
+		"size": Vector3(1.8, 2.8, 2.0),
+		"default_color": Color(0.35, 0.45, 0.35),
+		"main_loot": {"resource": "leg_armor", "amount": Vector2i(1, 1)},
+		"secondary_loot": [
+			{"resource": "food", "chance": 0.4, "amount": Vector2i(1, 2)},
+			{"resource": "medicine", "chance": 0.2, "amount": Vector2i(1, 2)},
+		],
+	},
 ]
+
+
+# Kartenansicht-Legende (2026-08-03, Nutzerwunsch: "färbe die gebäude
+# typen ein zu den jeweiligen lootarten, krankenhaus heilung grün etc.")
+# — ordnet jeder `main_loot.resource` eine grobe Vier-Kategorien-Farbe zu
+# (siehe MapView.gd, LOOT_CATEGORY_COLORS). Bewusst aus `main_loot`
+# abgeleitet statt einem eigenen Feld pro BUILDING_TYPES-Eintrag — eine
+# Quelle der Wahrheit, kein Risiko, dass Loot-Tabelle und Kategorie
+# irgendwann auseinanderlaufen.
+const LOOT_CATEGORY_BY_RESOURCE := {
+	"food": "food",
+	"medicine": "medicine",
+	"weapon": "equipment",
+	"armor": "equipment",
+	"helmet": "equipment",
+	"melee_weapon": "equipment",
+	"leg_armor": "equipment",
+	"ammo": "equipment",
+	"book": "books",
+}
+
+
+func _loot_category_for_template(template: Dictionary) -> String:
+	var resource: String = template["main_loot"]["resource"]
+	return LOOT_CATEGORY_BY_RESOURCE.get(resource, "food")
 
 
 func _roll_building_loot(template: Dictionary) -> Dictionary:
@@ -495,8 +646,12 @@ const CITY_ZONE_RADIUS_SMALL := 150.0
 # spürbare Mehrbelastung für die Zombie-Zielsuche — die durchsucht nur
 # GECLAIMTE Gebäude (`owner_peer_id != 0`, siehe Zombie._find_nearest_
 # target()), unclaimte Gebäude kosten dort praktisch nichts zusätzlich.
-const BUILDINGS_PER_LARGE_ZONE := 100
-const BUILDINGS_PER_SMALL_ZONE := 50
+# 2026-08-03 (Nutzerwunsch: "in die stadt viel mehr gebäude zum
+# benchmark") nochmal von 100/50 auf 300/150 verdreifacht (Summe 1050
+# statt 350) — reiner Stresstest für die Performance, keine
+# Balancing-Entscheidung. Slot-Reserve reicht laut Kommentar oben locker.
+const BUILDINGS_PER_LARGE_ZONE := 300
+const BUILDINGS_PER_SMALL_ZONE := 150
 const VEHICLES_PER_ZONE := 2
 # Differenzierte Fahrzeugtypen (Punkt 19 der Gesamtliste) — String-Keys aus
 # Vehicle.VEHICLE_STATS, siehe dort für Werte/Begründung. Zufällig pro
@@ -562,7 +717,10 @@ const FOREST_ZONE_RADIUS := 150.0
 # TREES_TOTAL/MAP_SIZE unten — ca. 1 Baum pro 1.767 m² hier gegen ca. 1 Baum
 # pro 121.860 m² in der Wildnis,~69× dichter) — das ist der eigentliche
 # visuelle Unterschied zu einem "hier stehen halt ein paar Bäume"-Gebiet.
-const TREES_PER_FOREST_ZONE := 40
+# 2026-08-03 (Nutzerwunsch: "mehr bäume im wald") von 40 auf 80 verdoppelt
+# — reiner Stresstest wie bei BUILDINGS_PER_*_ZONE oben, keine
+# Balancing-Entscheidung.
+const TREES_PER_FOREST_ZONE := 80
 # Ein Jagdstand pro Wald-Zone (Vision: Infos/02 Item-Liste.md, "Waldrand"-
 # Loot: Munition/Waffen/Fernglas — Fernglas hat keinen eigenen Ressourcen-
 # Typ, deshalb nur Munition+Waffe). Bewusst NICHT Teil von
@@ -581,11 +739,12 @@ var _forest_zone_centers: Array[Vector3] = []
 # direkt in das schon bekannte Performance-Risiko (siehe persistentes
 # Memory "koopgame_map_scale_performance": Entity-Zahl, nicht Fläche, ist
 # der Flaschenhals). Stattdessen feste, moderat erhöhte Gesamtzahlen
-# (vorher 10/4/5/5).
-const TREES_TOTAL := 200
-const CAR_WRECKS_TOTAL := 80
-const STONE_PILES_TOTAL := 100
-const BRICK_PILES_TOTAL := 100
+# (vorher 10/4/5/5). 2026-08-03 (Nutzerwunsch: "allgemein mehr
+# ressourcen", zum Benchmark) nochmal verdoppelt (vorher 200/80/100/100).
+const TREES_TOTAL := 400
+const CAR_WRECKS_TOTAL := 160
+const STONE_PILES_TOTAL := 200
+const BRICK_PILES_TOTAL := 200
 # Mindestabstand zwischen neu gespawnten Ressourcenknoten und
 # Gebäuden/Fahrzeugen/Zombie-Nest/anderen Ressourcenknoten (Nutzerwunsch:
 # "alles was im Spiel spawnt soll ein bisschen Platz dazwischen haben"),
@@ -606,6 +765,18 @@ const SPACING_ATTEMPTS := 10
 # Anfangs-Spawn.
 const RESOURCE_REGROWTH_INTERVAL := 30.0
 var _resource_regrowth_timer: float = 0.0
+# Banditen-Restloot (Punkt 23 der Gesamtliste, `Infos/01 Architektur.md`,
+# Ideen-Backlog: "gelegentlich hinterlassen Banditen-Camps kleinen Restloot
+# in bereits geplünderten Gebäuden") — 3 Minuten Echtzeit-Intervall, bewusst
+# ähnlich selten wie andere periodische Ereignisse (HORDE_INTERVAL 5 Min),
+# aber kurz genug für einen zügigen Test. Nur Nahrung/Medizin/Munition
+# (keine Baurohstoffe aus Stadt-Gebäude-Loot, siehe BUILDING_TYPES oben) —
+# kleine Menge statt vollem Loot-Respawn, siehe Vision-Zitat.
+const BANDIT_RESTOCK_INTERVAL := 180.0
+const BANDIT_LOOT_RESOURCES := ["food", "medicine", "ammo"]
+const BANDIT_LOOT_MIN := 3
+const BANDIT_LOOT_MAX := 8
+var _bandit_restock_timer: float = 0.0
 # Vier Baurohstoffe statt eines generischen "materials" (siehe
 # docs/base.md, "Vier Baurohstoffe") — jeder Bautyp braucht genau eine
 # thematisch passende Art: Wachposten (Holzturm), Mauer (Steinwall), Tor
@@ -642,6 +813,28 @@ const STORAGE_COST := {"wood": 30}
 # die Vision-Beträge sind für das dortige größere Ressourcensystem
 # kalibriert, nicht 1:1 auf dieses schlankere übertragbar.
 const OUTPOST_COST := {"wood": 15, "stone": 10}
+# Wachturm (Punkt 25 der Gesamtliste, siehe Infos/02 Item-Liste.md:
+# "12× Holz + 8× Stahlrahmen + Buch 'Verteid.' + Buch 'Elektrik'",
+# ~2500-3000). Stahlrahmen gibt's nicht, auf Metall umgehängt (gleiche
+# Preisklasse-Logik wie Außenposten oben) — bewusst OHNE Buch-Gate (Scope-
+# Entscheidung, siehe docs/building.md, "Wachturm": zwei neue Bücher nur
+# für ein einziges Gebäude wären für den aktuellen Umfang unverhältnismäßig).
+# Deutlich teurer als Wachposten (30 Holz) — reine Sichtweiten-Funktion,
+# kein Kampfnutzen, soll trotzdem eine bewusste Investition bleiben.
+const WATCHTOWER_COST := {"wood": 30, "metal": 20}
+# Sichtradius (siehe World._update_fog_of_war()) — deutlich größer als
+# FOG_VISION_RADIUS (130, für Einheiten/Home-Base), das ist der ganze Punkt
+# eines Wachturms ("erweiterte Sicht auf die Map").
+const WATCHTOWER_VISION_RADIUS := 350.0
+# Wachturm ist mit 5m Höhe deutlich größer als die übrigen 1,5³-Einzelklick-
+# Bautypen (die nehmen einfach den rohen Boden-Raycast-Y-Wert, minimales
+# Einsinken fällt bei 1,5m Höhe kaum auf) — ohne eigene Boden-Y würde der
+# Turm zum Großteil im Boden versinken (nur die Spitze ~2,5m ragt raus).
+# Halbe Mesh-Höhe, gleiches Prinzip wie SURVIVOR_GROUND_Y/TREE_GROUND_Y/etc.
+const WATCHTOWER_GROUND_Y := 2.5
+# Deckt sich mit der BoxMesh/BoxShape3D-Größe in Watchtower.tscn — für den
+# Ghost-Preview gebraucht (siehe _watchtower_ghost_mesh, _ready()).
+const WATCHTOWER_MESH_SIZE := Vector3(1.2, 5.0, 1.2)
 # Lager-Kapazität aus dem Volumen (Breite×Höhe×Tiefe) des ausgebauten
 # Gebäudes berechnet (siehe docs/building.md, "Lager") — an
 # Infos/03 Asset-Checkliste.md kalibriert: ein "Wohnhaus" (~500 m³) soll
@@ -676,6 +869,21 @@ const CRAFTING_RECIPES: Array[Dictionary] = [
 	{"id": "helmet", "name": "Helm", "cost": {"metal": 10, "stone": 5}, "yield": {"helmet": 1}},
 	{"id": "ammo", "name": "Munition", "cost": {"metal": 10}, "yield": {"ammo": 15}},
 ]
+# Gebäude-Ausbaustufen über Forschungsbücher (Punkt 24 der Gesamtliste,
+# `Infos/02 Item-Liste.md`, "Forschungsbücher & Progression" — Bücher
+# schalten primär GEBÄUDE-Ausbaustufen frei, nicht nur Crafting-Rezepte
+# wie CRAFTING_RECIPES oben). Bewusst als eigene, kleine Liste statt in
+# CRAFTING_RECIPES gemischt — hat kein "cost"/"yield" (kein Item-Ertrag),
+# request_craft() würde sonst mit einem KeyError abstürzen, wenn jemand
+# versehentlich/böswillig damit aufgerufen wird. Erste (und einzige,
+# 2026-08-03) Ausbaustufe: Erweiterte Krankenstation, siehe
+# docs/building.md. Weitere Vision-Ausbaustufen (Stromgenerator,
+# Garten-Anlage, Palisaden/Fallen) bewusst zurückgestellt — Wachturm ist
+# ein eigener Listenpunkt (25).
+const BUILDING_RESEARCH: Array[Dictionary] = [
+	{"id": "medical_upgrade", "name": "Erweiterte Krankenstation"},
+]
+const MEDICAL_UPGRADE_COST := {"brick": 15, "medicine": 3}
 const BUILD_MODE_ACTIVE_TEXT := "Baumodus aktiv — in die Welt klicken"
 # Deutsche Anzeigenamen für HUD/Ressourcen-Panel/Bau-Buttons — ein Ort für
 # alle Ressourcenarten statt verstreuter Einzel-Strings, siehe
@@ -698,6 +906,7 @@ const RESOURCE_DISPLAY_NAMES := {
 	"book_armor": "Buch: Rüstungsbau",
 	"book_helmet": "Buch: Helmbau",
 	"book_ammo": "Buch: Munitionsherstellung",
+	"book_medical_upgrade": "Buch: Medizinische Praxis",
 }
 # Ressourcen-Panel in Kategorien unterteilt (2026-08-01, Nutzerwunsch nach
 # dem UI-Overhaul: "rechts die Ressourcen sind ein bisschen zu viele") —
@@ -712,7 +921,7 @@ const RESOURCE_CATEGORIES: Array[Dictionary] = [
 	{"name": "Baurohstoffe", "keys": ["wood", "metal", "stone", "brick"]},
 	{"name": "Überleben", "keys": ["food", "medicine", "ammo"]},
 	{"name": "Ausrüstung", "keys": ["weapon", "armor", "helmet", "melee_weapon", "leg_armor"]},
-	{"name": "Forschungsbücher", "keys": ["book_weapon", "book_armor", "book_helmet", "book_ammo"]},
+	{"name": "Forschungsbücher", "keys": ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]},
 ]
 # Farben fürs Platzierungs-Preview (BuildGhost) — grün bei gültigem
 # Bauplatz (Radius + Ressourcen reichen), sonst rot. Alpha < 1, damit
@@ -796,6 +1005,8 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var fields_container: Node3D = $Fields
 @onready var outpost_spawner: MultiplayerSpawner = $OutpostSpawner
 @onready var outposts_container: Node3D = $Outposts
+@onready var watchtower_spawner: MultiplayerSpawner = $WatchtowerSpawner
+@onready var watchtowers_container: Node3D = $Watchtowers
 # Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") sind Gebäude/
 # Fahrzeuge/Zombie-Nester Spawner-Entities wie alles andere, keine festen
 # .tscn-Kind-Nodes mehr.
@@ -824,6 +1035,7 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var gate_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/GateButton
 @onready var field_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/FieldButton
 @onready var outpost_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/OutpostButton
+@onready var watchtower_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/WatchtowerButton
 @onready var build_ghost: MeshInstance3D = $BuildGhost
 @onready var build_ghost_line: Node3D = $BuildGhostLine
 @onready var workers_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Bauen/WorkersList
@@ -836,6 +1048,13 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var upgrade_workshop_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/UpgradeWorkshopButton
 @onready var upgrade_storage_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/UpgradeStorageButton
 @onready var upgrade_bed_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/UpgradeBedButton
+# Erweiterte Krankenstation (Punkt 24 der Gesamtliste, siehe
+# docs/building.md, "Erweiterte Krankenstation") — anders als die
+# Ausbauen-Buttons oben NICHT an eine Gebäude-Auswahl gebunden, sondern
+# sichtbar sobald der Spieler eine eigene, noch nicht erweiterte
+# Krankenstation besitzt (siehe _refresh_advanced_medical_ui()).
+@onready var advanced_medical_separator: HSeparator = $MainTabsUI/Panel/TabContainer/Bauen/AdvancedMedicalSeparator
+@onready var advanced_medical_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/AdvancedMedicalButton
 @onready var units_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Einheiten/UnitsList
 # Herstellen (siehe docs/building.md, "Herstellen" — Punkt 12 der
 # Gesamtliste) — jetzt der "Herstellen"-Tab statt eines eigenen Panels.
@@ -862,6 +1081,10 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 # Vollbild-Kartenansicht (siehe docs/world.md, "Kartenansicht" — Punkt 11
 # der Gesamtliste), eigene Taste (KEY_M) statt automatisch bei ZOOM_MAX.
 @onready var map_view_ui: CanvasLayer = $MapViewUI
+# Direkte Referenz auf das Script-Node (nicht nur die CanvasLayer), gebraucht
+# für reset_view()/zoom_in()/zoom_out() (siehe toggle_map_view() unten,
+# _handle_gamepad_input()).
+@onready var map_view: Control = $MapViewUI/Panel/MapView
 # Trupp-Detailfenster (siehe docs/survivor.md, "Rüstungssystem") — seit
 # 2026-08-03 ein Tab ("Trupp") im gemeinsamen MainTabsUI-TabContainer statt
 # eines eigenen, frei positionierten CanvasLayer (Nutzer-Report: "die ui
@@ -889,10 +1112,21 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 	$MainTabsUI/Panel/TabContainer/Einheiten/GroupRow/SelectGroup3Button,
 ]
 
-var _zoom_distance: float = 12.0
+# 2026-08-03 (Nutzerwunsch: "kamera... auf standard machen") von 12.0 auf
+# 25.0 angehoben — vorher startete jede Partie fast komplett reingezoomt
+# (knapp über ZOOM_MIN), jetzt ein Wert näher an der Mitte des jetzt auch
+# größeren Zoom-Bereichs (10-80) für einen brauchbareren Überblick direkt
+# beim Start.
+var _zoom_distance: float = 25.0
 var _tilt_angle: float = 0.5404
 var _rotating: bool = false
 var _right_click_dragged: bool = false
+# Gamepad-Steuerung (siehe GAMEPAD_*-Konstanten oben) — Vorframe-Zustand
+# der digitalen Buttons, um "gerade gedrückt"/"gerade losgelassen" selbst
+# zu erkennen (Input.is_joy_button_pressed() ist Level-getriggert, kein
+# eingebautes "just pressed" ohne eine InputMap-Action).
+var _gamepad_button_state: Dictionary = {}
+var _gamepad_zoom_repeat_timer: float = 0.0
 var selected: Array = []
 # Ausbauen (siehe docs/building.md, "Ausbauen") — Klick auf ein eigenes,
 # bereits geclaimtes Gebäude setzt das statt eines Trupp-Befehls; steuert
@@ -927,6 +1161,7 @@ var _next_workshop_id: int = 0
 var _next_storage_id: int = 0
 var _next_field_id: int = 0
 var _next_outpost_id: int = 0
+var _next_watchtower_id: int = 0
 # Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") sind Gebäude/
 # Fahrzeuge/Zombie-Nester Spawner-Entities wie alles andere (vorher feste
 # .tscn-Kind-Nodes, keine eigene ID nötig).
@@ -966,6 +1201,7 @@ const STATUS_MESSAGE_DURATION := 2.5
 var _status_message_timer: float = 0.0
 var _guard_post_ghost_mesh: BoxMesh
 var _wall_ghost_mesh: BoxMesh
+var _watchtower_ghost_mesh: BoxMesh
 # Ziehen mehrerer Mauer-/Tor-Segmente in einem Zug statt Einzelklicks (siehe
 # docs/walls.md, "Ziehen") — _wall_drag_start ist der Weltpunkt vom
 # Maus-Runterdrücken, _ghost_line_meshes ein wiederverwendeter Pool von
@@ -997,6 +1233,7 @@ func _ready() -> void:
 	brick_pile_spawner.spawn_function = _create_brick_pile
 	field_spawner.spawn_function = _create_field
 	outpost_spawner.spawn_function = _create_outpost
+	watchtower_spawner.spawn_function = _create_watchtower
 	building_spawner.spawn_function = _create_building
 	vehicle_spawner.spawn_function = _create_vehicle
 	zombie_nest_spawner.spawn_function = _create_zombie_nest
@@ -1005,10 +1242,12 @@ func _ready() -> void:
 	gate_button.pressed.connect(_on_toggle_build_mode_pressed.bind(BuildType.GATE))
 	field_button.pressed.connect(_on_toggle_build_mode_pressed.bind(BuildType.FIELD))
 	outpost_button.pressed.connect(_on_toggle_build_mode_pressed.bind(BuildType.OUTPOST))
+	watchtower_button.pressed.connect(_on_toggle_build_mode_pressed.bind(BuildType.WATCHTOWER))
 	upgrade_medical_button.pressed.connect(_on_upgrade_building_pressed.bind(BuildType.MEDICAL_STATION))
 	upgrade_workshop_button.pressed.connect(_on_upgrade_building_pressed.bind(BuildType.WORKSHOP))
 	upgrade_storage_button.pressed.connect(_on_upgrade_building_pressed.bind(BuildType.STORAGE))
 	upgrade_bed_button.pressed.connect(_on_upgrade_building_pressed.bind(BuildType.BED))
+	advanced_medical_button.pressed.connect(_on_advanced_medical_pressed)
 	unit_detail_weapon_button.pressed.connect(_on_detail_equip_weapon_pressed)
 	unit_detail_armor_button.pressed.connect(_on_detail_equip_armor_pressed)
 	unit_detail_helmet_button.pressed.connect(_on_detail_equip_helmet_pressed)
@@ -1029,6 +1268,8 @@ func _ready() -> void:
 	_guard_post_ghost_mesh = build_ghost.mesh
 	_wall_ghost_mesh = BoxMesh.new()
 	_wall_ghost_mesh.size = WALL_GHOST_SIZE
+	_watchtower_ghost_mesh = BoxMesh.new()
+	_watchtower_ghost_mesh.size = WATCHTOWER_MESH_SIZE
 	for i in select_group_buttons.size():
 		select_group_buttons[i].pressed.connect(_handle_control_group_key.bind(i + 1, false))
 	# Kein eigener Lobby-Flow hier — Host/Join/Spielerliste/Start laufen
@@ -1062,6 +1303,11 @@ func _ready() -> void:
 		# funktioniert dadurch gleichermaßen beim normalen Partie-Start UND
 		# bei einem spät beitretenden Peer, ganz ohne eigenen Sonderfall.
 		request_city_zones.rpc_id(1)
+		# Gleicher PULL für die Catch-up-Daten (Survivor/Home-Base/Zombies/...,
+		# siehe request_catch_up()) — der frühere reine Push-Weg über
+		# NetworkManager.player_connected konnte bei einem spät beitretenden
+		# Peer zu früh ankommen (Bugfix 2026-08-03, "Nachjoinen").
+		request_catch_up.rpc_id(1)
 
 
 func _spawn_all_players() -> void:
@@ -1133,10 +1379,16 @@ func _update_fog_of_war() -> void:
 	for base in get_tree().get_nodes_in_group("home_base"):
 		if is_instance_valid(base):
 			_reveal_around(base.position)
+	# Wachturm (Punkt 25 der Gesamtliste, siehe docs/building.md) —
+	# deutlich größerer Radius als Einheiten/Home-Base, das ist der ganze
+	# Punkt eines Wachturms ("erweiterte Sicht auf die Map").
+	for watchtower in get_tree().get_nodes_in_group("watchtower"):
+		if is_instance_valid(watchtower):
+			_reveal_around(watchtower.position, WATCHTOWER_VISION_RADIUS)
 
 
-func _reveal_around(world_pos: Vector3) -> void:
-	var cell_radius: int = ceili(FOG_VISION_RADIUS / FOG_CELL_SIZE)
+func _reveal_around(world_pos: Vector3, radius: float = FOG_VISION_RADIUS) -> void:
+	var cell_radius: int = ceili(radius / FOG_CELL_SIZE)
 	var center_cell := Vector2i(floori(world_pos.x / FOG_CELL_SIZE), floori(world_pos.z / FOG_CELL_SIZE))
 	for dx in range(-cell_radius, cell_radius + 1):
 		for dz in range(-cell_radius, cell_radius + 1):
@@ -1144,7 +1396,7 @@ func _reveal_around(world_pos: Vector3) -> void:
 			if _explored_cells.has(cell):
 				continue
 			var cell_center := Vector2((cell.x + 0.5) * FOG_CELL_SIZE, (cell.y + 0.5) * FOG_CELL_SIZE)
-			if cell_center.distance_to(Vector2(world_pos.x, world_pos.z)) <= FOG_VISION_RADIUS:
+			if cell_center.distance_to(Vector2(world_pos.x, world_pos.z)) <= radius:
 				_explored_cells[cell] = true
 
 
@@ -1485,7 +1737,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 	for existing in walls_container.get_children():
 		_catch_up_wall.rpc_id(peer_id, existing.wall_id, existing.owner_peer_id, existing.position, existing.rotation.y, existing.is_gate)
 	for existing in medical_stations_container.get_children():
-		_catch_up_medical_station.rpc_id(peer_id, existing.medical_station_id, existing.owner_peer_id, existing.position)
+		_catch_up_medical_station.rpc_id(peer_id, existing.medical_station_id, existing.owner_peer_id, existing.position, existing.is_advanced)
 	for existing in workshops_container.get_children():
 		_catch_up_workshop.rpc_id(peer_id, existing.workshop_id, existing.owner_peer_id, existing.position)
 	for existing in storages_container.get_children():
@@ -1504,6 +1756,8 @@ func _spawn_for_peer(peer_id: int) -> void:
 		_catch_up_field.rpc_id(peer_id, existing.field_id, existing.owner_peer_id, existing.position)
 	for existing in outposts_container.get_children():
 		_catch_up_outpost.rpc_id(peer_id, existing.outpost_id, existing.owner_peer_id, existing.position)
+	for existing in watchtowers_container.get_children():
+		_catch_up_watchtower.rpc_id(peer_id, existing.watchtower_id, existing.owner_peer_id, existing.position)
 	# Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") sind auch
 	# Buildings/Vehicles/ZombieNests Spawner-Entities (vorher feste
 	# .tscn-Kind-Nodes, die jeder Peer automatisch schon lokal hatte, kein
@@ -1522,6 +1776,9 @@ func _spawn_for_peer(peer_id: int) -> void:
 			"is_looted": existing.is_looted,
 			"owner_peer_id": existing.owner_peer_id,
 			"hp": existing.hp,
+			"has_bandit_loot": existing.has_bandit_loot,
+			"bandit_loot": existing.bandit_loot,
+			"loot_category": existing.loot_category,
 		})
 	for existing in vehicles_container.get_children():
 		_catch_up_vehicle.rpc_id(peer_id, existing.vehicle_id, existing.position, existing.hp, existing.owner_peer_id, existing.vehicle_type)
@@ -1638,11 +1895,11 @@ func _catch_up_wall(id: int, peer_id: int, spawn_position: Vector3, spawn_rotati
 
 
 @rpc("authority", "reliable")
-func _catch_up_medical_station(id: int, peer_id: int, spawn_position: Vector3) -> void:
+func _catch_up_medical_station(id: int, peer_id: int, spawn_position: Vector3, is_advanced: bool) -> void:
 	var station_name := "medicalstation_%d" % id
 	if medical_stations_container.has_node(station_name):
 		return
-	var station := _create_medical_station({"id": id, "peer_id": peer_id, "position": spawn_position})
+	var station := _create_medical_station({"id": id, "peer_id": peer_id, "position": spawn_position, "is_advanced": is_advanced})
 	medical_stations_container.add_child(station)
 
 
@@ -1730,6 +1987,15 @@ func _catch_up_outpost(id: int, peer_id: int, spawn_position: Vector3) -> void:
 		return
 	var outpost := _create_outpost({"id": id, "peer_id": peer_id, "position": spawn_position})
 	outposts_container.add_child(outpost)
+
+
+@rpc("authority", "reliable")
+func _catch_up_watchtower(id: int, peer_id: int, spawn_position: Vector3) -> void:
+	var watchtower_name := "watchtower_%d" % id
+	if watchtowers_container.has_node(watchtower_name):
+		return
+	var watchtower := _create_watchtower({"id": id, "peer_id": peer_id, "position": spawn_position})
+	watchtowers_container.add_child(watchtower)
 
 
 @rpc("authority", "reliable")
@@ -1875,6 +2141,10 @@ func _create_medical_station(data: Dictionary) -> Node:
 	station.medical_station_id = data["id"]
 	station.position = data["position"]
 	station.owner_peer_id = data["peer_id"]
+	# Optionales Zusatzfeld für Catch-up/Spielstand-Laden (siehe
+	# docs/building.md, "Erweiterte Krankenstation") — normales Ausbauen
+	# übergibt es nie, Building.gd-Äquivalent-Muster wie is_looted/hp dort.
+	station.is_advanced = data.get("is_advanced", false)
 	return station
 
 
@@ -1924,6 +2194,15 @@ func _create_outpost(data: Dictionary) -> Node:
 	return outpost
 
 
+func _create_watchtower(data: Dictionary) -> Node:
+	var watchtower := WATCHTOWER_SCENE.instantiate()
+	watchtower.name = "watchtower_%d" % data["id"]
+	watchtower.watchtower_id = data["id"]
+	watchtower.position = data["position"]
+	watchtower.owner_peer_id = data["peer_id"]
+	return watchtower
+
+
 func _create_building(data: Dictionary) -> Node:
 	# Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") aus
 	# BUILDING_TYPES erzeugt statt fester .tscn-Kind-Node — Mesh/
@@ -1951,6 +2230,7 @@ func _create_building(data: Dictionary) -> Node:
 	mesh_instance.set_surface_override_material(0, default_mat)
 	building.loot = data["loot"]
 	building.has_survivor = data.get("has_survivor", false)
+	building.loot_category = data.get("loot_category", "food")
 	# is_looted/owner_peer_id/hp sind optionale Zusatzfelder fürs Laden
 	# eines Spielstands (siehe docs/save_load.md) — normale Zonen-
 	# Generierung übergibt sie nie, Building.gd setzt die Defaults selbst
@@ -1962,6 +2242,12 @@ func _create_building(data: Dictionary) -> Node:
 	building.is_looted = data.get("is_looted", false)
 	building.owner_peer_id = data.get("owner_peer_id", 0)
 	building.hp = data.get("hp", 100)  # 100 == Building.MAX_HP
+	# Banditen-Restloot (siehe Building.gd, "Punkt 23 der Gesamtliste") —
+	# gleiches optionales Zusatzfeld-Muster wie is_looted/owner_peer_id/hp
+	# oben, fehlt bei normaler Zonen-Generierung, kommt nur von Catch-up/
+	# Spielstand-Laden.
+	building.has_bandit_loot = data.get("has_bandit_loot", false)
+	building.bandit_loot = data.get("bandit_loot", {})
 	building._update_visual()
 	return building
 
@@ -2169,6 +2455,7 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 			"default_color": template["default_color"],
 			"has_survivor": i == recruit_slot,
 			"zone_center": center,
+			"loot_category": _loot_category_for_template(template),
 		})
 		_next_building_id += 1
 	for i in VEHICLES_PER_ZONE:
@@ -2235,6 +2522,25 @@ func request_city_zones() -> void:
 	if not multiplayer.is_server():
 		return
 	_sync_city_zones.rpc_id(multiplayer.get_remote_sender_id(), _city_zone_centers)
+
+
+@rpc("any_peer", "reliable")
+func request_catch_up() -> void:
+	# Client-seitiger PULL, gleiches Muster wie request_city_zones() oben —
+	# ersetzt/ergänzt den ursprünglich rein host-seitigen PUSH über
+	# NetworkManager.player_connected → _on_player_connected() → _spawn_for_peer().
+	# Dieser Push feuert beim Host, sobald die _register_player-RPC des neuen
+	# Peers ankommt — das kann (Bugfix 2026-08-03, Nachjoinen-Fix) passieren,
+	# BEVOR der neue Peer selbst per GameManager-State-Sync-RPC überhaupt in
+	# World.tscn gewechselt hat, sein eigenes World-Node also noch gar nicht
+	# existiert (identische Race wie beim Straßen-Geometrie-Bug, siehe
+	# _ready()). Der alte Push bleibt als harmlos-redundanter Fallback stehen
+	# (_spawn_for_peer() ist laut eigenem Kommentar dort schon
+	# mehrfachaufruf-sicher), dieser PULL ist aber der eigentlich
+	# verlässliche Weg.
+	if not multiplayer.is_server():
+		return
+	_spawn_for_peer(multiplayer.get_remote_sender_id())
 
 
 @rpc("authority", "reliable")
@@ -2595,6 +2901,7 @@ func _generate_forest_zone(center: Vector3) -> void:
 		"default_color": FOREST_BUILDING_TEMPLATE["default_color"],
 		"has_survivor": false,
 		"zone_center": center,
+		"loot_category": "equipment",
 	})
 	_next_building_id += 1
 
@@ -2643,6 +2950,26 @@ func _regrow_resources() -> void:
 		var pos := _random_wilderness_position(BRICK_PILE_GROUND_Y)
 		brick_pile_spawner.spawn({"id": _next_brick_pile_id, "position": pos})
 		_next_brick_pile_id += 1
+
+
+func _spawn_bandit_restock() -> void:
+	# Siehe BANDIT_RESTOCK_INTERVAL oben — würfelt EIN bereits geplündertes,
+	# unbesetztes Gebäude ohne schon laufenden Restloot aus (claimte
+	# Gebäude sind ausgeschlossen, siehe grant_bandit_loot()-Kommentar in
+	# Building.gd) und gibt ihm eine kleine Menge einer zufälligen
+	# Ressource. Kein Effekt, wenn es gerade keinen passenden Kandidaten
+	# gibt (z. B. ganz frühes Spiel, noch nichts geplündert) — einfach beim
+	# nächsten Intervall erneut versuchen.
+	var candidates: Array = []
+	for building in buildings_container.get_children():
+		if building.is_looted and building.owner_peer_id == 0 and not building.has_bandit_loot:
+			candidates.append(building)
+	if candidates.is_empty():
+		return
+	var building: Node3D = candidates[randi() % candidates.size()]
+	var resource: String = BANDIT_LOOT_RESOURCES[randi() % BANDIT_LOOT_RESOURCES.size()]
+	var amount := randi_range(BANDIT_LOOT_MIN, BANDIT_LOOT_MAX)
+	building.grant_bandit_loot.rpc({resource: amount})
 
 
 func _random_wilderness_position(ground_y: float) -> Vector3:
@@ -2738,6 +3065,7 @@ func _collect_save_data() -> Dictionary:
 		"bed": _next_bed_id,
 		"field": _next_field_id,
 		"outpost": _next_outpost_id,
+		"watchtower": _next_watchtower_id,
 		"building": _next_building_id,
 		"vehicle": _next_vehicle_id,
 		"zombie_nest": _next_zombie_nest_id,
@@ -2808,7 +3136,7 @@ func _collect_save_data() -> Dictionary:
 
 	var medical_stations: Array = []
 	for station in medical_stations_container.get_children():
-		medical_stations.append({"id": station.medical_station_id, "peer_id": station.owner_peer_id, "position": station.position})
+		medical_stations.append({"id": station.medical_station_id, "peer_id": station.owner_peer_id, "position": station.position, "is_advanced": station.is_advanced})
 	data["medical_stations"] = medical_stations
 
 	var workshops: Array = []
@@ -2835,6 +3163,11 @@ func _collect_save_data() -> Dictionary:
 	for outpost in outposts_container.get_children():
 		outposts.append({"id": outpost.outpost_id, "peer_id": outpost.owner_peer_id, "position": outpost.position})
 	data["outposts"] = outposts
+
+	var watchtowers: Array = []
+	for watchtower in watchtowers_container.get_children():
+		watchtowers.append({"id": watchtower.watchtower_id, "peer_id": watchtower.owner_peer_id, "position": watchtower.position})
+	data["watchtowers"] = watchtowers
 
 	var trees: Array = []
 	for tree in trees_container.get_children():
@@ -2876,6 +3209,9 @@ func _collect_save_data() -> Dictionary:
 			"is_looted": building.is_looted,
 			"owner_peer_id": building.owner_peer_id,
 			"hp": building.hp,
+			"has_bandit_loot": building.has_bandit_loot,
+			"bandit_loot": building.bandit_loot.duplicate(),
+			"loot_category": building.loot_category,
 		})
 	data["buildings"] = buildings
 
@@ -2914,6 +3250,7 @@ func _load_game_state(data: Dictionary) -> void:
 	_next_bed_id = next_ids.get("bed", 0)
 	_next_field_id = next_ids.get("field", 0)
 	_next_outpost_id = next_ids.get("outpost", 0)
+	_next_watchtower_id = next_ids.get("watchtower", 0)
 	_next_building_id = next_ids.get("building", 0)
 	_next_vehicle_id = next_ids.get("vehicle", 0)
 	_next_zombie_nest_id = next_ids.get("zombie_nest", 0)
@@ -2967,7 +3304,7 @@ func _load_game_state(data: Dictionary) -> void:
 		wall_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "rotation_y": entry["rotation_y"], "is_gate": entry["is_gate"]})
 
 	for entry in data.get("medical_stations", []):
-		medical_station_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"]})
+		medical_station_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "is_advanced": entry.get("is_advanced", false)})
 
 	for entry in data.get("workshops", []):
 		workshop_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"]})
@@ -2983,6 +3320,9 @@ func _load_game_state(data: Dictionary) -> void:
 
 	for entry in data.get("outposts", []):
 		outpost_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"]})
+
+	for entry in data.get("watchtowers", []):
+		watchtower_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"]})
 
 	for entry in data.get("trees", []):
 		tree_spawner.spawn({"id": entry["id"], "position": entry["position"], "hp": entry["hp"], "is_marked": entry["is_marked"]})
@@ -3055,7 +3395,9 @@ func _update_build_button_texts() -> void:
 	gate_button.text = BUILD_MODE_ACTIVE_TEXT if (_build_mode and _build_type == BuildType.GATE) else _build_button_label("Tor", BuildType.GATE, peer_id)
 	field_button.text = BUILD_MODE_ACTIVE_TEXT if (_build_mode and _build_type == BuildType.FIELD) else _build_button_label("Feld", BuildType.FIELD, peer_id)
 	outpost_button.text = BUILD_MODE_ACTIVE_TEXT if (_build_mode and _build_type == BuildType.OUTPOST) else _build_button_label("Außenposten", BuildType.OUTPOST, peer_id)
+	watchtower_button.text = BUILD_MODE_ACTIVE_TEXT if (_build_mode and _build_type == BuildType.WATCHTOWER) else _build_button_label("Wachturm", BuildType.WATCHTOWER, peer_id)
 	_refresh_building_upgrade_ui(peer_id)
+	_refresh_advanced_medical_ui(peer_id)
 
 
 func _refresh_building_upgrade_ui(peer_id: int) -> void:
@@ -3081,6 +3423,41 @@ func _refresh_building_upgrade_ui(peer_id: int) -> void:
 	var capacity := int(round(_building_volume(_selected_claimed_building) * STORAGE_CAPACITY_PER_VOLUME))
 	upgrade_storage_button.text = "%s (+%d Kapazität)" % [_build_button_label("Zu Lager", BuildType.STORAGE, peer_id), capacity]
 	upgrade_bed_button.text = _build_button_label("Zu Schlafraum", BuildType.BED, peer_id)
+
+
+func _refresh_advanced_medical_ui(peer_id: int) -> void:
+	# Erweiterte Krankenstation (siehe docs/building.md) — anders als die
+	# Ausbauen-Buttons oben NICHT an eine Gebäude-Auswahl gebunden, sichtbar
+	# sobald der Spieler eine eigene, noch nicht erweiterte Krankenstation
+	# besitzt.
+	var station := _find_own_basic_medical_station(peer_id)
+	var has_station := station != null
+	advanced_medical_separator.visible = has_station
+	advanced_medical_button.visible = has_station
+	if not has_station:
+		return
+	var base := _find_own_home_base()
+	var unlocked: bool = base != null and base.unlocked_recipes.get("medical_upgrade", false)
+	if unlocked:
+		var cost_parts: Array = []
+		for key in MEDICAL_UPGRADE_COST:
+			cost_parts.append("%d %s" % [MEDICAL_UPGRADE_COST[key], RESOURCE_DISPLAY_NAMES.get(key, key)])
+		advanced_medical_button.text = "Krankenstation erweitern (%s)" % ", ".join(cost_parts)
+		advanced_medical_button.disabled = false
+	else:
+		var has_book: bool = base != null and base.resources.get("book_medical_upgrade", 0) > 0
+		advanced_medical_button.text = "Erweiterte Krankenstation erforschen (%s)" % RESOURCE_DISPLAY_NAMES.get("book_medical_upgrade", "book_medical_upgrade")
+		advanced_medical_button.disabled = not has_book
+
+
+func _on_advanced_medical_pressed() -> void:
+	var peer_id := multiplayer.get_unique_id()
+	var base := _find_own_home_base()
+	var unlocked: bool = base != null and base.unlocked_recipes.get("medical_upgrade", false)
+	if unlocked:
+		request_upgrade_medical_station.rpc_id(1, peer_id)
+	else:
+		request_research.rpc_id(1, "medical_upgrade", peer_id)
 
 
 func _build_button_label(display_name: String, type: BuildType, peer_id: int) -> String:
@@ -3122,6 +3499,10 @@ func request_build_structure(type: BuildType, build_position: Vector3, requestin
 		BuildType.OUTPOST:
 			outpost_spawner.spawn({"id": _next_outpost_id, "peer_id": requesting_peer_id, "position": build_position})
 			_next_outpost_id += 1
+		BuildType.WATCHTOWER:
+			var watchtower_position := Vector3(build_position.x, WATCHTOWER_GROUND_Y, build_position.z)
+			watchtower_spawner.spawn({"id": _next_watchtower_id, "peer_id": requesting_peer_id, "position": watchtower_position})
+			_next_watchtower_id += 1
 		_:
 			guard_post_spawner.spawn({"id": _next_guard_post_id, "peer_id": requesting_peer_id, "position": build_position})
 			_next_guard_post_id += 1
@@ -3370,13 +3751,16 @@ func request_craft(recipe_id: String, requesting_peer_id: int) -> void:
 func request_research(recipe_id: String, requesting_peer_id: int) -> void:
 	# Forschungsbücher (siehe docs/building.md, "Forschungsbücher") —
 	# verbraucht 1× "book_<recipe_id>" aus der eigenen Home-Base, schaltet
-	# das passende Rezept DAUERHAFT frei (HomeBase.unlock_recipe(), kein
-	# Vergessen). Braucht bewusst KEINE eigene Werkstatt (Lesen geht überall,
-	# nur das eigentliche Herstellen ist an die Werkstatt gebunden).
+	# das passende Rezept/die passende Gebäude-Ausbaustufe DAUERHAFT frei
+	# (HomeBase.unlock_recipe(), kein Vergessen — derselbe Speicher dient
+	# seit Punkt 24 der Gesamtliste für BEIDES, siehe BUILDING_RESEARCH
+	# oben). Braucht bewusst KEINE eigene Werkstatt (Lesen geht überall,
+	# nur das eigentliche Herstellen/Ausbauen ist jeweils zusätzlich
+	# gebunden — Werkstatt fürs Craften, eigene Krankenstation fürs
+	# Erweitern).
 	if not multiplayer.is_server():
 		return
-	var recipe := _find_recipe(recipe_id)
-	if recipe.is_empty():
+	if _find_recipe(recipe_id).is_empty() and _find_building_research(recipe_id).is_empty():
 		return
 	var base := _find_home_base_for_peer(requesting_peer_id)
 	if base == null:
@@ -3389,6 +3773,47 @@ func request_research(recipe_id: String, requesting_peer_id: int) -> void:
 		return
 	base.add_resources.rpc({book_type: -1})
 	base.unlock_recipe.rpc(recipe_id)
+
+
+func _find_building_research(research_id: String) -> Dictionary:
+	for entry in BUILDING_RESEARCH:
+		if entry["id"] == research_id:
+			return entry
+	return {}
+
+
+func _find_own_basic_medical_station(peer_id: int) -> Node3D:
+	# "Basic" = noch nicht erweitert — Kandidat fürs Ausbauen, siehe
+	# request_upgrade_medical_station()/_refresh_advanced_medical_ui().
+	for station in get_tree().get_nodes_in_group("medical_station"):
+		if station.owner_peer_id == peer_id and not station.is_advanced:
+			return station
+	return null
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_upgrade_medical_station(requesting_peer_id: int) -> void:
+	# Erweiterte Krankenstation (siehe docs/building.md) — anders als
+	# request_upgrade_building() (Building → MedicalStation/Werkstatt/...)
+	# wird hier eine BESTEHENDE MedicalStation in-place erweitert (kein
+	# Gebäudetausch, nur ein Flag, siehe MedicalStation.upgrade_to_advanced()).
+	if not multiplayer.is_server():
+		return
+	var base := _find_home_base_for_peer(requesting_peer_id)
+	if base == null or not base.unlocked_recipes.get("medical_upgrade", false):
+		report_status(requesting_peer_id, "Erweiterte Krankenstation noch nicht erforscht.")
+		return
+	var station := _find_own_basic_medical_station(requesting_peer_id)
+	if station == null:
+		return
+	if not _can_afford(requesting_peer_id, MEDICAL_UPGRADE_COST):
+		report_status(requesting_peer_id, "Nicht genug Ressourcen.")
+		return
+	var cost_delta := {}
+	for key in MEDICAL_UPGRADE_COST:
+		cost_delta[key] = -MEDICAL_UPGRADE_COST[key]
+	base.add_resources.rpc(cost_delta)
+	station.upgrade_to_advanced.rpc()
 
 
 # Handel (siehe docs/trading.md, Punkt 14 der Gesamtliste) — Nutzerwunsch:
@@ -3814,7 +4239,12 @@ func _process(delta: float) -> void:
 		if _resource_regrowth_timer >= RESOURCE_REGROWTH_INTERVAL:
 			_resource_regrowth_timer = 0.0
 			_regrow_resources()
+		_bandit_restock_timer += delta
+		if _bandit_restock_timer >= BANDIT_RESTOCK_INTERVAL:
+			_bandit_restock_timer = 0.0
+			_spawn_bandit_restock()
 	_handle_pan(delta)
+	_handle_gamepad_input(delta)
 	_update_hud()
 	_update_build_ghost()
 	_handle_day_night(delta)
@@ -3874,12 +4304,19 @@ func _update_build_ghost() -> void:
 		build_ghost.visible = false
 		return
 	build_ghost.visible = true
-	build_ghost.position = hit_position
+	build_ghost.position = Vector3(hit_position.x, WATCHTOWER_GROUND_Y, hit_position.z) if _build_type == BuildType.WATCHTOWER else hit_position
 	# Wall/Gate laufen zwar übers Ziehen und erreichen diesen Zweig nie
 	# (siehe _wall_drag_active oben), die Mesh-Auswahl bleibt trotzdem
 	# generisch für alle Einzelklick-Bautypen (Wachposten/Krankenstation/
-	# Werkstatt teilen sich die 1,5³-Box).
-	build_ghost.mesh = _wall_ghost_mesh if _build_type in [BuildType.WALL, BuildType.GATE] else _guard_post_ghost_mesh
+	# Werkstatt teilen sich die 1,5³-Box) — Wachturm bekommt als einziger
+	# eine eigene, größere Ghost-Mesh (siehe _watchtower_ghost_mesh unten,
+	# gleiches Muster wie der Mauer-Ghost).
+	if _build_type == BuildType.WATCHTOWER:
+		build_ghost.mesh = _watchtower_ghost_mesh
+	elif _build_type in [BuildType.WALL, BuildType.GATE]:
+		build_ghost.mesh = _wall_ghost_mesh
+	else:
+		build_ghost.mesh = _guard_post_ghost_mesh
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	var peer_id := multiplayer.get_unique_id()
@@ -4029,6 +4466,8 @@ func _cost_for_build_type(type: BuildType, peer_id: int) -> Dictionary:
 			base_cost = OUTPOST_COST
 		BuildType.BED:
 			base_cost = BED_COST
+		BuildType.WATCHTOWER:
+			base_cost = WATCHTOWER_COST
 		_:
 			base_cost = GUARD_POST_COST
 	# Werkstatt-Rabatt gilt für jeden ANDEREN Bautyp, nicht auf sich selbst
@@ -4054,14 +4493,11 @@ func _can_build_at(peer_id: int, build_position: Vector3, cost: Dictionary, type
 	# (dort mit requesting_peer_id aufgerufen, hier fürs Ghost-Preview mit
 	# der eigenen multiplayer.get_unique_id()) — ein Ort für die Regeln,
 	# damit Preview und tatsächlicher Bauversuch nie auseinanderlaufen.
-	# claim_building() nutzt das bewusst NICHT (siehe dort) — nur die reine
-	# Ressourcenprüfung über _can_afford(). `type` optional mit
-	# GUARD_POST-Standard (unkritisch: alle Bautypen außer OUTPOST prüfen
-	# ohnehin dieselbe Zonen-Regel) — Außenposten ist laut Vision
-	# (Infos/01 Architektur.md, "Außenposten") die einzige "Ausnahme von der
-	# Zusammenhang-Regel", überspringt die Zonen-Prüfung deshalb bewusst.
-	if type != BuildType.OUTPOST and not is_within_own_zone(peer_id, build_position):
-		return false
+	# Zonen-Abstandsprüfung (früher is_within_own_zone()/BUILD_RADIUS) auf
+	# Nutzerwunsch entfernt (2026-08-03, test.txt: "man kann nicht überall
+	# bauen können das sollte man") — Bauen ist jetzt überall auf der Karte
+	# möglich, `type`-Parameter bleibt für eventuelle künftige typspezifische
+	# Regeln erhalten, wird hier aber aktuell nicht mehr ausgewertet.
 	return _can_afford(peer_id, cost)
 
 
@@ -4075,33 +4511,11 @@ func _can_afford(peer_id: int, cost: Dictionary) -> bool:
 	return true
 
 
-func is_within_own_zone(peer_id: int, position: Vector3) -> bool:
-	# Die eigene Bauzone (siehe docs/zones.md): BUILD_RADIUS um die eigene
-	# Home-Base ODER um jedes bereits geclaimte Gebäude dieses Spielers —
-	# claimt man ein Gebäude, wächst die Zone dadurch organisch weiter.
-	# Gilt NUR fürs Bauen von Wachposten/Mauer/etc., NICHT fürs Claimen
-	# selbst (siehe claim_building() — die acht Gebäude liegen viel zu weit
-	# von jeder Home-Base entfernt, um je "angrenzend" zu sein, siehe
-	# docs/zones.md, "Warum Claimen ohne Abstandsprüfung").
-	var base := _find_home_base_for_peer(peer_id)
-	if base != null and base.position.distance_to(position) <= BUILD_RADIUS:
-		return true
-	for building in get_tree().get_nodes_in_group("searchable"):
-		if building.owner_peer_id == peer_id and building.global_position.distance_to(position) <= BUILD_RADIUS:
-			return true
-	return false
-
-
 func claim_building(peer_id: int, building: Node3D) -> void:
 	# Aufgerufen von Survivor._claim_building() (schon host-seitig, siehe
-	# dort). Bewusst OHNE Zonen-Abstandsprüfung (anders als
-	# request_build_structure(), das is_within_own_zone() nutzt) — die acht
-	# Gebäude liegen weit von jeder Home-Base entfernt (Kartenlayout, siehe
-	# docs/zones.md), eine Zusammenhang-Regel wäre hier unspielbar: kein
-	# Gebäude läge je innerhalb von BUILD_RADIUS der eigenen Basis. Claimen
-	# braucht deshalb nur: geplündert, noch niemandem gehörend, bezahlbar —
-	# danach wird das Gebäude selbst zum neuen Anker für
-	# is_within_own_zone() (Bauen UND Weiter-Claimen benachbarter Gebäude).
+	# dort). Braucht nur: geplündert, noch niemandem gehörend, bezahlbar —
+	# keine Zonen-/Abstandsprüfung, genau wie beim Bauen (siehe
+	# _can_build_at(), 2026-08-03 auf Nutzerwunsch entfernt).
 	if not building.is_looted or building.owner_peer_id != 0:
 		return
 	if not _can_afford(peer_id, ZONE_CLAIM_COST):
@@ -4177,20 +4591,17 @@ func request_toggle_harvest_mark(target_path: NodePath) -> void:
 	target.toggle_marked()
 
 
-func _report_build_failure(peer_id: int, build_position: Vector3, cost: Dictionary) -> void:
+func _report_build_failure(peer_id: int, _build_position: Vector3, _cost: Dictionary) -> void:
 	# Läuft NUR im Fehlerfall von request_build_structure()/
 	# request_build_wall_line() (claim_building() hat sein eigenes,
-	# einfacheres Feedback, siehe dort — keine Zonen-Abstandsprüfung),
-	# ermittelt dafür extra den genauen Grund — bewusst getrennt von
-	# _can_build_at() (bleibt dadurch ein einfacher, oft aufgerufener
-	# Bool-Check fürs Ghost-Preview, ohne Text-Overhead jeden Frame).
+	# einfacheres Feedback, siehe dort), ermittelt dafür extra den genauen
+	# Grund — bewusst getrennt von _can_build_at() (bleibt dadurch ein
+	# einfacher, oft aufgerufener Bool-Check fürs Ghost-Preview, ohne
+	# Text-Overhead jeden Frame). Seit dem Wegfall der Zonen-Abstandsprüfung
+	# (2026-08-03, Nutzerwunsch) kann ein fehlgeschlagener Bauversuch nur
+	# noch an fehlender eigener Basis oder zu wenig Ressourcen liegen.
 	var base := _find_home_base_for_peer(peer_id)
-	var message := "Keine eigene Basis gefunden."
-	if base != null:
-		if not is_within_own_zone(peer_id, build_position):
-			message = "Zu weit von der eigenen Zone entfernt."
-		else:
-			message = "Nicht genug Ressourcen."
+	var message := "Keine eigene Basis gefunden." if base == null else "Nicht genug Ressourcen."
 	report_status(peer_id, message)
 
 
@@ -4209,18 +4620,15 @@ func _show_status_message(message: String) -> void:
 
 
 func _update_hud() -> void:
+	# Die frühere Pro-Trupp-Statuszeile ("Trupp 1 — HP.../Hunger.../...")
+	# ist auf Nutzerwunsch entfernt (2026-08-03, "das mit trupp 1 hp 100
+	# kann weg") — redundant seit die Einheiten-Liste UND das Trupp-
+	# Detailfenster (siehe world.md, "UI-Overhaul"/"Fünfter Tab") dieselbe
+	# Information längst kompakter anzeigen. Der Fahrzeug-Ausstiegs-Hinweis
+	# bleibt, weil er nirgendwo sonst steht.
 	var own_base := _find_own_home_base()
 	base_choice_label.visible = own_base == null
 	var lines: Array = []
-	var own_survivors := _find_own_survivors()
-	if own_survivors.is_empty():
-		lines.append("Keine eigenen Trupps")
-	for survivor in own_survivors:
-		var line := "Trupp %d — HP %d/%d, Hunger %d, Müdigkeit %d, Moral %d" % [survivor.trupp_id, survivor.hp, survivor.MAX_HP, int(survivor.hunger), int(survivor.fatigue), int(survivor.morale)]
-		var carried: int = _carried_total(survivor.carried_loot)
-		if carried > 0:
-			line += " — trägt %d/%d" % [carried, survivor.CARRY_CAPACITY]
-		lines.append(line)
 	for unit in selected:
 		if is_instance_valid(unit) and unit.has_method("request_exit"):
 			lines.append("F: Aussteigen")
@@ -4289,6 +4697,16 @@ func _handle_pan(delta: float) -> void:
 		input_dir.x -= 1.0
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		input_dir.x += 1.0
+	# Linker Stick (Gamepad-Steuerung, siehe GAMEPAD_*-Konstanten) — additiv
+	# zu WASD, läuft unabhängig davon, ob ein Gamepad verbunden ist
+	# (Input.get_joy_axis() liefert ohne Gamepad einfach 0.0, kein
+	# zusätzlicher Verbindungs-Check nötig).
+	var stick_x := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var stick_y := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	if absf(stick_x) > GAMEPAD_DEADZONE:
+		input_dir.x += stick_x
+	if absf(stick_y) > GAMEPAD_DEADZONE:
+		input_dir.z += stick_y
 	if input_dir != Vector3.ZERO:
 		# WASD bleibt bildschirm-relativ, unabhängig von der aktuellen
 		# Rotation. Bewegt pivot.position (direkter Elternteil der Kamera),
@@ -4308,6 +4726,92 @@ func _stop_selected_units() -> void:
 	for unit in selected:
 		if is_instance_valid(unit) and unit.has_method("order_stop"):
 			unit.order_stop.rpc_id(1, multiplayer.get_unique_id())
+
+
+func _handle_gamepad_input(delta: float) -> void:
+	# Welt-spezifischer Teil der Gamepad-Steuerung (siehe GAMEPAD_*-
+	# Konstanten oben, docs/world.md "Gamepad-Steuerung") — Cursor-Bewegung
+	# und A/B-Klicks laufen seit dem Nachjoinen-artigen Bugfix "Controller
+	# im Hauptmenü nutzbar" (2026-08-03) zentral im Autoload
+	# `GamepadCursor.gd` (funktioniert dadurch auch in MainMenu/Lobby, nicht
+	# nur hier). Hier bleibt nur, was wirklich weltspezifisch ist: Kamera
+	# (Pan über _handle_pan(), Rotation/Zoom hier) + die drei Welt-Aktionen
+	# Pause/Kartenansicht/Fahrzeug-Ausstieg.
+	if Input.get_connected_joypads().is_empty():
+		return
+	var left_trigger := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+	GamepadCursor.cursor_suspended = left_trigger > GAMEPAD_TRIGGER_THRESHOLD
+	if GamepadCursor.cursor_suspended:
+		# Linker Trigger gehalten: rechter Stick steuert wie ein gehaltener
+		# Rechtsklick+Ziehen bei der Maus die Kamera-Rotation/-Neigung,
+		# direkt (nicht über ein synthetisches Maus-Event) — dieselbe
+		# Formel wie im echten Rechtsklick-Drag-Zweig in _unhandled_input().
+		# GamepadCursor pausiert währenddessen seine eigene Cursor-Bewegung
+		# (cursor_suspended), sonst würden sich beide um denselben Stick
+		# streiten.
+		var rotate_x := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var rotate_y := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		if absf(rotate_x) > GAMEPAD_DEADZONE:
+			pivot.rotate_y(-rotate_x * GAMEPAD_ROTATE_SENSITIVITY * delta)
+		if absf(rotate_y) > GAMEPAD_DEADZONE:
+			var tilt_sign := -1.0 if SettingsManager.invert_mouse_y else 1.0
+			_tilt_angle = clamp(_tilt_angle - tilt_sign * rotate_y * GAMEPAD_TILT_SENSITIVITY * delta, TILT_MIN, TILT_MAX)
+		if absf(rotate_x) > GAMEPAD_DEADZONE or absf(rotate_y) > GAMEPAD_DEADZONE:
+			_apply_zoom()
+	_handle_gamepad_button_transitions(JOY_BUTTON_START, _on_gamepad_start_pressed, Callable())
+	_handle_gamepad_button_transitions(JOY_BUTTON_BACK, _on_gamepad_back_pressed, Callable())
+	_handle_gamepad_button_transitions(JOY_BUTTON_Y, _on_gamepad_y_pressed, Callable())
+	_gamepad_zoom_repeat_timer -= delta
+	if _gamepad_zoom_repeat_timer <= 0.0:
+		# Bei offener Kartenansicht steuern LB/RB deren Zoom statt der
+		# 3D-Kamera (Nutzerwunsch: "die eine idee mit map reinzoomen das
+		# kann man jetzt machen wichtig alles muss mit controller stuerbar
+		# sein") — Mausrad macht in MapView._gui_input() dasselbe für
+		# Maus-Nutzer.
+		if map_view_ui.visible:
+			if Input.is_joy_button_pressed(0, JOY_BUTTON_LEFT_SHOULDER):
+				map_view.zoom_in()
+				_gamepad_zoom_repeat_timer = GAMEPAD_ZOOM_REPEAT_INTERVAL
+			elif Input.is_joy_button_pressed(0, JOY_BUTTON_RIGHT_SHOULDER):
+				map_view.zoom_out()
+				_gamepad_zoom_repeat_timer = GAMEPAD_ZOOM_REPEAT_INTERVAL
+		else:
+			if Input.is_joy_button_pressed(0, JOY_BUTTON_LEFT_SHOULDER):
+				_zoom(-1.0)
+				_gamepad_zoom_repeat_timer = GAMEPAD_ZOOM_REPEAT_INTERVAL
+			elif Input.is_joy_button_pressed(0, JOY_BUTTON_RIGHT_SHOULDER):
+				_zoom(1.0)
+				_gamepad_zoom_repeat_timer = GAMEPAD_ZOOM_REPEAT_INTERVAL
+
+
+func _handle_gamepad_button_transitions(button: JoyButton, on_pressed: Callable, on_released: Callable) -> void:
+	# "Gerade gedrückt"/"gerade losgelassen"-Erkennung ohne InputMap-Action
+	# (siehe _gamepad_button_state oben) — Input.is_joy_button_pressed()
+	# allein ist Level-getriggert. Vorher/Nachher-Zustand wird hier EINMAL
+	# pro Button pro Frame verglichen UND aktualisiert (ein früherer Versuch
+	# mit zwei getrennten Aufrufen für Press/Release hatte einen Bug: der
+	# zweite Aufruf sah schon den vom ersten Aufruf aktualisierten Zustand
+	# statt des tatsächlichen Vorframe-Werts). `on_released` optional
+	# (leeres `Callable()` bei Buttons ohne Loslass-Aktion, z. B. Start).
+	var was_pressed: bool = _gamepad_button_state.get(button, false)
+	var is_pressed := Input.is_joy_button_pressed(0, button)
+	_gamepad_button_state[button] = is_pressed
+	if is_pressed and not was_pressed:
+		on_pressed.call()
+	elif not is_pressed and was_pressed and on_released.is_valid():
+		on_released.call()
+
+
+func _on_gamepad_start_pressed() -> void:
+	pause_menu.toggle()
+
+
+func _on_gamepad_back_pressed() -> void:
+	toggle_map_view()
+
+
+func _on_gamepad_y_pressed() -> void:
+	_exit_selected_vehicles()
 
 
 func _exit_selected_vehicles() -> void:
@@ -4357,7 +4861,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# (vertikal, ändert den Blickwinkel der Kamera).
 		_right_click_dragged = true
 		pivot.rotate_y(-event.relative.x * MOUSE_ROTATE_SENSITIVITY)
-		_tilt_angle = clamp(_tilt_angle - event.relative.y * MOUSE_TILT_SENSITIVITY, TILT_MIN, TILT_MAX)
+		var tilt_sign := -1.0 if SettingsManager.invert_mouse_y else 1.0
+		_tilt_angle = clamp(_tilt_angle - tilt_sign * event.relative.y * MOUSE_TILT_SENSITIVITY, TILT_MIN, TILT_MAX)
 		_apply_zoom()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
@@ -4391,6 +4896,12 @@ func toggle_map_view() -> void:
 	# die Ansicht wieder, siehe docs/world.md, "Kartenansicht") — eine
 	# einzige Stelle für beide Auslöser.
 	map_view_ui.visible = not map_view_ui.visible
+	if map_view_ui.visible:
+		# Jede Sitzung mit der Kartenansicht startet wieder bei voller
+		# Übersicht, zentriert auf die aktuelle Position (siehe
+		# MapView.reset_view()) — vorhersehbarer als sich Zoom/Ausschnitt
+		# vom letzten Mal zu merken.
+		map_view.reset_view(Vector2(pivot.position.x, pivot.position.z))
 
 
 func _handle_control_group_key(group_number: int, assign: bool) -> void:
@@ -4447,21 +4958,25 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 			return
 		if hit.is_in_group("vehicle") and hit.owner_peer_id == 0 and not selected.is_empty():
 			# Unbesetztes Fahrzeug (owner_peer_id == 0, siehe docs/vehicle.md)
-			# — nur der ERSTE ausgewählte Trupp versucht einzusteigen (ein
-			# Fahrzeug hat nur einen Fahrersitz), Rest der Auswahl bleibt
-			# unangetastet stehen. X/Z vom Raycast-Treffpunkt, feste
-			# Bodenhöhe — gleiches Muster wie beim Gebäude-Klick.
-			var unit = selected[0]
-			if is_instance_valid(unit) and unit.has_method("order_enter_vehicle"):
-				var target := Vector3(result.position.x, SURVIVOR_GROUND_Y, result.position.z)
-				unit.order_enter_vehicle.rpc_id(1, target, hit.get_path(), multiplayer.get_unique_id())
+			# — ALLE ausgewählten eigenen Trupps versuchen einzusteigen, bis
+			# zur Kapazität des Fahrzeugtyps (Nutzerwunsch 2026-08-03, "autos
+			# mehr läute rein passen"): der erste wird Fahrer, der Rest
+			# Passagier (Vehicle.enter() entscheidet host-seitig, prüft dort
+			# auch die Kapazität erneut — hier nur optimistisch, ein Trupp zu
+			# viel läuft einfach ins Leere wie ein schon besetztes Fahrzeug).
+			# X/Z vom Raycast-Treffpunkt, feste Bodenhöhe — gleiches Muster
+			# wie beim Gebäude-Klick.
+			var target := Vector3(result.position.x, SURVIVOR_GROUND_Y, result.position.z)
+			var boarded_any := false
+			for unit in selected:
+				if is_instance_valid(unit) and unit.has_method("order_enter_vehicle"):
+					unit.order_enter_vehicle.rpc_id(1, target, hit.get_path(), multiplayer.get_unique_id())
+					boarded_any = true
+			if boarded_any:
 				# Optimistisch schon auf das Fahrzeug umschalten, nicht erst
-				# nachdem der Trupp tatsächlich angekommen ist — sonst bliebe
-				# bis dahin der (nach dem Einsteigen unsichtbare, nicht mehr
-				# auswählbare) Trupp ausgewählt. Befehle ans Fahrzeug vor dem
-				# tatsächlichen Einsteigen laufen einfach ins Leere (RPC prüft
-				# requesting_peer_id == owner_peer_id, das Fahrzeug gehört bis
-				# dahin noch niemandem).
+				# nachdem die Trupps tatsächlich angekommen sind — sonst
+				# blieben bis dahin die (nach dem Einsteigen unsichtbaren,
+				# nicht mehr auswählbaren) Trupps ausgewählt.
 				selected = [hit]
 			return
 		return
@@ -4509,7 +5024,7 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 			if not is_instance_valid(unit):
 				continue
 			var order_method: StringName = &"order_search"
-			if building.is_looted:
+			if building.is_looted and not building.has_bandit_loot:
 				order_method = &"order_claim_building"
 				if unit.has_method("order_harvest") and unit.troop_type == unit.TroopType.BUILD:
 					order_method = &"order_demolish_building"
@@ -4522,12 +5037,22 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 		# auf einen Zombie oder ein Zombie-Nest (siehe docs/zombies.md) statt
 		# auf Boden/Gebäude. has_method-Check filtert Fahrzeuge aus der
 		# Auswahl heraus (die haben keinen eigenen Angriff, siehe
-		# docs/vehicle.md). Kein Formation-Offset nötig — mehrere Trupps
-		# laufen bewusst auf denselben Punkt zu (Nahkampf-Cluster).
-		var enemy: Node3D = result.collider
+		# docs/vehicle.md).
+		# Ziele verteilen sich auf alle Feinde in der Nähe des angeklickten
+		# (Bugfix 2026-08-03, Nutzer-Feedback "greifen nur ein zombie an wenn
+		# sie in einer gruppe sind") — vorher bekamen ALLE ausgewählten
+		# Einheiten exakt denselben Feind zugewiesen, was bei mehreren
+		# Zombies in der Nähe wie ein einziger Fokus-Klumpen aussah, statt
+		# dass sich die Gruppe aufteilt. Jede Einheit greift jetzt den ihr
+		# jeweils NÄCHSTEN Feind aus diesem Umkreis an — bei nur einem
+		# Zombie in Reichweite bleibt das Verhalten wie vorher (alle auf
+		# denselben).
+		var clicked_enemy: Node3D = result.collider
+		var nearby_enemies := _nearby_enemies(clicked_enemy, GROUP_ATTACK_SPREAD_RADIUS)
 		for unit in selected:
 			if is_instance_valid(unit) and unit.has_method("order_attack"):
-				unit.order_attack.rpc_id(1, enemy.get_path(), multiplayer.get_unique_id())
+				var target_enemy := _nearest_enemy(unit.global_position, nearby_enemies)
+				unit.order_attack.rpc_id(1, target_enemy.get_path(), multiplayer.get_unique_id())
 		return
 	if result and not selected.is_empty() and result.collider.is_in_group("harvestable"):
 		# Bautrupp-Aktion (siehe docs/survivor.md, "Trupp-Arten") — Klick auf
@@ -4560,22 +5085,55 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 	selected.clear()
 
 
-const FORMATION_SPACING := 1.2
+# Formations-Radius für die Kreis-Verteilung um den Anführer (siehe
+# _formation_offset() unten) — bewusst größer als der alte Grid-Abstand
+# (früher FORMATION_SPACING := 1.2, jetzt entfernt), Nutzer-Feedback nach
+# Koop-Test: Trupps liefen "zu nah zusammen".
+const FORMATION_RADIUS := 2.0
+const GROUP_ATTACK_SPREAD_RADIUS := 10.0
+
+
+func _nearby_enemies(anchor: Node3D, radius: float) -> Array[Node3D]:
+	# Sammelt alle Zombies + Zombie-Nester im Umkreis um den angeklickten
+	# Feind (inklusive ihm selbst, deshalb nie leer) — Grundlage für die
+	# Ziel-Verteilung bei einem Gruppen-Angriffsbefehl, siehe _select_at().
+	var result: Array[Node3D] = [anchor]
+	var anchor_pos := anchor.global_position
+	for zombie in zombies_container.get_children():
+		if zombie != anchor and is_instance_valid(zombie) and zombie.global_position.distance_to(anchor_pos) <= radius:
+			result.append(zombie)
+	for nest in zombie_nests_container.get_children():
+		if nest != anchor and is_instance_valid(nest) and nest.global_position.distance_to(anchor_pos) <= radius:
+			result.append(nest)
+	return result
+
+
+func _nearest_enemy(from_position: Vector3, candidates: Array[Node3D]) -> Node3D:
+	var nearest: Node3D = candidates[0]
+	var nearest_dist := from_position.distance_to(nearest.global_position)
+	for candidate in candidates:
+		var dist := from_position.distance_to(candidate.global_position)
+		if dist < nearest_dist:
+			nearest = candidate
+			nearest_dist = dist
+	return nearest
+
 
 func _formation_offset(index: int, count: int) -> Vector3:
 	# Ohne Kollision/Pathfinding (siehe docs/survivor.md, "Bekannte Grenzen")
 	# würden mehrere gleichzeitig befohlene Einheiten sonst exakt übereinander
-	# laufen und ineinander clippen — verteilt sie stattdessen in einem
-	# einfachen Raster um den eigentlichen Zielpunkt.
-	if count <= 1:
+	# laufen und ineinander clippen. Nutzer-Feedback nach dem ersten Koop-
+	# Test (2026-08-03): das bisherige Raster wirkte "zu nah zusammen",
+	# gewünscht war "einer vorne, die anderen um ihn rum bisschen verteilt"
+	# — jetzt eine Anführer-plus-Kreis-Formation statt eines Rasters: die
+	# ZUERST ausgewählte Einheit (Index 0) läuft exakt zum Zielpunkt, alle
+	# weiteren verteilen sich gleichmäßig auf einem Kreis mit FORMATION_
+	# RADIUS darum.
+	if index == 0 or count <= 1:
 		return Vector3.ZERO
-	var columns := int(ceil(sqrt(float(count))))
-	var rows := int(ceil(float(count) / columns))
-	var col := index % columns
-	var row := index / columns
-	var offset_x := (col - (columns - 1) / 2.0) * FORMATION_SPACING
-	var offset_z := (row - (rows - 1) / 2.0) * FORMATION_SPACING
-	return Vector3(offset_x, 0, offset_z)
+	var followers := count - 1
+	var angle := TAU * float(index - 1) / float(followers)
+	return Vector3(cos(angle), 0.0, sin(angle)) * FORMATION_RADIUS
 
 
 func _zoom(direction: float) -> void:

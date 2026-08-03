@@ -10,3 +10,17 @@ extends StaticBody3D
 
 var medical_station_id: int = 0
 var owner_peer_id: int = 1
+# Erweiterte Krankenstation (Punkt 24 der Gesamtliste, Forschungsbücher
+# schalten jetzt auch Gebäude-Ausbaustufen frei, nicht nur Crafting-
+# Rezepte — siehe docs/building.md, "Erweiterte Krankenstation"). Heilt
+# schneller (siehe Survivor._handle_healing()), sonst funktional
+# identisch — kein zweiter Gebäudetyp, nur ein Flag auf derselben Node.
+var is_advanced: bool = false
+
+
+@rpc("authority", "call_local", "reliable")
+func upgrade_to_advanced() -> void:
+	# Von World.request_upgrade_medical_station() aufgerufen (host-seitig,
+	# schon geprüft: erforscht + bezahlt) — kein eigener RPC-Guard hier
+	# nötig, gleiches Vertrauensmodell wie Building.set_claimed_owner().
+	is_advanced = true

@@ -54,12 +54,33 @@ getroffener Seite/Dach der Box diese Höhe schwankt.
 wird bei jedem Gebäude-Spawn aus einer echten Loot-TABELLE gewürfelt.
 
 - **`World.BUILDING_TYPES`** ersetzt die früheren zwölf ANONYMEN
-  Vorlagen durch vier ECHTE, aus der Vision benannte Gebäudetypen
-  (`Infos/01 Architektur.md`, "Loot-Tabellen je Gebäudetyp"): Wohnhaus,
-  Supermarkt, Apotheke, Waffenladen/Polizeistation. Jeder Typ hat
-  `main_loot` (garantiert, Betrag als Bereich, z. B. Wohnhaus 1-2×
-  Nahrung) + `secondary_loot` (Liste unabhängiger Chancen, z. B.
-  Apotheke 50% zusätzliche Medizin).
+  Vorlagen durch ECHTE, aus der Vision benannte Gebäudetypen
+  (`Infos/02 Item-Liste.md`, "Gebäude-Fundorte"). Ursprünglich vier
+  (Wohnhaus, Supermarkt, Apotheke, Waffenladen/Polizeistation),
+  2026-08-03 (Nutzerwunsch nach der Vision-Gap-Analyse) um zehn weitere
+  ergänzt: Klinik, Militärbasis, Privatbunker, Feuerwehrstation,
+  Restaurant/Kneipe, Tankstelle, Bibliothek, Universität, Garten-Center,
+  Camping-Laden — macht 14 insgesamt. Jeder Typ hat `main_loot`
+  (garantiert, Betrag als Bereich, z. B. Wohnhaus 1-2× Nahrung) +
+  `secondary_loot` (Liste unabhängiger Chancen, z. B. Apotheke 50%
+  zusätzliche Medizin).
+- **Die zehn neuen im Detail:** Klinik (Apotheke-Variante, mehr Medizin),
+  Militärbasis + Privatbunker (beide wie Waffenladen, aber mit höheren
+  Sekundär-Chancen — keine echte Seltenheits-Stufe, da unser System keine
+  Waffen-Tiers kennt), Feuerwehrstation (Rüstung statt "Feuerwehr-Anzug",
+  der als eigene Ressource nicht existiert), Restaurant/Kneipe + Tankstelle
+  (beide Nahrungs-Varianten, kleiner als Supermarkt), Bibliothek +
+  Universität (NEU: erster Typ mit garantiertem Buch als Hauptloot, vorher
+  gab's Bücher nur als Nebenloot-Chance irgendwo), Garten-Center
+  (Nahkampfwaffe statt "Axt/Machete", die als eigene Werkzeug-Ressource
+  nicht existiert), Camping-Laden (Beinschutz statt "Rucksack", den es seit
+  der Rucksack-Rückabwicklung nicht mehr als Item gibt, siehe
+  [`survivor.md`](survivor.md), "Rucksack").
+- **Bewusst weiterhin NICHT übernommen: Baumarkt/Werkstatt,
+  Auto-Werkstatt, Elektronikgeschäft** — deren Vision-Hauptloot
+  (Baumaterial/Stahlrahmen/Ersatzteile/Elektronik-Items) bräuchte entweder
+  neue Ressourcenarten, die es in diesem System nicht gibt, oder würde die
+  Baurohstoff-Regel direkt unten verletzen.
 - **`_roll_building_loot(template)`/`_apply_loot_roll()`** würfeln daraus
   EINMALIG beim Spawn die konkrete `loot`-Dictionary (host-seitig, wie
   der Rest der Weltgenerierung) — das Ergebnis wird wie bisher als
@@ -71,10 +92,11 @@ wird bei jedem Gebäude-Spawn aus einer echten Loot-TABELLE gewürfelt.
   Zombie-Loot (siehe [`zombies.md`](zombies.md)) oder Crafting (siehe
   [`building.md`](building.md), "Herstellen"), jetzt zusätzlich aus
   gezieltem Gebäude-Scavenging.
-- **"Buch"** in `secondary_loot` steht für einen zufälligen der vier
-  `book_*`-Typen (siehe [`building.md`](building.md),
-  "Forschungsbücher") — die Vision nennt Bücher nur allgemein als
-  Nebenloot, ohne Typ-Bezug.
+- **"Buch"** in `main_loot`/`secondary_loot` steht für einen zufälligen der
+  fünf `book_*`-Typen (`BOOK_LOOT_TYPES`, seit 2026-08-03 inkl.
+  `book_medical_upgrade`, siehe [`building.md`](building.md),
+  "Forschungsbücher"/"Erweiterte Krankenstation") — die Vision nennt Bücher
+  nur allgemein als Nebenloot, ohne Typ-Bezug.
 - **Bewusst NICHT übernommen: "Werkstatt/Baumarkt"** (fünfter
   Vision-Typ, Loot wäre Baumaterial) — Holz/Metall/Stein/Ziegel kommen
   in diesem System ausschließlich aus eigenen Ressourcenknoten (Baum/
@@ -140,6 +162,54 @@ Stationieren, Stopp) setzt `_searching = false`, `_sheltered = false` und
 leert `_pending_building_path` — eine laufende oder noch nicht begonnene
 Suche wird dadurch sauber abgebrochen, nicht im Hintergrund
 weitergeführt.
+
+## Banditen-Restloot (2026-08-03, Punkt 23 der Gesamtliste)
+
+Aus dem Ideen-Backlog der Vision (`Infos/01 Architektur.md`): "gelegentlich
+hinterlassen Banditen-Camps kleinen Restloot in bereits geplünderten
+Gebäuden — Grund für gelegentliches Zurückkehren, ohne vollen
+Loot-Respawn." Umgesetzt als rein serverseitiger periodischer Timer, KEINE
+tatsächlichen Banditen-NPCs (reine Loot-Mechanik, die den Namen aus der
+Vision übernimmt).
+
+- **`World._spawn_bandit_restock()`** läuft alle `BANDIT_RESTOCK_INTERVAL`
+  (180s Echtzeit, `World._process()`) und würfelt EIN zufälliges,
+  bereits geplündertes, NICHT geclaimtes Gebäude ohne schon laufenden
+  Restock aus (`buildings_container.get_children()`, gefiltert auf
+  `is_looted && owner_peer_id == 0 && not has_bandit_loot`) — kein Effekt,
+  wenn es gerade keinen Kandidaten gibt.
+- **Kleine Menge statt vollem Respawn:** genau EINE Ressource aus
+  `BANDIT_LOOT_RESOURCES` (`food`/`medicine`/`ammo` — bewusst dieselbe
+  Ressourcenfamilie wie normaler Stadt-Gebäude-Loot, keine Baurohstoffe,
+  siehe `docs/base.md`, "Vier Baurohstoffe"), Menge 3-8
+  (`BANDIT_LOOT_MIN`/`MAX`).
+- **`Building.grant_bandit_loot(loot)`** (`@rpc("authority", "call_local",
+  "reliable")`) setzt `has_bandit_loot = true`/`bandit_loot = loot`,
+  färbt das Gebäude golden ein (`_update_visual()`, gleicher Farbton wie
+  ein markierter Baum/Autowrack, siehe `docs/survivor.md`,
+  "Markier-System") — visuell klar unterscheidbar vom neutralen Grau eines
+  "leer, nichts mehr zu holen"-Gebäudes.
+- **`World._select_at()`** behandelt ein Gebäude mit `has_bandit_loot` wie
+  ein noch nicht durchsuchtes — `order_search()` statt
+  `order_claim_building()`/`order_demolish_building()` — obwohl
+  `is_looted` weiterhin `true` ist. Einzige Ausnahme von der sonst
+  endgültigen `is_looted`-Sperre.
+- **`Survivor._finish_search()`** verzweigt VOR der normalen
+  `is_looted`-Sperre: `has_bandit_loot` → `_pick_up_loot(bandit_loot)` +
+  `clear_bandit_loot.rpc()` (kein `mark_looted()` nötig, ist es schon,
+  keine erneute Rekrutierung), sonst normaler Erst-Suche-Ablauf
+  unverändert. Nach dem Einsammeln fällt das Gebäude zurück auf den
+  normalen "geplündert, unbesetzt"-Zustand — claim-/abreißbar wie zuvor.
+- **Vollmap-Ansicht (`MapView._draw_buildings()`):** der gelbe
+  "hier gibt's noch Loot"-Rahmen erscheint jetzt auch bei
+  `has_bandit_loot`, nicht mehr nur bei `not is_looted`.
+- **Catch-up + Speichern/Laden:** `has_bandit_loot`/`bandit_loot` laufen
+  über dieselben optionalen Zusatzfelder wie `is_looted`/`owner_peer_id`/
+  `hp` (`_catch_up_building()`/`_collect_save_data()`/`_create_building()`).
+
+**Noch nicht vom Nutzer getestet** — Erst-Test dauert mindestens 3 Minuten
+Echtzeit bis zum ersten Restock (nur wenn zu diesem Zeitpunkt schon
+mindestens ein Gebäude geplündert-aber-unbesetzt ist).
 
 ## Bekannte Grenzen (noch nicht gelöst)
 

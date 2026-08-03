@@ -74,7 +74,13 @@ func _on_join_pressed() -> void:
 
 
 func _on_connection_succeeded() -> void:
-	GameManager.change_state(GameManager.GameState.LOBBY)
+	# Kein lokaler Sprung mehr auf LOBBY hier — der Host schickt über
+	# GameManager._on_peer_connected() gezielt seinen aktuellen State
+	# (LOBBY, wenn er selbst noch wartet, oder direkt IN_GAME, wenn er schon
+	# mittendrin ist — z.B. nach Solo-Start oder Laden eines Spielstands).
+	# Ohne das landete ein später beitretender Peer immer in der Lobby und
+	# wartete dort ergebnislos, selbst wenn der Host längst spielte.
+	status_label.text = "Verbunden, warte auf Server..."
 
 
 func _on_connection_failed() -> void:

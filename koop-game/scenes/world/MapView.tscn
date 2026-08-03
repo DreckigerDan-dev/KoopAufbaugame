@@ -16,6 +16,7 @@ offset_right = -40.0
 offset_bottom = -40.0
 
 [node name="MapView" type="Control" parent="Panel"]
+clip_contents = true
 script = ExtResource("1")
 layout_mode = 1
 anchor_right = 1.0
@@ -30,9 +31,9 @@ anchor_left = 0.0
 anchor_top = 1.0
 offset_left = 8.0
 offset_top = -28.0
-offset_right = 320.0
+offset_right = 420.0
 offset_bottom = -4.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-text = "Klick: Kamera dorthin (schließt die Karte) — M: Schließen"
+text = "Linksklick: hinreisen+schließen — Rechtsklick: Ausschnitt verschieben — Mausrad: Zoom — M: Schließen"

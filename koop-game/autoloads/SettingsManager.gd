@@ -9,9 +9,11 @@ const SETTINGS_PATH := "user://settings.cfg"
 const SECTION := "settings"
 const DEFAULT_FULLSCREEN := false
 const DEFAULT_MASTER_VOLUME_DB := 0.0
+const DEFAULT_INVERT_MOUSE_Y := false
 
 var fullscreen: bool = DEFAULT_FULLSCREEN
 var master_volume_db: float = DEFAULT_MASTER_VOLUME_DB
+var invert_mouse_y: bool = DEFAULT_INVERT_MOUSE_Y
 
 
 func _ready() -> void:
@@ -34,16 +36,23 @@ func apply_master_volume(db: float) -> void:
 	_save_to_disk()
 
 
+func set_invert_mouse_y(enabled: bool) -> void:
+	invert_mouse_y = enabled
+	_save_to_disk()
+
+
 func _load_from_disk() -> void:
 	var config := ConfigFile.new()
 	if config.load(SETTINGS_PATH) != OK:
 		return
 	fullscreen = config.get_value(SECTION, "fullscreen", DEFAULT_FULLSCREEN)
 	master_volume_db = config.get_value(SECTION, "master_volume_db", DEFAULT_MASTER_VOLUME_DB)
+	invert_mouse_y = config.get_value(SECTION, "invert_mouse_y", DEFAULT_INVERT_MOUSE_Y)
 
 
 func _save_to_disk() -> void:
 	var config := ConfigFile.new()
 	config.set_value(SECTION, "fullscreen", fullscreen)
 	config.set_value(SECTION, "master_volume_db", master_volume_db)
+	config.set_value(SECTION, "invert_mouse_y", invert_mouse_y)
 	config.save(SETTINGS_PATH)

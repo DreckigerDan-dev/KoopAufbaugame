@@ -33,31 +33,41 @@ const OBSTACLE_LAYER := 2
 # Survivor.CARRY_CAPACITY, geloottet wird zu Fuß nach dem Aussteigen. Ein
 # echter Kapazitäts-Bonus bräuchte ein eigenes Fahrzeug-Inventar-System,
 # das hier bewusst nicht mitgebaut wird (kein Auftrag dafür).
+# `seats` (Nutzerwunsch 2026-08-03, "autos mehr läute rein passen"): Sitze
+# GESAMT inklusive Fahrer — Motorrad bleibt bewusst bei 1 (kein Soziussitz-
+# Konzept), Auto/LKW bekommen Platz für Mitfahrer, siehe enter()/passengers.
 const VEHICLE_STATS := {
 	"car": {
 		"max_hp": 200, "move_speed": 8.0, "noise_radius": 10.0,
-		"size": Vector3(1.6, 1.2, 3.2), "color": Color(0.25, 0.3, 0.7),
+		"size": Vector3(1.6, 1.2, 3.2), "color": Color(0.25, 0.3, 0.7), "seats": 3,
 	},
 	"motorcycle": {
 		"max_hp": 80, "move_speed": 13.0, "noise_radius": 7.0,
-		"size": Vector3(0.8, 1.0, 2.0), "color": Color(0.55, 0.4, 0.08),
+		"size": Vector3(0.8, 1.0, 2.0), "color": Color(0.55, 0.4, 0.08), "seats": 1,
 	},
 	"truck": {
 		"max_hp": 320, "move_speed": 6.0, "noise_radius": 15.0,
-		"size": Vector3(2.0, 1.6, 4.2), "color": Color(0.2, 0.42, 0.22),
+		"size": Vector3(2.0, 1.6, 4.2), "color": Color(0.2, 0.42, 0.22), "seats": 5,
 	},
 }
 
 @export var vehicle_type: String = "car"
 
 var vehicle_id: int = 0
-var owner_peer_id: int = 0  # 0 = unbesetzt, gehört noch niemandem
+var owner_peer_id: int = 0  # 0 = unbesetzt, gehört noch niemandem (= auch keine Passagiere)
 # Wie bei Zombie.gd/is_brute NICHT hier auf einen Höchstwert vorbelegt —
 # _ready() berechnet hp/_max_hp erst NACHDEM der Node dem Baum hinzugefügt
 # wurde (@export-Timing, siehe dort), ein hier gesetzter Wert würde sofort
 # überschrieben (siehe World._create_vehicle()/_load_game_state()).
 var hp: int = 0
 var driver: Node3D = null  # nur host-seitig aussagekräftig, siehe _sync_owner()
+# Mitfahrer ohne Steuerungsrechte (können nicht order_move()/order_stop()
+# aufrufen, das bleibt exklusiv beim Fahrer über owner_peer_id) — steigen
+# zusammen mit dem Fahrer aus, wenn dieser request_exit() ruft (siehe dort),
+# kein eigenständiges Aussteigen einzelner Mitfahrer (der Trupp ist ja
+# ohnehin unsichtbar/nicht auswählbar, solange er drinsitzt, siehe
+# Survivor._board()). Nur host-seitig aussagekräftig, wie driver.
+var passengers: Array = []
 
 var _max_hp: int = 0
 var _move_speed: float = 0.0
@@ -100,6 +110,15 @@ func _process(delta: float) -> void:
 
 func is_idle() -> bool:
 	return _waypoints.is_empty()
+
+
+func seat_count() -> int:
+	return (1 if driver != null else 0) + passengers.size()
+
+
+func is_full() -> bool:
+	var seats: int = VEHICLE_STATS.get(vehicle_type, VEHICLE_STATS["car"])["seats"]
+	return seat_count() >= seats
 
 
 func is_occupied() -> bool:
@@ -149,13 +168,23 @@ func _handle_noise(delta: float) -> void:
 			zombie.alert(self)
 
 
-func enter(survivor: Node3D, requesting_peer_id: int) -> void:
-	# Host-seitig von Survivor._enter_vehicle() aufgerufen (schon dort
-	# geprüft: Fahrzeug noch unbesetzt) — kein eigenes RPC nötig, gleiches
-	# Muster wie GuardPost.request_worker() -> Survivor.order_station().
-	owner_peer_id = requesting_peer_id
-	driver = survivor
-	_sync_owner.rpc(requesting_peer_id)
+func enter(survivor: Node3D, requesting_peer_id: int) -> bool:
+	# Host-seitig von Survivor._enter_vehicle() aufgerufen — kein eigenes
+	# RPC nötig, gleiches Muster wie GuardPost.request_worker() ->
+	# Survivor.order_station(). Erster Trupp wird Fahrer (bekommt die
+	# Steuerungsrechte über owner_peer_id), jeder weitere bis zur
+	# Sitzplatz-Kapazität wird Mitfahrer (siehe VEHICLE_STATS/seat_count()).
+	# Gibt false zurück, wenn schon voll — Aufrufer (_enter_vehicle())
+	# behandelt das wie ein schon besetztes Fahrzeug (kein Feedback, zu spät).
+	if is_full():
+		return false
+	if driver == null:
+		owner_peer_id = requesting_peer_id
+		driver = survivor
+		_sync_owner.rpc(requesting_peer_id)
+	else:
+		passengers.append(survivor)
+	return true
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -187,11 +216,21 @@ func order_stop(requesting_peer_id: int) -> void:
 func request_exit(requesting_peer_id: int) -> void:
 	# Aussteigen (F-Taste, siehe World.gd) — kann von jedem Peer kommen,
 	# deshalb any_peer statt eines direkten Funktionsaufrufs wie bei enter().
+	# Nur der FAHRER kann das auslösen (owner_peer_id-Check) — steigt er aus,
+	# steigt die ganze Besatzung mit aus (Mitfahrer haben keine eigene
+	# Aussteige-Möglichkeit, siehe passengers-Deklaration oben). Jeder
+	# Aussteigende bekommt einen eigenen kleinen Seitenversatz, damit nicht
+	# alle exakt übereinanderstehen (gleiches Grundmotiv wie
+	# World._formation_offset(), hier bewusst einfacher gehalten).
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
 		return
-	if is_instance_valid(driver):
-		driver.exit_vehicle(position)
+	var exiting: Array = [driver] + passengers
+	for i in exiting.size():
+		var survivor: Node3D = exiting[i]
+		if is_instance_valid(survivor):
+			survivor.exit_vehicle(position + Vector3(i * 1.2, 0, 0))
 	driver = null
+	passengers.clear()
 	owner_peer_id = 0
 	_waypoints.clear()
 	_sync_owner.rpc(0)
@@ -211,10 +250,12 @@ func take_damage(amount: int) -> void:
 			# Besitzer, wenn es einen gibt — ein längst unbesetztes Fahrzeug
 			# hat niemanden, der informiert werden müsste.
 			get_tree().current_scene.report_status(owner_peer_id, "Fahrzeug wurde von einem Zombie zerstört.")
-		if is_instance_valid(driver):
-			# Permadeath wie im Konzept (ARCHITECTURE.md) — kein Rauswurf in
-			# letzter Sekunde, der Trupp stirbt mit dem Fahrzeug.
-			driver.vehicle_destroyed()
+		# Permadeath wie im Konzept (ARCHITECTURE.md) — kein Rauswurf in
+		# letzter Sekunde, Fahrer UND alle Mitfahrer sterben mit dem
+		# Fahrzeug.
+		for survivor in [driver] + passengers:
+			if is_instance_valid(survivor):
+				survivor.vehicle_destroyed()
 		_die.rpc()
 
 

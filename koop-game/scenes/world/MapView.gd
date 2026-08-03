@@ -27,6 +27,33 @@ const FOG_COLOR := Color(0.02, 0.02, 0.02, 1.0)
 # Textur, siehe z. B. Minimap.gd).
 const LOOT_AVAILABLE_COLOR := Color(1, 0.85, 0.2)
 const LOOT_OUTLINE_WIDTH := 2.0
+# Gebäudetyp-Farbcode nach Loot-Kategorie (2026-08-03, Nutzerwunsch:
+# "färbe die gebäude typen ein zu den jeweiligen lootarten, krankenhaus
+# heilung grün etc.") — Kategorie kommt aus `Building.loot_category`
+# (siehe World.LOOT_CATEGORY_BY_RESOURCE, aus `main_loot.resource`
+# abgeleitet). Gilt NUR für unbesetzte Gebäude — sobald eines geclaimt ist,
+# hat die Besitzer-Farbe (eigen/verbündet, siehe _owner_color()) Vorrang,
+# das ist an dem Punkt die wichtigere Information.
+const LOOT_CATEGORY_COLORS := {
+	"food": Color(0.85, 0.55, 0.15),
+	"medicine": Color(0.25, 0.75, 0.35),
+	"equipment": Color(0.8, 0.25, 0.25),
+	"books": Color(0.5, 0.4, 0.85),
+}
+const LOOT_CATEGORY_LABELS := {
+	"food": "Nahrung",
+	"medicine": "Medizin",
+	"equipment": "Ausrüstung/Waffen",
+	"books": "Forschungsbücher",
+}
+# Reihenfolge fix statt Dictionary-Iteration (Dictionary-Reihenfolge ist
+# zwar in GDScript Insertions-stabil, aber explizit lesbarer für die
+# Legende).
+const LOOT_CATEGORY_ORDER := ["food", "medicine", "equipment", "books"]
+const LEGEND_MARGIN := 12.0
+const LEGEND_SWATCH_SIZE := 14.0
+const LEGEND_ROW_HEIGHT := 20.0
+const LEGEND_FONT_SIZE := 14
 const UNIT_RADIUS := 6.0
 const ZOMBIE_RADIUS := 5.0
 const NEST_RADIUS := 9.0
@@ -37,6 +64,36 @@ const CAMERA_MARKER_SIZE := 16.0
 # Minimap.gd, nur größer skaliert für die Vollbild-Ansicht.
 const SOS_COLOR := Color(1.0, 0.15, 0.15)
 const SOS_RADIUS := 14.0
+# Zoom (2026-08-03, Nutzerwunsch: "die eine idee mit map reinzoomen das
+# kann man jetzt machen") — 1.0 zeigt die komplette Karte (bisheriges
+# Verhalten), höhere Werte zoomen um _view_center herum rein. Multiplikativ
+# wie der 3D-Kamera-Zoom (siehe World._zoom()), gleiches Bediengefühl.
+const MAP_ZOOM_MIN := 1.0
+const MAP_ZOOM_MAX := 8.0
+const MAP_ZOOM_STEP_FACTOR := 0.35
+var _zoom_level: float = MAP_ZOOM_MIN
+# Weltposition (X/Z), die in der Bildschirmmitte der Kartenansicht liegt —
+# beim Öffnen auf die aktuelle Kameraposition gesetzt (siehe World.gd,
+# toggle_map_view()), NICHT auf den Kartenmittelpunkt, sonst würde man
+# reingezoomt erstmal woanders landen als da, wo man gerade ist.
+var _view_center: Vector2 = Vector2.ZERO
+
+
+func zoom_in() -> void:
+	_zoom_level = clampf(_zoom_level * (1.0 + MAP_ZOOM_STEP_FACTOR), MAP_ZOOM_MIN, MAP_ZOOM_MAX)
+
+
+func zoom_out() -> void:
+	_zoom_level = clampf(_zoom_level / (1.0 + MAP_ZOOM_STEP_FACTOR), MAP_ZOOM_MIN, MAP_ZOOM_MAX)
+
+
+func reset_view(world_center: Vector2) -> void:
+	# Von World.toggle_map_view() beim Öffnen aufgerufen — jede Sitzung mit
+	# der Kartenansicht startet wieder bei voller Übersicht, zentriert auf
+	# die aktuelle Position, statt sich einen alten Zoom-/Pan-Stand von
+	# vorhin zu merken (vorhersehbarer als "wo war ich beim letzten Mal").
+	_zoom_level = MAP_ZOOM_MIN
+	_view_center = world_center
 
 
 func _process(_delta: float) -> void:
@@ -54,6 +111,7 @@ func _draw() -> void:
 	_draw_fog()
 	_draw_sos_alerts()
 	_draw_camera_marker()
+	_draw_legend()
 
 
 func _draw_fog() -> void:
@@ -78,9 +136,16 @@ func _draw_buildings(own_peer_id: int) -> void:
 		if not is_instance_valid(building):
 			continue
 		var pos := _to_map(building.position)
-		var color := _owner_color(building.owner_peer_id, own_peer_id, UNCLAIMED_BUILDING_COLOR)
+		# Unbesetzt: Farbe nach Loot-Kategorie (siehe LOOT_CATEGORY_COLORS),
+		# damit man auf einen Blick sieht, welcher Gebäudetyp wo steht —
+		# geclaimt: Besitzer-Farbe hat Vorrang (wichtigere Info an dem Punkt).
+		var neutral_color: Color = LOOT_CATEGORY_COLORS.get(building.loot_category, UNCLAIMED_BUILDING_COLOR)
+		var color := _owner_color(building.owner_peer_id, own_peer_id, neutral_color)
 		_draw_square(pos, color)
-		if not building.is_looted:
+		if not building.is_looted or building.has_bandit_loot:
+			# Banditen-Restloot (siehe Building.gd/World._spawn_bandit_restock())
+			# zählt genauso als "hier gibt's noch was zu holen" wie ein
+			# frisches, noch nie durchsuchtes Gebäude — gleicher gelber Rahmen.
 			_draw_square_outline(pos, LOOT_AVAILABLE_COLOR)
 
 
@@ -133,6 +198,26 @@ func _draw_camera_marker() -> void:
 	draw_polygon(PackedVector2Array([tip, back_left, back_right]), PackedColorArray([CAMERA_MARKER_COLOR]))
 
 
+func _draw_legend() -> void:
+	# Erklärt die Gebäude-Farbcodierung (siehe LOOT_CATEGORY_COLORS/
+	# _draw_buildings()) UND den gelben "Loot verfügbar"-Rahmen — ohne das
+	# wäre die Farbzuordnung reines Raten. Fester Text/Farb-Ansatz statt
+	# Icons (kein Icon-Set im Projekt, gleiches Prinzip wie überall sonst).
+	var font := get_theme_default_font()
+	var row_count := LOOT_CATEGORY_ORDER.size() + 1
+	var panel_size := Vector2(190.0, LEGEND_MARGIN * 2.0 + row_count * LEGEND_ROW_HEIGHT)
+	draw_rect(Rect2(Vector2(LEGEND_MARGIN, LEGEND_MARGIN), panel_size), Color(0.05, 0.05, 0.05, 0.85))
+	var y := LEGEND_MARGIN * 2.0
+	for category in LOOT_CATEGORY_ORDER:
+		var swatch_pos := Vector2(LEGEND_MARGIN * 2.0, y)
+		draw_rect(Rect2(swatch_pos, Vector2(LEGEND_SWATCH_SIZE, LEGEND_SWATCH_SIZE)), LOOT_CATEGORY_COLORS[category])
+		draw_string(font, swatch_pos + Vector2(LEGEND_SWATCH_SIZE + 8.0, LEGEND_SWATCH_SIZE - 2.0), LOOT_CATEGORY_LABELS[category], HORIZONTAL_ALIGNMENT_LEFT, -1, LEGEND_FONT_SIZE, Color.WHITE)
+		y += LEGEND_ROW_HEIGHT
+	var outline_pos := Vector2(LEGEND_MARGIN * 2.0, y)
+	draw_rect(Rect2(outline_pos, Vector2(LEGEND_SWATCH_SIZE, LEGEND_SWATCH_SIZE)), LOOT_AVAILABLE_COLOR, false, LOOT_OUTLINE_WIDTH)
+	draw_string(font, outline_pos + Vector2(LEGEND_SWATCH_SIZE + 8.0, LEGEND_SWATCH_SIZE - 2.0), "Loot verfügbar", HORIZONTAL_ALIGNMENT_LEFT, -1, LEGEND_FONT_SIZE, Color.WHITE)
+
+
 func _owner_color(owner_peer_id: int, own_peer_id: int, neutral_color: Color) -> Color:
 	if owner_peer_id == 0:
 		return neutral_color
@@ -154,28 +239,59 @@ func _draw_square_outline(center: Vector2, color: Color) -> void:
 
 
 func _to_map(world_position: Vector3) -> Vector2:
+	# Berücksichtigt seit dem Zoom (siehe MAP_ZOOM_*-Konstanten oben)
+	# _zoom_level/_view_center statt immer die komplette Karte 1:1 auf die
+	# Panelgröße zu skalieren. Bewusst KEIN Clamping mehr auf die
+	# Panelgröße (früher hier, als der Maßstab noch immer fix war) — beim
+	# Reingezoomt-Sein sollen Symbole außerhalb des sichtbaren Ausschnitts
+	# einfach nicht mehr da erscheinen, nicht an den Rand "geklebt" werden.
+	# `clip_contents` auf dem MapView-Node selbst (siehe MapView.tscn)
+	# schneidet das sauber ab, statt über den Panel-Rand zu malen.
 	var map_size: float = get_tree().current_scene.MAP_SIZE
-	var half := map_size / 2.0
-	var x := (world_position.x + half) / map_size * size.x
-	var y := (world_position.z + half) / map_size * size.y
-	return Vector2(clampf(x, 0.0, size.x), clampf(y, 0.0, size.y))
+	var visible_size := map_size / _zoom_level
+	var half := visible_size / 2.0
+	var x := (world_position.x - _view_center.x + half) / visible_size * size.x
+	var y := (world_position.z - _view_center.y + half) / visible_size * size.y
+	return Vector2(x, y)
+
+
+func _from_map(local_position: Vector2) -> Vector2:
+	# Umkehrung von _to_map() — Bildschirmposition (innerhalb des Panels)
+	# zurück in Welt-X/Z, unter Berücksichtigung von Zoom/View-Center.
+	var map_size: float = get_tree().current_scene.MAP_SIZE
+	var visible_size := map_size / _zoom_level
+	var half := visible_size / 2.0
+	var world_x := local_position.x / size.x * visible_size - half + _view_center.x
+	var world_z := local_position.y / size.y * visible_size - half + _view_center.y
+	return Vector2(world_x, world_z)
 
 
 func _gui_input(event: InputEvent) -> void:
-	# Klick springt die eigene Kamera dorthin (gleiches Verhalten wie die
-	# Minimap) UND schließt die Kartenansicht direkt wieder — "Fast Travel"
-	# statt einer Ansicht, die offen bleibt (Nutzerentscheidung für eine
-	# eigene Taste statt Auto-Trigger galt fürs ÖFFNEN, nicht fürs
-	# Offenbleiben nach der Navigation).
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_pan_to(event.position)
-		get_tree().current_scene.toggle_map_view()
+	# Linksklick springt die eigene Kamera dorthin (gleiches Verhalten wie
+	# die Minimap) UND schließt die Kartenansicht direkt wieder — "Fast
+	# Travel" statt einer Ansicht, die offen bleibt (Nutzerentscheidung für
+	# eine eigene Taste statt Auto-Trigger galt fürs ÖFFNEN, nicht fürs
+	# Offenbleiben nach der Navigation). Rechtsklick verschiebt NUR den
+	# Kartenausschnitt (kein Kamera-Sprung, kein Schließen) — sonst könnte
+	# man beim Reingezoomt-Sein gar nicht navigieren, ohne jedes Mal zu
+	# schließen. Mausrad zoomt. Funktioniert 1:1 auch per Gamepad —
+	# GamepadCursor synthetisiert A/B als Links-/Rechtsklick, LB/RB werden
+	# in World._handle_gamepad_input() auf zoom_in()/zoom_out() umgeleitet,
+	# solange die Kartenansicht offen ist.
+	if event is InputEventMouseButton and event.pressed:
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				_pan_to(event.position)
+				get_tree().current_scene.toggle_map_view()
+			MOUSE_BUTTON_RIGHT:
+				_view_center = _from_map(event.position)
+			MOUSE_BUTTON_WHEEL_UP:
+				zoom_in()
+			MOUSE_BUTTON_WHEEL_DOWN:
+				zoom_out()
 
 
 func _pan_to(local_position: Vector2) -> void:
-	var map_size: float = get_tree().current_scene.MAP_SIZE
-	var half := map_size / 2.0
-	var world_x := local_position.x / size.x * map_size - half
-	var world_z := local_position.y / size.y * map_size - half
+	var world_pos := _from_map(local_position)
 	var pivot: Node3D = get_tree().current_scene.pivot
-	pivot.position = Vector3(world_x, pivot.position.y, world_z)
+	pivot.position = Vector3(world_pos.x, pivot.position.y, world_pos.y)
