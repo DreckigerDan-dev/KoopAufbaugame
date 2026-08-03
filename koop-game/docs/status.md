@@ -1,3 +1,256 @@
+## Sechs Balance-Fixes aus dem Mechaniken-Bericht umgesetzt (2026-08-04)
+
+Direkte Reaktion auf die Kernbefunde aus `docs/mechanics-review.md`
+("kein Sieg-/Niederlage-Zustand", "Zombie-Bedrohung unbegrenzt vs.
+Trupp-Kapazität strikt endlich"). Nutzer hat vorab per Rückfragen die
+Details festgelegt (siehe `docs/base.md`, `docs/recruitment.md`,
+`docs/zombies.md`, `docs/world.md`, `docs/survivor.md` für die einzelnen
+Abschnitte):
+
+1. **Home-Base zerstörbar** (`HomeBase.MAX_HP := 500`) + **Game-Over/
+   Rettungsmechanik**: verlorener Spieler bekommt ein Panel ("Hilfe
+   anfragen"/"Aufgeben"), Mitspieler kann einen eigenen Trupp zum
+   golden eingefärbten **Base-Erstellen-Trupp** machen und schicken —
+   schaltet `request_choose_start_base()` wieder frei (praktisch ein
+   Neustart). Ohne Hilfe: echter Game-Over-Bildschirm (Neu starten/
+   Hauptmenü). Ruine bleibt liegen, normal abreißbar. Neue Szene
+   `GameOverUI.tscn`/`.gd`. Details: `docs/base.md`, "Zerstörbarkeit +
+   Rettungsmechanik".
+2. **Rekrutierung erweitert**: 15 % Zufallschance bei jedem normalen
+   Gebäude-Durchsuchen (`Survivor.LOOT_RECRUIT_CHANCE`) + neues
+   "Schutzsuchende"-Ereignis (periodisch, gedeckelt auf 2 Trupps/Spieler
+   über diesen Kanal). Details: `docs/recruitment.md`, "Erweiterte
+   Rekrutierung".
+3. **Zombie-Bedrohung skaliert mit Spieleranzahl**: Horde-Größe ×
+   Spieleranzahl, `MAX_ZOMBIES` 200→400. Details: `docs/zombies.md`,
+   "Horde-Nächte".
+4. **Pause (nur Host)**: `World._game_paused`, Button im Pause-Menü,
+   "PAUSIERT"-Anzeige für alle. Jedes Entity-Script mit eigenem
+   `_process()` fragt das selbst ab (kein zentraler `process_mode`-Umbau).
+   Details: `docs/world.md`, "Pause".
+5. **Mehr Start-Ressourcen** (Baurohstoffe/Überlebensgüter deutlich
+   angehoben) + **Rohstoffe auch in Stadt-Zonen** (`RESOURCES_PER_CITY_ZONE
+   := 6`, nicht mehr nur Wildnis). Details: `docs/base.md`/`docs/world.md`.
+6. **Hunger-Verfall verlangsamt** (`HUNGER_DECAY_RATE` 1.5→0.3/s, analog
+   zum Müdigkeit-/Moral-Fix vom selben Tag). Details: `docs/survivor.md`,
+   "Hunger + Essen".
+
+Nebenbei aufgeräumt: `docs/base.md`/`docs/recruitment.md` hatten stark
+veraltete Abschnitte (alte 150er-Testwerte, "zwei Trupps am Start" statt
+der längst aktuellen 5) — an den berührten Stellen korrigiert.
+
+**Noch nicht vom Nutzer getestet — deutlich größerer Umfang als die
+bisherigen Einzel-Fixes, braucht gründliches Gegentesten** (siehe
+`docs/pending-tests.md`, neuer Abschnitt "Balance-Fixes").
+
+## Mechaniken-/Balance-Bericht (2026-08-04)
+
+Nutzerwunsch: nach dem Korrektheits-Durchgang einschätzen, ob die
+Mechaniken als Ganzes Sinn ergeben, plus Bericht zu Spieldauer/Statistiken/
+Spielablauf. Reine Code-Analyse (Konstanten/Formeln), kein echter
+Spieltest. Kernbefund: **kein Sieg-/Niederlage-Zustand im Code**, UND die
+Zombie-Bedrohung wächst zeitlich unbegrenzt (bis Deckel 200), während die
+Trupp-Kapazität pro Spieler strikt endlich ist (Start 5, einmalig +1 auf
+max. 6, Permadeath, keine laufende Rekrutierung) — strukturell eine
+Abnutzungskurve statt eines stabilen Gleichgewichts. Volle Zahlen/
+Zeitskala/Session-Hochrechnung in [`mechanics-review.md`](mechanics-review.md)
+(neue Datei).
+
+## Korrektheits-Durchgang, Runde 2: ganze Codebase (2026-08-04)
+
+Fortsetzung des Korrektheits-Durchgangs (siehe unten) — nach den drei
+neuesten Systemen jetzt der Rest: `Zombie.gd`, `Vehicle.gd`, `Wall.gd`,
+Speicherstand-Rundlauf, Crafting/Forschung/Handel, Zonen/Claim. Zwei
+weitere echte, wirtschaftlich relevante Bugs gefunden und behoben:
+
+- **Doppelte Zombie-Loot-Vergabe möglich:** `Zombie.take_damage()` prüfte
+  `hp <= 0` bei JEDEM Aufruf neu, ohne zu merken, ob der Tod schon
+  verarbeitet wurde. Trifft z. B. ein Wachposten UND ein Survivor-
+  Gegenschaden denselben Zombie im selben Frame tödlich (`queue_free()`
+  entfernt die Node erst am Frame-Ende, nicht sofort), hätte
+  `grant_zombie_loot()` zweimal gefeuert — doppelter Ressourcen-Ertrag für
+  einen einzigen Kill. Neue `_dead`-Sperre verhindert das.
+- **Doppelter Ernte-Ertrag möglich:** `order_harvest()` hat (anders als
+  das automatische Markier-System) KEINEN "schon zugewiesen"-Check —
+  mehrere Bautrupps können absichtlich oder versehentlich auf denselben
+  Baum/dasselbe Autowrack angesetzt werden. `Survivor._process_harvest()`
+  prüfte den Erfolg (`hp <= 0`) erst NACH dem eigenen Schlag, ohne vorher
+  zu prüfen, ob das Ziel bereits (von einem anderen, im selben Frame
+  früher verarbeiteten Trupp) gefällt wurde — ein zweiter Trupp hätte
+  dadurch ein zweites Mal den vollen Ertrag gutgeschrieben bekommen.
+  Jetzt: Bail-out, sobald das Ziel beim eigenen Cooldown-Tick schon bei
+  0 HP steht.
+- **`HomeBase.unlocked_recipes` fehlte komplett im Speicherstand** —
+  `_collect_save_data()`/`_load_game_state()` haben Ressourcen und
+  Lagerkapazität gesichert, aber nie die erforschten Rezepte/Ausbaustufen.
+  Da Forschungsbücher beim Erforschen verbraucht werden, hätte ein
+  Speichern+Laden jede schon erforschte Freischaltung DAUERHAFT
+  rückgängig gemacht, ohne das Buch zurückzugeben — permanenter
+  Fortschrittsverlust. Jetzt mitgespeichert/wiederhergestellt.
+
+Sonst keine weiteren Funde — `Vehicle.gd`/`Wall.gd`/Crafting/Handel/
+Zonen-Claim-Logik sind bereits korrekt gegen Mehrfachausführung
+abgesichert (sequentielle RPC-Verarbeitung, Zustand wird vor dem
+eigentlichen Effekt erneut geprüft).
+
+## Korrektheits-Durchgang, Runde 1: drei neueste Systeme (2026-08-04)
+
+Erster Durchgang über die drei neuesten Systeme (Bau-Markier-Modus,
+Formation, Ladebildschirm):
+
+- **`finish_construction()`-Fix:** `has_open_construction` wird jetzt
+  sofort zurückgesetzt statt sich auf `queue_free()`-Timing zu verlassen
+  — verhindert eine theoretische doppelte Zielstruktur-Erzeugung.
+- **`GuardPost.built`-Catch-up-Lücke behoben** (war schon länger in
+  `docs/building.md` als bekannte Grenze vermerkt, nie behoben):
+  `_catch_up_guard_post()` schickt `built` nie mit — ein spät
+  beitretender Peer sah jeden fertigen Wachposten dauerhaft im
+  "noch im Bau"-Gelb. `_create_guard_post()` konnte das Feld schon
+  (fürs Speicherstand-Laden), jetzt auch beim Catch-up verdrahtet.
+
+## Punkt 27: Ladebildschirm (2026-08-04)
+
+Letzter noch offener Punkt der festen Liste. `GameManager.change_state()`
+schickt beim Wechsel zu `GameState.IN_GAME` jeden Peer jetzt erst zu einer
+neuen `LoadingScreen.tscn` statt direkt zu `World.tscn` — die lädt die
+Welt ASYNCHRON im Hintergrund (`ResourceLoader.load_threaded_request()`)
+statt des vorherigen synchronen `change_scene_to_file()`, das für ein
+kurzes Einfrieren sorgte. Fortschrittsbalken zeigt echten Ladefortschritt,
+dazu ein zufälliger, rein kosmetischer Lade-Spruch (Nutzerwunsch: "paar
+lustige sprüche sowas wie der hamster beeilt sich oder bitcoin mining
+fast fertig oder heute schon genug getrunke") aus 16 festen Optionen.
+Details in [`loading.md`](loading.md). Noch nicht vom Nutzer getestet.
+Damit sind alle 29 Punkte der aktuellen Liste umgesetzt (siehe
+persistentes Memory `koopgame_next_steps_plan`).
+
+## Punkt 29, vierte Korrektur: Leere schwarze Box oben links (2026-08-04)
+
+Nach dem bestätigten Ressourcen-Panel-Umbau fiel dem Nutzer eine leere
+schwarze Box oben links auf ("nur ne leere schwarze box, kein text
+drauf") — das bei der ersten Korrektur eingeführte `HUD/InfoPanel` war
+dauerhaft sichtbar, obwohl der dahinterliegende `hud_label`-Text seit dem
+HUD-Aufräumen vom 2026-08-03 die meiste Zeit komplett leer ist. Behoben:
+Panel-Sichtbarkeit folgt jetzt, ob tatsächlich Inhalt da ist. Details in
+[`world.md`](world.md), "UI-Überarbeitung Runde 2", "Vierte Korrektur".
+**Vom Nutzer bestätigt:** "passt ist weg" — Punkt 29 damit komplett
+abgeschlossen.
+
+## Punkt 29, dritte Korrektur: Text lief aus dem Bildschirm (2026-08-04)
+
+Nutzer: "wird besser die schrifft geht aber aus dem bildschirm raus" —
+Kategorie-Zeilen ohne Zeilenumbruch liefen bei mehreren Ressourcen pro
+Kategorie seitlich über den Bildschirmrand hinaus. Kapazität nicht mehr
+pro Ressource wiederholt (kürzere Zeilen), plus `autowrap_mode = 3` auf
+allen vier Kategorie-Labels als Absicherung, Panel/Tab-Höhe entsprechend
+angepasst. Details in [`world.md`](world.md), "UI-Überarbeitung Runde 2",
+"Dritte Korrektur". **Vom Nutzer bestätigt:** "deutlich besser als
+vorher" — Ressourcen-Panel-Umbau (Punkt 29) damit abgeschlossen.
+
+## Punkt 29, zweite Korrektur: Ressourcen-Panel entschlackt (2026-08-04)
+
+Nutzer nach der Überlappungs-Korrektur: "wird besser aber zu viel
+ressourcen am besten nur die bau materialien das mit waffen bücher etc.
+soll dann in ein unter tab". Baurohstoffe bleiben dauerhaft sichtbar,
+Überleben/Ausrüstung/Forschungsbücher wandern in einen kleinen
+`TabContainer` darunter (nur eine Kategorie gleichzeitig sichtbar). Details
+in [`world.md`](world.md), "UI-Überarbeitung Runde 2", "Zweite Korrektur".
+Noch nicht getestet.
+
+## Punkt 29 Korrektur: UI-Überlappung durch falsche Basis-Auflösung (2026-08-04)
+
+Nutzer schickte Screenshot (`bilder/ui 1.PNG`) des ersten UI-Wurfs:
+"irgendwie schaut das nicht so wie gewünscht aus" — Ressourcen-Text und
+Bau-Buttons lagen sichtbar übereinander. Ursache: UI-Anker laufen im
+projektweiten Basis-Viewport (Godot-Standard 648px Höhe, kein
+`window/size/viewport_height` gesetzt), NICHT in der tatsächlichen
+Fensterauflösung — das auf 620px vergrößerte `MainTabsUI`-Panel nahm damit
+fast den ganzen Bildschirm ein und überlappte mit dem neu nach oben links
+verschobenen Ressourcen-Panel. Korrektur: Ressourcen-Panel bleibt oben
+RECHTS (wie ursprünglich), `MainTabsUI`-Panel-Höhe auf ein Maß reduziert,
+das innerhalb 648px tatsächlich Platz lässt (404→454px statt 404→604px).
+Details in [`world.md`](world.md), "UI-Überarbeitung Runde 2", Abschnitt
+"Korrektur nach erstem Screenshot-Test". Noch nicht erneut vom Nutzer
+getestet.
+
+## Punkt 29: UI-Überarbeitung Runde 2 (2026-08-04)
+
+Nutzer schickte Referenz-Screenshot (Infection Free Zone, `bilder/ui.PNG`)
+mit "vielleicht paar stats vertauschen ... damit es nicht wie eine Kopie
+aussieht" und danach "mach erstmal wie du meinst, wir müssen später eh hin
+und her wechseln, nur damit man eine Richtung bekommt" — als erster,
+bewusst nicht finaler Wurf umgesetzt: Ressourcen-Panel verliert die
+Zwei-Tabs-Aufteilung (siehe Punkt 14-Nachbarabschnitt in `world.md`)
+zugunsten kompakter Einzeiler pro Kategorie, wandert von oben rechts nach
+oben LINKS (bewusst seitenverkehrt zur Referenz). Auswahl-/Status-Anzeige
+bekommt erstmals einen Panel-Hintergrund, rutscht darunter. `MainTabsUI`-
+Panel vergrößert (behebt das direkt zuvor gemeldete "Baustellen-Liste
+nicht so sichtbar"). Details in [`world.md`](world.md), "UI-Überarbeitung
+Runde 2". Noch nicht vom Nutzer gesehen/getestet — explizit als Richtung
+angelegt, weitere Iterationsrunden erwartet.
+
+## Map-Stresstest nochmal hochgeschraubt (2026-08-04)
+
+Nutzerwunsch ("schraub einfach hoch ich teste dann") — weitere Runde
+desselben Benchmark-Stresstests von 2026-08-03: `BUILDINGS_PER_LARGE_ZONE`/
+`_SMALL_ZONE` 300/150→500/250 (Summe 1750 statt 1050),
+`TREES_PER_FOREST_ZONE` 80→150, `TREES_TOTAL`/`CAR_WRECKS_TOTAL`/
+`STONE_PILES_TOTAL`/`BRICK_PILES_TOTAL` jeweils verdoppelt
+(800/320/400/400). Reiner Stresstest, keine Balancing-Entscheidung.
+Diesmal zusätzlich relevant, weil seit dem Bau-Markier-Modus (Punkt 28)
+JEDES Gebäude ein eigenes `_process()` hat (vorher komplett passiv) —
+Performance noch nicht gemessen, Nutzer testet selbst. Details/offene
+Fragen in [`benchmarks.md`](benchmarks.md).
+
+## Balancing: Müdigkeit/Moral-Verfall verlangsamt (2026-08-04)
+
+Direktes Nutzer-Feedback nach dem ersten Test von Punkt 28: "das mit müde
+und moral geht zu schnell runter ich lauf zu einem gebäude und habe beides
+auf 0 sollte langsamer ablaufen". `Survivor.FATIGUE_DECAY_RATE` 0.8→0.15/s,
+`MORALE_DECAY_RATE` 0.4→0.075/s (gleiches 2:1-Verhältnis beibehalten) —
+vorher beide schon nach 125s/250s komplett aufgebraucht (kürzer als ein
+Erkundungslauf), jetzt ~11/~22 Minuten bis 0. Details in
+[`survivor.md`](survivor.md), "Bedürfnisse: Müdigkeit + Moral". Zweites
+Feedback aus demselben Test: die neue Baustellen-Liste im Bauen-Tab ist
+"nicht so sichtbar" — laut Nutzer nicht dringend ("kann man später
+anpassen"), vorgemerkt für Punkt 29 (UI-Überarbeitung Runde 2).
+
+## Punkt 28: Bau-Markier-Modus mit zuweisbaren Bautrupps (2026-08-04)
+
+Punkt 27 (Ladebildschirm) auf Nutzerwunsch übersprungen ("lassen wir
+erstmal"), direkt weiter mit Punkt 28 — laut Nutzer der wichtigste
+Feature-Kandidat aus der Planungssession. Umbau des bisherigen
+Sofort-Ausbaus (`request_upgrade_building()`) zu einem echten
+RTS-Bauauftrag: Gebäude claimen → Ziel-Ausbaustufe festlegen (Lager/
+Krankenstation/Werkstatt/Schlafraum) → offener Bauauftrag statt sofortiger
+Fertigstellung → beliebig viele Bautrupps zuweisen (Klick auf die
+amberfarbene Baustelle mit ausgewählten Trupps ODER "Trupp zuweisen"-Button
+in der neuen Baustellen-Liste im Bauen-Tab) → Baufortschritt läuft über
+Zeit, Tempo skaliert linear mit Anzahl zugewiesener Trupps. Plus
+Stornieren mit Rückerstattung und volle Speicherstand-/Catch-up-Persistenz
+für Zieltyp+Fortschritt (nicht für die zugewiesenen Trupps selbst — die
+gehen bei Rejoin/Laden verloren, müssen neu zugewiesen werden). Details in
+[`building.md`](building.md), "Baustellen". Registrierung/Abziehen der
+Bautrupps nutzt exakt das bestehende `GuardPost`-Wachposten-Worker-Muster
+mit (`Survivor._stationed_at`/`_unstation()`), dadurch kein neuer Code fürs
+Abziehen nötig. Noch nicht vom Nutzer getestet — siehe
+`docs/pending-tests.md`. Weiter mit Punkt 29 (UI-Überarbeitung Runde 2)
+oder zurück zu Punkt 27, je nach Nutzerwunsch.
+
+## Punkt 26: Formation natürlicher (2026-08-04)
+
+Erster Schritt der neuen Feature-Phase (Punkte 26-29, siehe Planungssession
+vom 2026-08-03 Abend). Trupps liefen trotz Kreis-Formation im
+Gleichschritt los ("truppen laufen auf einer linie sollen er natürlicher
+laufen") — behoben über eine kleine, einmalig zufällige Geschwindigkeits-
+Varianz pro Trupp (`Survivor.MOVE_SPEED_VARIANCE := 0.08`) plus einen
+index-abhängigen, gestaffelten Bewegungsstart bei Gruppenbefehlen
+(`World.MOVE_STAGGER_STEP := 0.15`, neuer `start_delay`-Parameter in
+`order_move()`). Details in [`commander.md`](commander.md), "Formation
+natürlicher". `Vehicle.order_move()` musste denselben Parameter
+(ungenutzt) mitbekommen, weil derselbe generische RPC-Aufruf auch
+Fahrzeuge trifft. Noch nicht vom Nutzer getestet. Weiter mit Punkt 27
+(Ladebildschirm).
+
 ## Weitere Nutzerwünsche direkt im Anschluss (2026-08-03)
 
 Vier kleinere Punkte im selben Zug nach dem Koop-Testdurchlauf:
@@ -2354,6 +2607,34 @@ gespeichert, nicht nur hier):
    aktualisieren (Roadmap-Haken, neuer Abschnitt) — sonst verlässt sich die
    nächste Session auf einen veralteten Stand (siehe "Nachtrag 2026-07-31"
    oben, genau das ist einmal passiert).
+
+## Welt-Sync-Sperre + Verbindungsabbruch-Fix (2026-08-04)
+
+Echter Zwei-Spieler-Test deckte zwei Bugs auf: der zweite (Nicht-Host-)
+Peer hatte lange Minimap-Ladezeiten und konnte keine Startbase wählen,
+und in einer zweiten Testrunde stellte sich heraus, dass die Ursache ein
+kompletter **Verbindungsabbruch** war — `_spawn_for_peer()` feuerte beim
+Beitritt über 4000 einzelne Catch-up-RPCs (Gebäude/Bäume/Wracks/Steine/
+Ziegel) synchron ab und überlastete damit die ENet-Verbindung.
+
+- **`WorldSyncOverlay`** (neue Szene, in `World.tscn` eingebunden):
+  Vollbild-Blocker, verhindert Klicks/zeigt Fortschritt, bis der Client
+  die Welt tatsächlich vollständig empfangen hat — zählt über
+  `child_entered_tree` der Entity-Container (deckt sowohl direkte
+  Spawner-Replikation als auch die Catch-up-RPCs ab).
+- **Bündel-RPCs:** `_catch_up_buildings_bulk()`/`_catch_up_trees_bulk()`/
+  `_catch_up_car_wrecks_bulk()`/`_catch_up_stone_piles_bulk()`/
+  `_catch_up_brick_piles_bulk()` ersetzen die fünf schwersten
+  Einzel-Catch-up-Funktionen — ein RPC-Aufruf pro Typ statt tausender.
+- **Stresstest-Zahlen zurückgenommen** auf den ursprünglichen
+  Ausgangswert (Gebäude 1750→350, Bäume/Ressourcen entsprechend runter).
+- Nebenbei behoben: `_spawn_for_peer()` rief sich beim Partie-Start auch
+  für die eigene Host-Peer-ID auf und krachte beim Tag/Nacht-Catch-up
+  ("RPC ... on yourself is not allowed").
+
+Ausführlich in [`networking.md`](networking.md), "Welt-Sync-Sperre".
+
+**Vom Nutzer bestätigt: "passt alles".**
 
 ## Ordner-Hinweis
 

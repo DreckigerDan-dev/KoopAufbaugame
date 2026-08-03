@@ -160,6 +160,15 @@ Rüstungs-Slot").
   feuern auf dieselbe Ziel-Liste wie auf normale Zombies, siehe
   `GuardPost._find_nearest_zombie()`) — ein Nest selbst droppt aber
   nichts, der Wert wird dort ignoriert.
+- **Korrektheits-Fix (2026-08-04): doppelte Loot-Vergabe verhindert** —
+  `take_damage()` prüfte `hp <= 0` bei JEDEM Aufruf neu, ohne sich zu
+  merken, ob der Tod schon verarbeitet wurde. Treffen z. B. ein
+  Wachposten-Schuss UND ein Survivor-Gegenschaden denselben Zombie im
+  selben Frame tödlich (`queue_free()` entfernt die Node erst am
+  Frame-Ende, nicht sofort), hätte `grant_zombie_loot()` zweimal gefeuert
+  — doppelter Ertrag für einen einzigen Kill. Neue `_dead`-Sperre (erste
+  Zeile in `take_damage()`) lässt jeden weiteren Aufruf nach dem Tod ins
+  Leere laufen.
 
 ## Nacht-Schadensbonus
 
@@ -303,9 +312,18 @@ Nest-Nachwachsens.
   `_trigger_horde_night()` aus. Nicht mehr an ein reines
   Echtzeit-Intervall gekoppelt, sondern an den echten Spieltag —
   Nutzerwunsch, ersetzt das frühere `HORDE_INTERVAL`.
+- **Skalierung mit Spieleranzahl (2026-08-04, siehe
+  `docs/mechanics-review.md`, "Zombie-Bedrohung über Zeit"):**
+  `horde_size`/`brute_count` werden jetzt mit `max(NetworkManager.
+  players.size(), 1)` multipliziert — vorher war eine Horde bei 1 Spieler
+  genauso groß wie bei 4, Koop zu viert war dadurch pro Kopf spürbar
+  leichter statt gleich schwer. `MAX_ZOMBIES` dafür gleichzeitig von 200
+  auf 400 angehoben (der alte Deckel wäre bei 4 Spielern viel zu schnell
+  erreicht gewesen).
 - **`_trigger_horde_night()`:** warnt zuerst alle verbundenen Spieler
   (`report_status()` an jede `NetworkManager.players`-ID: "Eine Horde
-  nähert sich!"), spawnt danach `HORDE_SIZE := 10` Zombies (mit etwas
+  nähert sich!"), spawnt danach `HORDE_SIZE := 10` Zombies (× Spieleranzahl,
+  siehe oben; mit etwas
   Streuung, `HORDE_SPAWN_SCATTER := 6.0`) und alarmiert sie SOFORT auf ein
   gemeinsames Ziel (`zombie.alert(target)`) statt sie normal wandern zu
   lassen — echter, gebündelter Druck statt nur mehr Wander-Zombies. **Seit
@@ -390,8 +408,10 @@ persistentes Memory `koopgame_map_scale_performance`): Zielsuche
 Zombie pro Frame über flache Gruppen-Iteration ohne räumliche Struktur —
 skaliert quadratisch mit der Zombie-Zahl.
 
-- **`World.MAX_ZOMBIES := 200`** — bewusst ein Startwert zum empirischen
-  Benchmarken, kein "richtig" berechneter Wert (hardwareabhängig).
+- **`World.MAX_ZOMBIES := 400`** (2026-08-04 von 200 angehoben, siehe
+  "Skalierung mit Spieleranzahl" oben) — bewusst ein Startwert zum
+  empirischen Benchmarken, kein "richtig" berechneter Wert
+  (hardwareabhängig).
 - **Nur das Zombie-Nest respektiert den Deckel:**
   `World.spawn_nest_zombie()` prüft vor jedem Spawn
   `get_tree().get_nodes_in_group("zombie").size() >= MAX_ZOMBIES` und
@@ -633,11 +653,11 @@ Umgebung verfügbar, nur über statische Checks verifiziert).
 - **Kein Wiederauftauchen eines zerstörten Nests an anderer Stelle** —
   fünf Nester (eines pro Stadt-Zone, siehe oben) entstehen einmalig bei
   Weltgenerierung, ein zerstörtes Nest kommt nicht zurück.
-- **Horde-Nächte eskalieren nicht über die Spieldauer** — feste
-  `HORDE_SIZE`/`HORDE_BRUTE_COUNT` jede Nacht, keine Steigerung mit der
-  Zeit, wie in der ursprünglichen Vision ("Blutmond-Events alle paar
-  Tage"). Der Tag/Nacht-Zyklus selbst ist seit diesem Feature umgesetzt
-  (siehe [`docs/world.md`](world.md), "Tag/Nacht-Zyklus").
+- **Horde-Eskalation über Spieldauer UND Spieleranzahl behoben** — die
+  Blutmond-Kalender-Eskalation (Punkt 21 der Gesamtliste) deckt die
+  Zeit-Steigerung ab, die Spieleranzahl-Skalierung (siehe oben,
+  2026-08-04) die frühere Lücke "Koop zu viert war leichter als Solo".
+  Diese Zeile war seitdem veraltet, hier korrigiert.
 - **Catch-up für Zombie-Nest-Existenz/HP seit dem Kartenumbau gelöst**
   (`_catch_up_zombie_nest()`, siehe [`docs/world.md`](world.md)) — ein
   spät beitretender Peer sieht jetzt den korrekten HP-Stand jedes

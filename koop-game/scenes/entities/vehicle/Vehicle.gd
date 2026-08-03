@@ -100,6 +100,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Pause (siehe Zombie.gd für dieselbe Begründung/docs/mechanics-review.md).
+	if get_tree().current_scene.is_paused():
+		return
 	if driver == null:
 		# Unbesetzt/geparkt — nichts zu tun, kein unnötiger _sync_state-Spam.
 		return
@@ -188,7 +191,12 @@ func enter(survivor: Node3D, requesting_peer_id: int) -> bool:
 
 
 @rpc("any_peer", "call_local", "reliable")
-func order_move(target: Vector3, requesting_peer_id: int, queue: bool) -> void:
+func order_move(target: Vector3, requesting_peer_id: int, queue: bool, _start_delay: float = 0.0) -> void:
+	# _start_delay (siehe Survivor.order_move()) wird hier nur akzeptiert,
+	# nicht genutzt — World._select_at() ruft order_move() generisch für
+	# alle ausgewählten Einheiten auf, egal ob Trupp oder Fahrzeug. Fahrzeuge
+	# haben eigenes Straßen-Pathing statt Formations-Kreis, gestaffelter
+	# Loslauf ist hier nicht relevant.
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
 		return
 	if not queue:

@@ -60,3 +60,31 @@ duplizieren.
 - Kein laufender Godot-Editor in dieser Umgebung — ein echter Profiler-Lauf
   (Punkt 1, übersprungen) würde beide offenen Fragen direkt beantworten,
   falls irgendwann doch verfügbar.
+- **Messung nach Kartenstand 2026-08-03/2026-08-04 noch komplett aus** —
+  seit der letzten Zeile (2026-08-01e, 670 Zombies) kamen mehrere
+  Stresstest-Runden UND neue Systeme dazu, ohne dass danach neu gemessen
+  wurde: Gebäude 350→1050→1750 (`BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE`),
+  Bäume/Ressourcen mehrfach verdoppelt (`TREES_PER_FOREST_ZONE`/
+  `TREES_TOTAL`/`CAR_WRECKS_TOTAL`/`STONE_PILES_TOTAL`/
+  `BRICK_PILES_TOTAL`), UND seit dem Bau-Markier-Modus (Punkt 28) hat
+  JEDES Gebäude jetzt ein eigenes `_process()` (`Building.gd`, vorher
+  komplett passiv) — auch wenn das pro Gebäude nur ein billiger
+  Early-Return ist, läuft es jetzt bei 1750 statt 0 Gebäuden.
+  **Ergebnis eingetragen (2026-08-04):** echter Zwei-Spieler-Test zeigte
+  einen klaren Netzwerk-Nebeneffekt der Erhöhung — zweiter (Nicht-Host-)
+  Peer hatte lange Minimap-Ladezeiten UND konnte keine Startbase wählen,
+  weil >2500 einzelne Spawn-Nachrichten (1750 Gebäude + hunderte Bäume/
+  Ressourcen) erst über das Netzwerk bei ihm ankommen mussten, siehe
+  `docs/networking.md`, "Welt-Sync-Sperre" für die Ursache + den Fix
+  (`WorldSyncOverlay`). Frametime/FPS-Aspekt der Erhöhung selbst weiterhin
+  nicht separat gemessen.
+  **Nachtrag (2026-08-04, zweite Testrunde):** war schlimmer als gedacht —
+  die Netzwerkverbindung des zweiten Peers ist unter der Last komplett
+  abgestürzt (`_spawn_for_peer()` feuerte >4000 einzelne RPCs synchron ab),
+  nicht nur langsam. Behoben durch Bündel-RPCs (`_catch_up_buildings_bulk()`
+  & Co.) UND Rücknahme aller Stresstest-Erhöhungen auf den ursprünglichen
+  Ausgangswert: Gebäude wieder 350 (100/50 statt 500/250),
+  `TREES_PER_FOREST_ZONE` wieder 40, `TREES_TOTAL`/`CAR_WRECKS_TOTAL`/
+  `STONE_PILES_TOTAL`/`BRICK_PILES_TOTAL` wieder 200/80/100/100 — Details
+  in `docs/networking.md`, "Welt-Sync-Sperre". Damit sind die 1750/800/
+  320/400/400-Werte aus dieser Zeile hier nicht mehr aktuell.

@@ -36,21 +36,69 @@ zwischen Spielern. Spawn-Position kommt seit der Start-Basis-Wahl (siehe
 Stadt-Gebäude, das der jeweilige Peer selbst als Basis gewählt hat, nicht
 mehr aus festen Kartenecken (`World.request_choose_start_base()`).
 
+## Zerstörbarkeit + Rettungsmechanik (2026-08-04)
+
+Vorher komplett unzerstörbar — Nutzerwunsch nach dem Mechaniken-Bericht
+(siehe `docs/mechanics-review.md`, "Fehlende Enden/Ziele"): das Spiel
+hatte keinen Sieg-/Niederlage-Zustand.
+
+- **`HomeBase.MAX_HP := 500`** — deutlich zäher als jedes andere Gebäude
+  ("sehr zäh", Nutzerwunsch), Zerstörung bleibt ein seltenes, dramatisches
+  Ereignis. `take_damage()` gleiches Muster wie `Building`/`Wall`.
+  Zombies erreichen sie über `Zombie._find_nearest_target()`, eigene
+  Gruppe `"home_base"` (nicht `"searchable"`, keine Scavenging-Semantik).
+- **Ruine statt Verschwinden:** bei Zerstörung spawnt `World.
+  home_base_destroyed()` an derselben Stelle ein normales, schon
+  geplündertes, unbesetztes `Building` (reine Wiederverwendung des
+  bestehenden Abriss-Mechanismus — Nutzerwunsch: "kaputte Gebäude für
+  paar Ressourcen bergen").
+- **Rettungsmechanik statt sofortigem Aus:** der betroffene Spieler sieht
+  ein Panel (`GameOverUI.gd`/`.tscn`) mit "Hilfe anfragen" oder
+  "Aufgeben". Bittet er um Hilfe, sieht jeder Mitspieler die Anfrage im
+  Einheiten-Tab (`RescueList`) und kann einen EIGENEN Trupp auswählen +
+  "Trupp senden" drücken — der Trupp wird zum **Base-Erstellen-Trupp**
+  (`Survivor.is_rescue_unit`, golden eingefärbt, kostet den Helfer
+  dauerhaft eine Einheit), wechselt den Besitzer zum verlorenen Spieler
+  und schaltet für ihn `World.request_choose_start_base()` wieder frei
+  (praktisch wie ein Neustart innerhalb derselben Session — er wählt
+  erneut ein Gebäude als Basis, bekommt `START_SURVIVOR_COUNT` neue
+  Trupps). Ohne Hilfe (Solo oder "Aufgeben"): echter Game-Over-Bildschirm
+  mit "Neu starten" (frisches Solo-Spiel) oder "Zurück zum Hauptmenü".
+- **`World._lost_peers`/`_rescue_requests`** — gleiches Muster wie
+  `_trade_offers` (nur Host führt Buch, an alle Peers gespiegelt, KEIN
+  Catch-up/KEINE Speicherstand-Persistenz, kurzlebiger Zwischenzustand).
+  **Bekannte Lücke:** speichert/lädt jemand exakt während ein Spieler im
+  "verloren, wartet auf Rettung"-Zustand ist, geht dieser Zustand beim
+  Neuladen verloren (Spieler hat dann einfach keine Basis, keine
+  gesperrte `request_choose_start_base()` mehr) — akzeptierter Randfall,
+  gleiche Vereinfachung wie bei Handelsangeboten.
+- **Trupps unterwegs überleben** die Zerstörung der eigenen Home-Base
+  (Annahme, vom Nutzer nicht widersprochen) — gelten bis zur Rettung als
+  "heimatlos" (kein Lager/Heilung/Forschung mehr erreichbar).
+- HP ist Teil von Speicherstand/Catch-up (`_collect_save_data()`/
+  `_load_game_state()`/`_catch_up_home_base()`), damit ein Neuladen nicht
+  stillschweigend jede Home-Base wieder auf volle HP zurücksetzt.
+- Noch nicht vom Nutzer getestet.
+
 ## Ressourcen
 
 ```gdscript
-const START_RESOURCES := {"food": 150, "wood": 150, "metal": 150, "stone": 150, "brick": 150, "medicine": 150, "ammo": 150, "weapon": 150, "armor": 150, "helmet": 150, "melee_weapon": 150, "leg_armor": 150, "book_weapon": 150, "book_armor": 150, "book_helmet": 150, "book_ammo": 150}
+const START_RESOURCES := {"food": 60, "wood": 50, "metal": 25, "stone": 40, "brick": 25, "medicine": 25, "ammo": 30, "weapon": 1, "armor": 1, "helmet": 1, "melee_weapon": 1, "leg_armor": 1}
 var resources: Dictionary = START_RESOURCES.duplicate()
 ```
 
-**Aktuell TEMPORÄRE Testwerte (2026-08-01, alle Arten auf 150 inkl. der
-vier `book_*`-Arten, `BASE_STORAGE_CAPACITY` mit auf 300 angehoben)** —
-Nutzerwunsch zum bequemeren Durchtesten neuer Features, explizit NICHT die
-echte Balance (`book_*` gehören normalerweise NICHT in den Startbestand,
-nur über seltenen Zombie-Loot erreichbar, siehe
-[`docs/zombies.md`](zombies.md)). Muss vor Release zurückgebaut werden,
-ursprüngliche Werte stehen als Kommentar direkt in `HomeBase.gd`, siehe
-persistentes Memory `koopgame_temp_test_resources`.
+Echte Balance-Werte (nicht mehr die temporären 150/Art-Testwerte vom
+2026-08-01, siehe persistentes Memory `koopgame_temp_test_resources` für
+die Historie — diese Doku-Zeile war seitdem veraltet, hier korrigiert).
+Baurohstoffe/Überlebensgüter 2026-08-04 nochmal angehoben (Nutzerwunsch:
+"mehr start resourcen das man seine base gleich bischen ausbauen kann",
+siehe `docs/mechanics-review.md`, "Ressourcen-Wirtschaft") — reicht jetzt
+z. B. für eine Zonen-Erweiterung (15 Stein) PLUS einen Wachposten (30
+Holz) direkt zu Spielbeginn. Kein `book_*` im Startbestand — Bücher sind
+NUR über seltenen Zombie-Loot erreichbar (siehe
+[`docs/zombies.md`](zombies.md)). Ausrüstungs-Startbestand (`weapon`/
+`armor`/`helmet`/`melee_weapon`/`leg_armor`) bewusst bei 1 belassen —
+Einzel-Slots, kein Grund die zu erhöhen.
 
 Sechzehn Ressourcenarten (2026-08-02: `melee_weapon`/`leg_armor` seit
 Punkt 18 der Gesamtliste dazugekommen, siehe [`survivor.md`](survivor.md),

@@ -101,6 +101,31 @@ zum Zielpunkt, alle weiteren verteilen sich gleichmäßig auf einem Kreis
 mit `FORMATION_RADIUS := 2.0` darum (ersetzt die alte, jetzt gelöschte
 `FORMATION_SPACING`-Konstante).
 
+**Formation natürlicher (2026-08-04):** die reine Zielpunkt-Verteilung
+reichte nicht, Nutzer-Feedback nach dem Kreis-Update: "truppen laufen auf
+einer linie sollen er natürlicher laufen" — alle Einheiten liefen trotz
+unterschiedlicher Zielpunkte im exakt selben Frame mit exakt gleicher
+Geschwindigkeit los. Zwei Ergänzungen, beide ohne Netzwerk-Zustand (rein
+host-seitig in `Survivor._process()`):
+- **`Survivor.MOVE_SPEED_VARIANCE := 0.08`** — jeder Trupp bekommt bei
+  `_ready()` einmalig einen zufälligen Geschwindigkeitsfaktor (±8%,
+  `_move_speed_factor`), multipliziert in `_current_move_speed()`.
+- **`World.MOVE_STAGGER_STEP := 0.15`** — `_select_at()` gibt jeder
+  Einheit im Gruppenbefehl einen index-abhängigen Start-Versatz
+  (`float(i) * MOVE_STAGGER_STEP`) als neuen vierten Parameter
+  `start_delay` an `order_move()` mit. Der Trupp zählt `_move_start_delay`
+  in `_handle_movement()` herunter, bevor er sich überhaupt bewegt —
+  Index 0 (Anführer) bekommt 0 und läuft weiterhin sofort los. Gilt nur
+  bei einem frischen Befehl, nicht beim Shift-Klick-Anhängen (`queue ==
+  true`).
+- `Vehicle.order_move()` bekommt denselben vierten Parameter
+  (`_start_delay`) nur der Signatur wegen (derselbe generische
+  `unit.order_move.rpc_id(...)`-Aufruf trifft auch Fahrzeuge, die
+  mitausgewählt sein können) — bleibt dort ungenutzt, Fahrzeuge folgen
+  weiter dem Straßen-Pathing.
+
+Noch nicht vom Nutzer getestet.
+
 ## Kontrollgruppen
 
 RTS-Standard: `Strg`+Zifferntaste (1–9) weist die aktuelle Auswahl der

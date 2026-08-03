@@ -44,6 +44,34 @@ var zone_center: Vector3 = Vector3.ZERO
 var is_looted: bool = false
 var owner_peer_id: int = 0  # 0 = nicht geclaimt
 var hp: int = MAX_HP
+# Schutzsuchende (2026-08-04, Rekrutierungs-Erweiterung, siehe
+# docs/mechanics-review.md) — reine Wiederverwendung des bestehenden
+# has_survivor-Mechanismus (Survivor._finish_search() ruft World.
+# spawn_recruit() bei Erfolg auf), nur eigens periodisch in der Wildnis
+# gespawnt statt fest in eine Stadt-Zone eingebaut. is_refugee
+# unterscheidet den Kanal, damit World.gd den 2-pro-Spieler-Deckel NUR
+# hier anwendet (das ursprüngliche feste Rekrutierungs-Gebäude bleibt
+# ungedeckelt).
+var is_refugee: bool = false
+
+# Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
+# "Baustellen") — Ziel-Ausbaustufe festlegen, ohne dass der Ausbau sofort
+# passiert. World.request_start_construction() setzt die Felder unten,
+# _process() (host-only wie GuardPost/Survivor) zählt den Baufortschritt
+# hoch und meldet Fertigstellung an World.finish_construction().
+const CONSTRUCTION_WORK_PER_TROOP := 1.0
+const CONSTRUCTION_SYNC_INTERVAL := 0.5
+
+var has_open_construction: bool = false
+# BuildType-Wert als int gehalten statt typisiert (siehe World.BuildType) —
+# Building.gd kennt World.gd bewusst nicht als Typ-Abhängigkeit, nur als
+# Laufzeit-Vergleichswert.
+var construction_target_type: int = 0
+var construction_progress: float = 0.0
+var construction_required: float = 0.0
+var construction_worker_count: int = 0
+var _construction_workers: Array = []
+var _construction_sync_timer: float = 0.0
 # Banditen-Restloot (Vision-Ideenbacklog, Punkt 23 der Gesamtliste,
 # `Infos/01 Architektur.md`: "gelegentlich hinterlassen Banditen-Camps
 # kleinen Restloot in bereits geplünderten Gebäuden — Grund für
@@ -54,6 +82,120 @@ var hp: int = MAX_HP
 # befüllt diese beiden Felder neu.
 var has_bandit_loot: bool = false
 var bandit_loot: Dictionary = {}
+
+
+func _ready() -> void:
+	# Erst seit dem Bau-Markier-Modus überhaupt nötig — vorher war Building.gd
+	# komplett passiv, alle Mutationen liefen über von außen (World.gd/
+	# Survivor.gd) aufgerufene RPCs. Gleiches host-only-_process()-Muster wie
+	# GuardPost/Survivor.
+	if not multiplayer.is_server():
+		set_process(false)
+
+
+func _process(delta: float) -> void:
+	# Pause (siehe Zombie.gd für dieselbe Begründung/docs/mechanics-review.md).
+	if get_tree().current_scene.is_paused():
+		return
+	if not has_open_construction:
+		return
+	construction_progress += _construction_workers.size() * CONSTRUCTION_WORK_PER_TROOP * delta
+	_construction_sync_timer += delta
+	if _construction_sync_timer >= CONSTRUCTION_SYNC_INTERVAL:
+		_construction_sync_timer = 0.0
+		_sync_construction_progress.rpc(construction_progress)
+	if construction_progress >= construction_required:
+		# Building.gd kennt seine World-Spawner nicht selbst (siehe
+		# docs/building.md, "Bewusst dupliziert statt geteilt" für dasselbe
+		# Cross-Node-Prinzip) — World.finish_construction() macht den
+		# eigentlichen Umbau (take_damage()/Spawn der Zielstruktur).
+		get_tree().current_scene.finish_construction(self)
+
+
+func start_construction(target_type: int, required_work: float) -> void:
+	has_open_construction = true
+	construction_target_type = target_type
+	construction_progress = 0.0
+	construction_required = required_work
+	construction_worker_count = 0
+	_construction_workers.clear()
+	_construction_sync_timer = 0.0
+	_sync_construction_start.rpc(target_type, required_work)
+	_update_visual()
+
+
+func cancel_construction() -> void:
+	has_open_construction = false
+	construction_target_type = 0
+	construction_progress = 0.0
+	construction_required = 0.0
+	construction_worker_count = 0
+	_construction_workers.clear()
+	_sync_construction_cancel.rpc()
+	_update_visual()
+
+
+func register_worker(trupp: Node3D) -> void:
+	if trupp in _construction_workers:
+		return
+	_construction_workers.append(trupp)
+	_sync_construction_worker_count.rpc(_construction_workers.size())
+
+
+func unregister_worker(trupp: Node3D) -> void:
+	_construction_workers.erase(trupp)
+	_sync_construction_worker_count.rpc(_construction_workers.size())
+
+
+func get_construction_workers() -> Array:
+	# Öffentlicher Zugriff für World.finish_construction()/
+	# request_cancel_construction() — die müssen beim Fertigstellen/
+	# Stornieren alle zugewiesenen Trupps freigeben, sollen aber nicht
+	# direkt das private _construction_workers-Array anfassen.
+	return _construction_workers
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_recall_worker(requesting_peer_id: int) -> void:
+	# Gegenstück zu GuardPost.request_recall_worker() (siehe dort) — zieht
+	# einen zugewiesenen Bautrupp wieder ab, macht ihn dadurch wieder frei
+	# bewegbar (order_stop() ruft schon _unstation() -> unregister_worker()).
+	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
+		return
+	if _construction_workers.is_empty():
+		return
+	var trupp: Node3D = _construction_workers[0]
+	trupp.order_stop(requesting_peer_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_construction_start(target_type: int, required_work: float) -> void:
+	has_open_construction = true
+	construction_target_type = target_type
+	construction_progress = 0.0
+	construction_required = required_work
+	construction_worker_count = 0
+	_update_visual()
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_construction_progress(progress: float) -> void:
+	construction_progress = progress
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_construction_worker_count(count: int) -> void:
+	construction_worker_count = count
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_construction_cancel() -> void:
+	has_open_construction = false
+	construction_target_type = 0
+	construction_progress = 0.0
+	construction_required = 0.0
+	construction_worker_count = 0
+	_update_visual()
 
 
 @rpc("authority", "call_local", "reliable")
@@ -129,7 +271,12 @@ func _update_visual() -> void:
 	if mesh == null:
 		return
 	var mat := StandardMaterial3D.new()
-	if owner_peer_id != 0:
+	if has_open_construction:
+		# Offener Bauauftrag (siehe "Bau-Markier-Modus" oben) — amberfarben,
+		# geht dem "geclaimt"-Blau vor, weil ein Bauauftrag immer auch ein
+		# geclaimtes Gebäude voraussetzt.
+		mat.albedo_color = Color(0.9, 0.6, 0.15)
+	elif owner_peer_id != 0:
 		# Geclaimt — bläulicher Ton, deutlich unterscheidbar vom neutralen
 		# Grau eines nur geplünderten, noch niemandem gehörenden Gebäudes.
 		mat.albedo_color = Color(0.3, 0.5, 0.75)

@@ -58,7 +58,12 @@ steht statt zu versinken/schweben) entsprechend auf `0.85` angepasst.
 
 ## Hunger + Essen
 
-- `hunger` fällt linear mit `HUNGER_DECAY_RATE` (1.5/s), Boden bei 0.
+- `hunger` fällt linear mit `HUNGER_DECAY_RATE` (0.3/s, 2026-08-04 von
+  1.5/s runtergesetzt — Nutzerwunsch: "alle bedürfnisse sollten länger
+  brauchen zum abblaufen", siehe `docs/mechanics-review.md`,
+  "Nahrungs-/Bedürfnisökonomie". Vorher 0→100 in ~67s, jetzt ~333s/~5,5
+  Minuten, ähnliche Größenordnung-Reduktion wie der Müdigkeit-/Moral-Fix
+  vom selben Tag), Boden bei 0.
 - `_handle_eating()` läuft analog zur Heilung: in `HEAL_RADIUS` (3.0) um
   die eigene Home-Base, alle `EAT_INTERVAL` (2.0s) wird 1 Food aus dem
   Basis-Pool verbraucht und `hunger` um `EAT_AMOUNT` (15) erhöht, solange
@@ -82,9 +87,15 @@ konsistent zum bestehenden Muster (`MedicalStation.gd`) — komplettiert
 statt neu gebaut.
 
 - **`fatigue`/`morale`** (beide `float`, Start 100, Boden 0) fallen linear
-  wie `hunger`, aber langsamer (`FATIGUE_DECAY_RATE` 0.8/s,
-  `MORALE_DECAY_RATE` 0.4/s — ergänzende statt zentrale Bedürfnisse, kein
-  so knapper Rhythmus wie Hunger).
+  wie `hunger`, aber langsamer (`FATIGUE_DECAY_RATE` 0.15/s,
+  `MORALE_DECAY_RATE` 0.075/s — ergänzende statt zentrale Bedürfnisse, kein
+  so knapper Rhythmus wie Hunger). **Nachjustiert (2026-08-04):**
+  ursprünglich 0.8/0.4 (Nutzer-Feedback: "das mit müde und moral geht zu
+  schnell runter ich lauf zu einem gebäude und habe beides auf 0") — bei
+  den alten Werten waren beide schon nach 125s bzw. 250s komplett
+  aufgebraucht, kürzer als ein einziger Erkundungslauf. Neue Werte: ~11
+  Minuten (Müdigkeit) bzw. ~22 Minuten (Moral) bis 0, gleiches
+  2:1-Verhältnis beibehalten.
 - **Regeneration NUR am eigenen Schlafraum** (`_handle_resting()`,
   `BED_REST_RADIUS` 5.0 um ein Gebäude der Gruppe `"bed"`,
   `REST_RATE` 10/s für BEIDE Werte gleichzeitig) — bewusst KEINE
@@ -496,6 +507,16 @@ Markier-System (siehe unten).
   Home-Base) einen Besitzer, dem sie etwas gutschreiben könnte.
 - **`is_idle()`** prüft jetzt zusätzlich `not
   is_instance_valid(_harvest_target)`.
+- **Korrektheits-Fix (2026-08-04): doppelter Ertrag verhindert** —
+  `order_harvest()` hat (anders als das Markier-System unten) KEINEN
+  "schon zugewiesen"-Check, mehrere Bautrupps können absichtlich oder
+  versehentlich auf dasselbe Ziel angesetzt werden. `_process_harvest()`
+  prüfte den Erfolg (`hp <= 0`) vorher erst NACH dem eigenen Schlag, ohne
+  vorher zu prüfen, ob das Ziel im selben Frame schon von einem anderen
+  Trupp gefällt wurde — ein zweiter Trupp hätte dadurch ein zweites Mal
+  den vollen `YIELD` gutgeschrieben bekommen. Jetzt: Bail-out (Ziel wird
+  freigegeben, kein Schlag/keine Gutschrift), sobald das Ziel beim
+  eigenen Cooldown-Tick schon bei 0 HP steht.
 
 ### Markier-System
 

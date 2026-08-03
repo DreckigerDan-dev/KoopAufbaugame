@@ -147,41 +147,110 @@ Scavenging ("Rückweg zur Basis (oder zum Außenposten zum Zwischenlagern)",
 
 ## Ausbauen
 
-Krankenstation und Werkstatt entstehen seit dem Baumenü-Umbau **nicht**
-mehr durch freies Platzieren, sondern durch Ausbauen eines bereits
-geplünderten UND vom Spieler selbst geclaimten Gebäudes (siehe
-[`docs/zones.md`](zones.md) fürs Claimen selbst).
+Krankenstation/Werkstatt/Lager/Schlafraum entstehen seit dem Baumenü-Umbau
+**nicht** mehr durch freies Platzieren, sondern durch Ausbauen eines
+bereits geplünderten UND vom Spieler selbst geclaimten Gebäudes (siehe
+[`docs/zones.md`](zones.md) fürs Claimen selbst). Seit dem Bau-Markier-
+Modus (Punkt 28 der Gesamtliste, siehe unten) läuft dieser Ausbau **nicht
+mehr sofort**, sondern über einen offenen Bauauftrag mit zuweisbaren
+Bautrupps.
 
-- **Auswählen:** Klick auf ein eigenes, geclaimtes Gebäude (egal ob
-  gerade ein Trupp ausgewählt ist oder nicht — `World._select_at()`,
-  `"searchable"`-Branch, läuft dafür bewusst unabhängig von `selected`)
-  setzt `_selected_claimed_building` und blendet einen "Ausbauen"-
-  Abschnitt im "Bauen"-Tab ein (`_refresh_building_upgrade_ui()`, siehe
-  [`world.md`](world.md), "UI-Overhaul") — kein eigenes Panel.
-- **`World.request_upgrade_building(building_path, upgrade_type,
-  requesting_peer_id)`** (`@rpc("any_peer", "call_local", "reliable")`):
-  prüft Besitz (`building.owner_peer_id == requesting_peer_id`) und
-  Bezahlbarkeit (`_cost_for_build_type(upgrade_type, ...)`, dieselben
-  Kosten wie das frühere freie Platzieren), zieht die Kosten ab, entfernt
-  das `Building` an derselben Position und spawnt dort stattdessen die
-  `MedicalStation`/`Workshop`-Struktur über den jeweiligen
-  `MultiplayerSpawner`.
-- **Entfernen des Building-Nodes ohne neues RPC:** ruft einfach
-  `building.take_damage(building.hp)` auf — nutzt denselben, bereits
-  netzwerksicheren Abriss-Pfad wie beim echten Abreißen (siehe
-  [`docs/survivor.md`](survivor.md), "Gebäude abreißen"), aber **ohne**
-  die dortige Rohstoff-Auszahlung (die passiert nur in
-  `Survivor._process_harvest()`, nicht in `Building.take_damage()`
-  selbst) — ein Ausbau ist ein Umbau, kein Abriss-für-Rohstoffe.
-- **Optimistisches UI-Reset:** `_on_upgrade_building_pressed()` setzt
-  `_selected_claimed_building = null` sofort nach dem RPC-Aufruf, ohne auf
-  die Server-Bestätigung zu warten — verhindert einen versehentlichen
-  zweiten Ausbau-Versuch auf ein bereits ersetztes Gebäude.
-- **Lager** (aus der Vision-Idee des Nutzers) ist noch **nicht** als
-  dritte Ausbau-Option umgesetzt — bräuchte erst ein Ressourcen-Limit-
-  System (siehe [`docs/base.md`](base.md), "Bekannte Grenzen"), das es
-  noch nicht gibt, bewusst zurückgestellt wie im ursprünglichen
-  Roadmap-Punkt "Lager + Betten".
+- **Auswählen:** Klick auf ein eigenes, geclaimtes Gebäude OHNE offenen
+  Bauauftrag (egal ob gerade ein Trupp ausgewählt ist oder nicht —
+  `World._select_at()`, `"searchable"`-Branch, läuft dafür bewusst
+  unabhängig von `selected`) setzt `_selected_claimed_building` und
+  blendet einen "Ausbauen"-Abschnitt im "Bauen"-Tab ein
+  (`_refresh_building_upgrade_ui()`, siehe [`world.md`](world.md),
+  "UI-Overhaul") — kein eigenes Panel.
+- **`World.request_start_construction(building_path, upgrade_type,
+  requesting_peer_id)`** (`@rpc("any_peer", "call_local", "reliable")`,
+  vorher `request_upgrade_building()` — umbenannt, weil es seit dem
+  Bau-Markier-Modus nicht mehr sofort baut): prüft Besitz
+  (`building.owner_peer_id == requesting_peer_id`), dass noch kein
+  Bauauftrag läuft, und Bezahlbarkeit (`_cost_for_build_type(upgrade_type,
+  ...)`, dieselben Kosten wie das frühere freie Platzieren). Zieht die
+  Kosten SOFORT ab (verhindert, dass mehrere Bauaufträge mit
+  nicht-vorhandenen Ressourcen gestartet werden), ruft dann
+  `building.start_construction(upgrade_type, required_work)` — das
+  Building bleibt dabei bestehen (nur amberfarben eingefärbt, siehe unten),
+  nichts wird sofort ersetzt.
+- **Lager** ist inzwischen als dritte (vierte) Ausbau-Option umgesetzt.
+
+## Baustellen (Bau-Markier-Modus, Punkt 28 der Gesamtliste, 2026-08-04)
+
+RTS-typisches "Gebäude markieren, Bautrupps zuweisen, Baufortschritt läuft
+über Zeit" statt des früheren Ein-Klick-Sofortbaus — Nutzerwunsch aus der
+Planungssession vom 2026-08-03 Abend: "man kann geclaimte gebäude sagen
+das soll ein lager werden dann ein krankesation etc. und dann sagen 3 bau
+units dort hin 4 dort hin etc. besseres management rts feeling".
+
+- **Datenmodell (auf `Building.gd`, nicht `World.gd`):**
+  `has_open_construction`/`construction_target_type` (als `int` gehalten,
+  nicht als `World.BuildType` typisiert — `Building.gd` kennt `World.gd`
+  bewusst nicht als Typ-Abhängigkeit)/`construction_progress`/
+  `construction_required`/`construction_worker_count`/
+  `_construction_workers` (Array, privat).
+- **Bauzeit:** `World.CONSTRUCTION_WORK` (Dictionary, Krankenstation 30/
+  Werkstatt 35/Schlafraum 20 Trupp-Sekunden) — Lager skaliert stattdessen
+  mit dem Gebäude-Volumen wie schon seine Kapazität
+  (`STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 1.5`, analog zu
+  `STORAGE_CAPACITY_PER_VOLUME`). Alles Startwerte, nach Testen
+  nachjustierbar.
+- **Fortschritt:** `Building._process()` (host-only wie GuardPost/Survivor,
+  erst seit dem Bau-Markier-Modus hat `Building.gd` überhaupt einen
+  `_process()`) erhöht `construction_progress` um
+  `_construction_workers.size() * CONSTRUCTION_WORK_PER_TROOP * delta` —
+  mehr zugewiesene Bautrupps bauen also schneller, exakt wie gewünscht.
+  Ein throttled Sync-RPC (`CONSTRUCTION_SYNC_INTERVAL := 0.5s`, gleiches
+  Throttle-Prinzip wie die Fog-of-War-/Worker-UI-Refresh-Intervalle)
+  repliziert den Fortschritt an alle Peers für die UI.
+- **Fertigstellung:** sobald `construction_progress >= construction_required`,
+  ruft `Building._process()` `World.finish_construction(building)` auf
+  (Building kennt seine World-Spawner nicht selbst, gleiches
+  Cross-Node-Prinzip wie unten bei "Bewusst dupliziert statt geteilt") —
+  das macht denselben Umbau, den früher `request_upgrade_building()`
+  sofort gemacht hat: alle noch zugewiesenen Trupps freigeben
+  (`order_stop()`), `building.take_damage(building.hp)` (derselbe
+  netzwerksichere Abriss-Pfad wie beim echten Abreißen, siehe
+  [`docs/survivor.md`](survivor.md), "Gebäude abreißen", aber ohne die
+  dortige Rohstoff-Auszahlung), dann die Zielstruktur spawnen.
+- **Trupps zuweisen:** entweder direkt in der Welt auf die (amberfarbene)
+  Baustelle klicken, während Bautrupps ausgewählt sind (`World._select_at()`
+  – Sonderfall im `"searchable"`-Branch), oder über den "Trupp
+  zuweisen"-Button in der neuen Baustellen-Liste im "Bauen"-Tab
+  (`_refresh_construction_ui()`, `ConstructionList`) — beide rufen
+  `_assign_selected_to_construction()`, das für jeden ausgewählten Trupp
+  `Survivor.order_station_at_building(building_path, peer_id)` sendet
+  (neues RPC, NodePath-Argument aus demselben Grund wie
+  `order_search()`/`order_claim_building()`). Nur `TroopType.BUILD`
+  (gleiche Exklusivität wie `order_harvest()`).
+- **Registrierung wiederverwendet das Wachposten-Muster:** bei Ankunft
+  registriert sich der Trupp am Building genau wie an einem `GuardPost`
+  (`Survivor._stationed_at`/`_unstation()` werden mitbenutzt) —
+  **Abziehen/Umverteilen braucht dadurch keinen neuen Code**, läuft über
+  denselben bestehenden `order_stop()`-Pfad. Der "Trupp abziehen"-Button in
+  der Baustellen-Liste ruft `Building.request_recall_worker()` (identisch
+  zu `GuardPost.request_recall_worker()`).
+- **Stornieren mit Rückerstattung:** `World.request_cancel_construction(
+  building_path, peer_id)` erstattet die Kosten (`_cost_for_build_type()`
+  live berechnet, z. B. mit aktuellem Werkstatt-Rabatt statt dem
+  ursprünglich gezahlten Betrag), zieht alle zugewiesenen Trupps ab und
+  ruft `building.cancel_construction()` — das Gebäude fällt zurück in den
+  normalen "geplündert + geclaimt"-Zustand (blau statt amber).
+- **Persistenz + Catch-up:** `has_open_construction`/
+  `construction_target_type`/`construction_progress`/
+  `construction_required` sind jetzt Teil von `_collect_save_data()`/
+  `_catch_up_building()`/`_create_building()` (gleiches optionale-
+  Zusatzfeld-Muster wie `is_looted`/`owner_peer_id`/`hp`). **Bewusste
+  Lücke:** die zugewiesenen Trupps selbst (`_construction_workers`)
+  werden NICHT mitgespeichert/übertragen — nach Laden/Beitritt läuft der
+  Fortschritt weiter, aber mit 0 zugewiesenen Trupps, der Spieler muss
+  neu zuweisen. Eine stabile Trupp-ID-Verknüpfung übers Savegame gibt es
+  nirgends in der Codebase, das wäre ein deutlich größerer Zusatzaufwand
+  für einen Randfall (Baupause exakt beim Speichern/Rejoin).
+- **Visuell:** amberfarben (`Color(0.9, 0.6, 0.15)`), geht dem
+  "geclaimt"-Blau in `Building._update_visual()` vor.
+- Noch nicht vom Nutzer getestet, siehe `docs/pending-tests.md`.
 
 ## Zonen-Prüfung (`_can_build_at()`) — Abstandsteil entfernt (2026-08-03)
 
@@ -602,25 +671,35 @@ Lärm-Alarm-Schleife (`_alert_nearby_zombies()` in `GuardPost.gd` und
 
 ## Bekannte Grenzen (noch nicht gelöst)
 
-- **Kein Catch-up für `built`/`worker_count`** bei spät beitretenden
-  Peers über die reine Node-Existenz hinaus — `_catch_up_guard_post()`
-  spawnt den Node korrekt, aber ein bereits fertig gebauter Wachposten
-  erscheint beim neuen Peer kurz im Baugelb, bis der nächste Sync-Zufall
-  ihn korrigiert (kein expliziter State-Catch-up wie bei `is_looted`).
+- **`built`-Catch-up behoben (2026-08-04, Korrektheits-Durchgang):**
+  `_catch_up_guard_post()` schickt `built` jetzt mit (`_create_guard_post()`
+  konnte das Feld schon länger verarbeiten, wurde beim Catch-up aber nie
+  übergeben) — ein spät beitretender Peer sah vorher JEDEN bereits fertig
+  gebauten Wachposten dauerhaft im "noch im Bau"-Gelb, ohne dass sich das
+  je von selbst korrigiert hätte (kein periodischer Resync für dieses
+  Feld, anders als die Formulierung hier vorher vermutete).
+- **`worker_count`-Catch-up weiterhin fehlend** — betrifft nur die eigene
+  Wachposten-Liste im Bauen-Tab (`_refresh_worker_ui()` zeigt ohnehin nur
+  eigene Posten), kein rein visuelles Problem wie bei `built` oben, daher
+  niedrigere Priorität.
+- **Nur ein Wachposten-Typ**, keine Ausbaustufen.
+- **Keine Reichweiten-/Zonen-Vorschau** außer dem punktuellen Ghost am
+  Mauszeiger.
 - **Nur ein Wachposten-Typ**, keine Ausbaustufen.
 - **Keine Reichweiten-/Zonen-Vorschau** außer dem punktuellen Ghost am
   Mauszeiger.
 - **Kapazitäts-Faktor fürs Lager an Platzhalter-Gebäudegrößen kalibriert**
   — muss neu justiert werden, sobald echte Gebäude-Assets die Boxen
   ersetzen, siehe "Lager" oben.
-- **Ausbauen hat kein Ghost-Preview/keine Bestätigung** — Klick auf den
-  Button baut sofort um (bei Erfolg), anders als der Bau-Fluss mit
-  Ghost-Vorschau.
-- **Kein Catch-up beim Ausbauen für spät beitretende Peers** — dasselbe
-  bereits bestehende Problem wie bei `Building.is_looted` (siehe
-  [`docs/scavenging.md`](scavenging.md)): ein spät beitretender Peer
-  sieht ein bereits ausgebautes Gebäude lokal weiterhin als unausgebautes
-  `Building`.
+- **Bauauftrag-Start hat kein Ghost-Preview/keine Bestätigung** — Klick auf
+  den Button startet sofort den Bauauftrag (bei Erfolg), anders als der
+  Bau-Fluss mit Ghost-Vorschau. Der eigentliche Umbau selbst läuft seit dem
+  Bau-Markier-Modus aber nicht mehr sofort, siehe "Baustellen" oben.
+- **Catch-up für Bauaufträge seit dem Bau-Markier-Modus behoben** — ein
+  spät beitretender Peer sieht jetzt Zieltyp und Fortschritt eines offenen
+  Bauauftrags korrekt (siehe "Baustellen" oben, `_catch_up_building()`).
+  **Bewusst weiterhin fehlend:** die zugewiesenen Trupps selbst werden
+  nicht mitübertragen, der Spieler muss nach Catch-up/Laden neu zuweisen.
 - **Außenposten: "Rasten/Schlafen" aus der Vision nicht umgesetzt** —
   braucht erst ein Müdigkeits-/Bedürfnissystem (Punkt 16 der Gesamtliste,
   siehe `docs/status.md`). Nur die Rückweg-Funktion ist umgesetzt.

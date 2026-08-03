@@ -1,12 +1,46 @@
 # Rekrutierung
 
-Erklärt, wie ein Spieler zu zusätzlichen Trupps kommt: den festen
-Zweit-Trupp beim Start (`World.request_choose_start_base()`, siehe
-[`docs/zones.md`](zones.md), "Start-Basis wählen") und das Rekrutieren
-über ein durchsuchtes Gebäude mit `has_survivor = true`
-(`Survivor._finish_search()` → `World.spawn_recruit()`). Aufbauend auf
+Erklärt, wie ein Spieler zu zusätzlichen Trupps kommt. Aufbauend auf
 [`docs/scavenging.md`](scavenging.md) (Durchsuchen als Auslöser) und
-[`docs/base.md`](base.md) (Home-Base als Spawn-Bezugspunkt).
+[`docs/base.md`](base.md) (Home-Base als Spawn-Bezugspunkt). **Hinweis:**
+die beiden Abschnitte unten ("Start: zwei Trupps"/"Rekrutierung über
+durchsuchte Gebäude") sind historisch und teilweise veraltet
+(`START_SURVIVOR_COUNT` ist inzwischen 5, nicht 2, siehe `World.gd`) —
+für den aktuellen Gesamtstand siehe "Erweiterte Rekrutierung
+(2026-08-04)" weiter unten.
+
+## Erweiterte Rekrutierung (2026-08-04)
+
+Nutzerwunsch nach dem Mechaniken-Bericht (siehe `docs/mechanics-review.md`,
+"Spieler-Kapazität") — der einzige Nachschub-Kanal war vorher EIN festes
+Gebäude auf der ganzen Karte, einmalig. Jetzt drei Kanäle nebeneinander,
+alle über denselben bestehenden `has_survivor`-Mechanismus
+(`Survivor._finish_search()` → `World.spawn_recruit()`):
+
+1. **Festes Rekrutierungs-Gebäude** (unverändert) — ein einzelnes,
+   fest platziertes Gebäude, einmalig, ungedeckelt.
+2. **Plünder-Zufallschance (`Survivor.LOOT_RECRUIT_CHANCE := 0.15`)** —
+   JEDES normal durchsuchte Gebäude hat jetzt zusätzlich 15 % Chance auf
+   einen neuen Trupp, ungedeckelt, unabhängig vom festen Gebäude.
+3. **Schutzsuchende** (`World._maybe_spawn_refugee()`,
+   `Building.is_refugee`) — alle `REFUGEE_SPAWN_INTERVAL := 180s` (3 Min.)
+   eine `REFUGEE_SPAWN_CHANCE := 0.4`-Chance, dass irgendwo in der
+   Wildnis ein neuer, aufsammelbarer Überlebender auftaucht (reine
+   Wiederverwendung von `Building.gd` mit `has_survivor = true`,
+   `is_refugee = true`, minimalem Loot `{"food": 3}`), bis zu
+   `REFUGEE_MAX_ACTIVE := 3` gleichzeitig aktive auf der Karte. Einziger
+   Kanal mit Deckel: `World.spawn_refugee_recruit()` gewährt maximal
+   `REFUGEE_RECRUIT_CAP_PER_PEER := 2` Trupps pro Spieler über diesen Weg
+   (Nutzerwunsch, "2 pro Spieler erstmal") — danach durchsucht, aber ohne
+   neuen Trupp ("Der Schutzsuchende zieht weiter ...").
+
+`Building.is_refugee` ist Teil von Speicherstand/Catch-up (gleiches
+optionales Zusatzfeld-Muster wie `is_looted`/`hp`/etc.), der Pro-Spieler-
+Zähler `World._refugee_recruits_granted` dagegen NICHT (kurzlebiger
+Zustand, akzeptierte Lücke — ein Speichern+Laden während offener
+Schutzsuchender-Zähler würde den Deckel theoretisch zurücksetzen).
+
+Noch nicht vom Nutzer getestet.
 
 ## Start: zwei Trupps pro Peer
 

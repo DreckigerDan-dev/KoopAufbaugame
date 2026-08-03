@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://confl3gu552vg"
-path="res://.godot/imported/gamepadfehler.PNG-44fd434852cf252b0716623297890d70.ctex"
+uid="uid://dxcjh10554wjd"
+path="res://.godot/imported/debuger.PNG-6c9ea00fdd88d91859977bc28c55e753.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://bilder/gamepadfehler.PNG"
-dest_files=["res://.godot/imported/gamepadfehler.PNG-44fd434852cf252b0716623297890d70.ctex"]
+source_file="res://bilder/debuger.PNG"
+dest_files=["res://.godot/imported/debuger.PNG-6c9ea00fdd88d91859977bc28c55e753.ctex"]
 
 [params]
 

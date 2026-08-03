@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/world/WorldSyncOverlay.gd" id="1"]
+
+[node name="WorldSyncOverlay" type="CanvasLayer"]
+layer = 20
+script = ExtResource("1")
+
+[node name="Blocker" type="ColorRect" parent="."]
+mouse_filter = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.05, 0.05, 0.05, 0.85)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Blocker"]
+offset_left = -160.0
+offset_top = -30.0
+offset_right = 160.0
+offset_bottom = 30.0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="Blocker/VBoxContainer"]
+theme_override_font_sizes/font_size = 18
+text = "Welt wird synchronisiert ..."
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="Blocker/VBoxContainer"]

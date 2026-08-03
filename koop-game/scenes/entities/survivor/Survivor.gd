@@ -24,6 +24,15 @@ enum TroopType { FIELD, BUILD }
 const MAX_HP := 100
 const MOVE_SPEED := 4.0
 const ARRIVE_THRESHOLD := 0.05
+# Formation natürlicher (Nutzer-Feedback: "truppen laufen auf einer linie
+# sollen er natürlicher laufen") — die reine Kreis-Verteilung der Zielpunkte
+# (World._formation_offset()) reichte nicht, weil alle Einheiten trotzdem im
+# perfekten Gleichschritt lossliefen. MOVE_SPEED_VARIANCE gibt jedem Trupp
+# einmalig eine leicht andere Geschwindigkeit, der index-abhängige
+# start_delay-Parameter in order_move() (siehe World._select_at()) einen
+# gestaffelten Loslauf-Zeitpunkt — beides zusammen bricht das synchrone
+# Linienlaufen auf.
+const MOVE_SPEED_VARIANCE := 0.08
 const HEAL_DELAY_AFTER_DAMAGE := 4.0
 const HEAL_RADIUS := 3.0
 const HEAL_RATE := 5.0
@@ -34,7 +43,15 @@ const MEDICAL_STATION_HEAL_RATE := HEAL_RATE * 2.0
 # Erweiterte Krankenstation (Punkt 24 der Gesamtliste, siehe
 # docs/building.md) — gleicher Radius, nur schnellere Heilrate.
 const ADVANCED_MEDICAL_STATION_HEAL_RATE := HEAL_RATE * 3.0
-const HUNGER_DECAY_RATE := 1.5
+# 1.5 → 0.3 (2026-08-04, siehe docs/mechanics-review.md, "Nahrungs-/
+# Bedürfnisökonomie") — Nutzerwunsch: "alle bedürfnisse sollten länger
+# brauchen zum abblaufen das mann sich eher auf ander sachen fokosieren
+# kann". Vorher 0→100 in ~67s (schneller als ein einziger Erkundungslauf),
+# jetzt ~333s (~5,5 Minuten) — ähnliche Größenordnung-Reduktion (~5×) wie
+# der Müdigkeit-/Moral-Fix vom selben Tag, Hunger bleibt aber weiterhin
+# etwas knapper getaktet als die beiden (bewusst "zeitkritischer", siehe
+# Kommentar unten).
+const HUNGER_DECAY_RATE := 0.3
 const HUNGER_LOW_THRESHOLD := 30.0
 const HUNGER_SPEED_FACTOR := 0.5
 const EAT_INTERVAL := 2.0
@@ -47,10 +64,16 @@ const EAT_AMOUNT := 15.0
 # (Infos/02 Item-Liste.md) der ganze Sinn der Betten-Mechanik. Langsamerer
 # Verfall als Hunger (weniger zeitkritisch, ergänzendes statt zentrales
 # Bedürfnis), REST_RATE angelehnt an MEDICAL_STATION_HEAL_RATE.
-const FATIGUE_DECAY_RATE := 0.8
+# Verfallsraten deutlich verlangsamt (2026-08-04, Nutzer-Feedback: "das mit
+# müde und moral geht zu schnell runter ich lauf zu einem gebäude und habe
+# beides auf 0") — bei den ursprünglichen Werten (0.8/0.4) waren beide
+# schon nach 125s bzw. 250s komplett aufgebraucht, kürzer als ein einziger
+# Erkundungslauf. Neue Werte: ~11 Minuten (Müdigkeit) bzw. ~22 Minuten
+# (Moral) bis 0, gleiches 2:1-Verhältnis wie vorher beibehalten.
+const FATIGUE_DECAY_RATE := 0.15
 const FATIGUE_LOW_THRESHOLD := 30.0
 const FATIGUE_SPEED_FACTOR := 0.7
-const MORALE_DECAY_RATE := 0.4
+const MORALE_DECAY_RATE := 0.075
 const MORALE_LOW_THRESHOLD := 30.0
 # Niedrige Moral schwächt den Angriff statt die Bewegung (siehe
 # _effective_attack_damage()) — Müdigkeit macht langsam, Moral macht
@@ -111,6 +134,11 @@ const SECONDARY_MELEE_COOLDOWN := 0.8
 const HARVEST_RANGE := 1.2
 const HARVEST_COOLDOWN := 1.0
 const HARVEST_DAMAGE := 15
+# Rekrutierungs-Erweiterung (2026-08-04, siehe docs/mechanics-review.md,
+# "Spieler-Kapazität") — zusätzlich zum festen has_survivor-Gebäude und den
+# neuen Schutzsuchenden (World.spawn_refugee_recruit()) gibt JEDES normal
+# durchsuchte Gebäude eine kleine Zufallschance auf einen neuen Trupp.
+const LOOT_RECRUIT_CHANCE := 0.15
 # Trage-Kapazität (siehe docs/scavenging.md, "Rückweg") — Summe über alle
 # Ressourcenarten hinweg, nicht pro Art. War kurzzeitig (Punkt 9 der
 # Gesamtliste) ein knappes Rucksack-Ausrüstungsstück (BASE 20 +
@@ -133,6 +161,14 @@ const VEHICLE_TYPE_LABELS := {"car": "Auto", "motorcycle": "Motorrad", "truck": 
 var trupp_id: int = 0
 var owner_peer_id: int = 1
 var troop_type: TroopType = TroopType.FIELD
+# Base-Erstellen-Trupp (2026-08-04, Rettungsmechanik, siehe
+# docs/mechanics-review.md, "Fehlende Enden/Ziele") — existiert nur im
+# Multiplayer: ein Mitspieler wandelt einen eigenen Trupp per
+# become_rescue_unit() um und schickt ihn einem Spieler ohne Home-Base,
+# der dadurch World.request_choose_start_base() wieder nutzen darf. Wird
+# beim erfolgreichen Neustart verbraucht (World.gd setzt es zurück auf
+# false), kein eigener TroopType/eigene Szene — funktional reicht ein Flag.
+var is_rescue_unit: bool = false
 var hp: int = MAX_HP
 var hunger: float = 100.0
 var fatigue: float = 100.0
@@ -195,6 +231,14 @@ var _pending_vehicle_path: NodePath = NodePath()
 # Grund wie _pending_building_path (NodePath statt Node3D-Referenz).
 var _pending_claim_path: NodePath = NodePath()
 
+# Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
+# "Baustellen") — _pending_construction_path aus demselben Grund wie
+# _pending_building_path/_pending_claim_path (NodePath statt Node3D-
+# Referenz, Building-Nodes sind statisch in World.tscn verankert). Bei
+# Ankunft registriert sich der Trupp am Building wie bei einem GuardPost
+# (_stationed_at/_unstation() werden mitbenutzt, siehe order_station()).
+var _pending_construction_path: NodePath = NodePath()
+
 # Angriffsbefehl (siehe docs/survivor.md, "Angriffsbefehl") — direkte
 # Node3D-Referenz statt NodePath, weil Zombies über MultiplayerSpawner
 # laufen und is_instance_valid() hier ohnehin jeden Frame geprüft werden
@@ -213,15 +257,27 @@ var _attack_timer: float = 0.0
 var _harvest_target: Node3D = null
 var _harvest_timer: float = 0.0
 
+# Formation natürlicher (siehe MOVE_SPEED_VARIANCE oben) — _move_speed_factor
+# einmalig zufällig gesetzt, _move_start_delay zählt bei einem frischen
+# order_move() (siehe dort) auf 0 herunter, bevor sich der Trupp überhaupt
+# bewegt.
+var _move_speed_factor: float = 1.0
+var _move_start_delay: float = 0.0
+
 
 func _ready() -> void:
 	# Nur der Host simuliert — Clients bekommen den Zustand ausschließlich
 	# über _sync_state() repliziert.
 	if not multiplayer.is_server():
 		set_process(false)
+		return
+	_move_speed_factor = 1.0 + randf_range(-MOVE_SPEED_VARIANCE, MOVE_SPEED_VARIANCE)
 
 
 func _process(delta: float) -> void:
+	# Pause (siehe Zombie.gd für dieselbe Begründung/docs/mechanics-review.md).
+	if get_tree().current_scene.is_paused():
+		return
 	_time_since_damage += delta
 	if is_instance_valid(_attack_target):
 		_process_attack(delta)
@@ -249,7 +305,7 @@ func _process(delta: float) -> void:
 	_handle_eating(delta)
 	_handle_resting(delta)
 	_handle_carried_loot()
-	_sync_state.rpc(position, hp, hunger, fatigue, morale, carried_loot, is_armed, is_wearing_armor, has_helmet, secondary_weapon, has_leg_armor, troop_type)
+	_sync_state.rpc(position, hp, hunger, fatigue, morale, carried_loot, is_armed, is_wearing_armor, has_helmet, secondary_weapon, has_leg_armor, troop_type, owner_peer_id, is_rescue_unit)
 
 
 func _current_move_speed() -> float:
@@ -263,12 +319,19 @@ func _current_move_speed() -> float:
 		# "Rüstungssystem") — kombiniert sich mit dem Hunger-/Müdigkeits-
 		# Malus, falls mehrere gleichzeitig zutreffen.
 		speed *= ARMOR_SPEED_FACTOR
+	speed *= _move_speed_factor
 	return speed
 
 
 func _handle_movement(delta: float) -> void:
 	if _searching:
 		_process_search(delta)
+		return
+	if _move_start_delay > 0.0:
+		# Gestaffelter Loslauf (siehe MOVE_SPEED_VARIANCE oben) — der Trupp
+		# wartet den ihm bei order_move() zugewiesenen Versatz ab, bevor er
+		# sich überhaupt Richtung erstem Wegpunkt bewegt.
+		_move_start_delay = max(_move_start_delay - delta, 0.0)
 		return
 	if _waypoints.is_empty():
 		return
@@ -302,6 +365,18 @@ func _handle_movement(delta: float) -> void:
 			_enter_vehicle()
 		elif not _pending_claim_path.is_empty():
 			_claim_building()
+		elif not _pending_construction_path.is_empty():
+			# Bau-Markier-Modus (siehe order_station_at_building() unten) —
+			# NodePath statt der direkten Node3D-Referenz aus
+			# _pending_station_target, weil der Befehl übers Netzwerk kommt
+			# (is_instance_valid()-Check hier deckt ab, dass der Bauauftrag
+			# inzwischen fertig/storniert und das Building schon entfernt sein
+			# könnte).
+			var site := get_node_or_null(_pending_construction_path)
+			if is_instance_valid(site):
+				_stationed_at = site
+				site.register_worker(self)
+			_pending_construction_path = NodePath()
 
 
 func _is_path_blocked(next_position: Vector3) -> bool:
@@ -411,6 +486,18 @@ func _process_harvest(delta: float) -> void:
 		_harvest_timer += delta
 		if _harvest_timer >= HARVEST_COOLDOWN:
 			_harvest_timer = 0.0
+			if _harvest_target.hp <= 0:
+				# Korrektheits-Fix (2026-08-04): mehrere Bautrupps können
+				# ohne Prüfung auf dasselbe Ziel angesetzt werden
+				# (order_harvest() hat keinen "schon zugewiesen"-Check wie
+				# das Markier-System). Ohne dieses Bail-out hätte ein
+				# zweiter Trupp, dessen Cooldown im selben Frame abläuft
+				# NACHDEM das Ziel schon gefällt wurde, unconditional
+				# nochmal take_damage() gerufen und wegen hp<=0 ein
+				# ZWEITES Mal Ressourcen gutgeschrieben bekommen (doppelter
+				# Ertrag für einen einzigen Baum/Wrack).
+				_harvest_target = null
+				return
 			_harvest_target.take_damage(HARVEST_DAMAGE)
 			if _harvest_target.hp <= 0:
 				var base := _find_home_base()
@@ -491,7 +578,17 @@ func _finish_search() -> void:
 	if building.has_survivor:
 		# Rekrutierung (siehe docs/recruitment.md) — get_tree().current_scene
 		# ist zuverlässig die World-Node, weil Survivor nur existiert, während
-		# World.tscn die aktuell geladene Szene ist.
+		# World.tscn die aktuell geladene Szene ist. Schutzsuchende (siehe
+		# LOOT_RECRUIT_CHANCE oben/docs/mechanics-review.md) laufen über
+		# einen eigenen, gedeckelten Kanal statt spawn_recruit() direkt.
+		if building.is_refugee:
+			get_tree().current_scene.spawn_refugee_recruit(owner_peer_id, position)
+		else:
+			get_tree().current_scene.spawn_recruit(owner_peer_id, position)
+	elif randf() <= LOOT_RECRUIT_CHANCE:
+		# Neue, ungedeckelte Zufallschance auf jedem NORMALEN durchsuchten
+		# Gebäude (siehe docs/mechanics-review.md, "Spieler-Kapazität") —
+		# unabhängig vom festen has_survivor-Gebäude und den Schutzsuchenden.
 		get_tree().current_scene.spawn_recruit(owner_peer_id, position)
 	_return_to_base()
 
@@ -674,6 +771,10 @@ func _unstation() -> void:
 		_stationed_at.unregister_worker(self)
 	_stationed_at = null
 	_pending_station_target = null
+	# Bau-Markier-Modus (siehe order_station_at_building() unten) — bricht
+	# auch einen noch laufenden Anmarsch zu einer Baustelle ab, falls ein
+	# neuer Befehl dazwischenkommt, bevor der Trupp überhaupt registriert war.
+	_pending_construction_path = NodePath()
 
 
 func _cancel_search() -> void:
@@ -796,17 +897,22 @@ func _handle_resting(delta: float) -> void:
 
 
 @rpc("any_peer", "call_local", "reliable")
-func order_move(target: Vector3, requesting_peer_id: int, queue: bool) -> void:
+func order_move(target: Vector3, requesting_peer_id: int, queue: bool, start_delay: float = 0.0) -> void:
 	# Läuft nur host-seitig, requesting_peer_id muss zum Eigentümer passen
 	# (vereinfachte Vertrauensannahme, siehe docs/survivor.md, "Bekannte
 	# Grenzen"). `queue` (Shift+Klick) hängt hinten an die bestehende
-	# Wegpunkt-Schlange an, statt sie zu ersetzen.
+	# Wegpunkt-Schlange an, statt sie zu ersetzen. `start_delay` (siehe
+	# MOVE_SPEED_VARIANCE oben, gesetzt von World._select_at() anhand des
+	# Auswahl-Index) gilt nur bei einem frischen Befehl — ein angehängter
+	# Shift-Klick-Wegpunkt soll den bereits laufenden Trupp nicht nochmal
+	# anhalten.
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
 		return
 	if not queue:
 		_unstation()
 		_cancel_search()
 		_waypoints.clear()
+		_move_start_delay = start_delay
 	_waypoints.append(target)
 
 
@@ -860,6 +966,31 @@ func order_claim_building(target: Vector3, building_path: NodePath, requesting_p
 	_cancel_search()
 	_waypoints = [target]
 	_pending_claim_path = building_path
+
+
+@rpc("any_peer", "call_local", "reliable")
+func order_station_at_building(building_path: NodePath, requesting_peer_id: int) -> void:
+	# Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
+	# "Baustellen") — schickt den Trupp zu einem Building mit offenem
+	# Bauauftrag, analog zu order_claim_building(). Nur Bautrupps (gleiche
+	# Exklusivität wie order_harvest()), Ziel ist immer die Building-Position
+	# selbst statt eines Raycast-Treffpunkts (anders als order_search()/
+	# order_claim_building() — hier klickt der Spieler die Baustelle über die
+	# Baustellen-Liste an, nicht zwingend über einen Welt-Klick mit
+	# Treffpunkt).
+	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
+		return
+	if troop_type != TroopType.BUILD:
+		get_tree().current_scene.report_status(requesting_peer_id, "Nur Bautrupps können Baustellen bearbeiten.")
+		return
+	var building := get_node_or_null(building_path)
+	if building == null or not building.has_open_construction:
+		get_tree().current_scene.report_status(requesting_peer_id, "Kein offener Bauauftrag.")
+		return
+	_unstation()
+	_cancel_search()
+	_waypoints = [building.position]
+	_pending_construction_path = building_path
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -1082,7 +1213,7 @@ func _die() -> void:
 
 
 @rpc("authority", "call_local", "unreliable_ordered")
-func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fatigue: float, new_morale: float, new_carried_loot: Dictionary, new_is_armed: bool, new_is_wearing_armor: bool, new_has_helmet: bool, new_secondary_weapon: bool, new_has_leg_armor: bool, new_troop_type: TroopType) -> void:
+func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fatigue: float, new_morale: float, new_carried_loot: Dictionary, new_is_armed: bool, new_is_wearing_armor: bool, new_has_helmet: bool, new_secondary_weapon: bool, new_has_leg_armor: bool, new_troop_type: TroopType, new_owner_peer_id: int, new_is_rescue_unit: bool) -> void:
 	# Kombiniert Position/HP/Hunger/Müdigkeit/Moral/Loot/Waffen-/Rüstungs-
 	# Status in einem RPC (unreliable_ordered: gelegentlicher Verlust
 	# unproblematisch, jeder Frame schickt ohnehin den kompletten aktuellen
@@ -1097,7 +1228,11 @@ func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fati
 	# set_troop_type() änderte troop_type bisher NUR auf der Host-Instanz,
 	# ohne Broadcast an andere Peers; beim Host selbst fiel das nie auf,
 	# weil seine eigene UI dieselbe Node-Instanz liest, die der Server
-	# direkt mutiert.
+	# direkt mutiert. new_owner_peer_id/new_is_rescue_unit (2026-08-04,
+	# Rettungsmechanik, siehe docs/mechanics-review.md) aus demselben
+	# Grund — become_rescue_unit() ändert owner_peer_id zur Laufzeit, alle
+	# Peers müssen das mitbekommen, damit der gerettete Spieler den Trupp
+	# überhaupt auswählen kann.
 	position = new_position
 	hp = new_hp
 	hunger = new_hunger
@@ -1110,6 +1245,8 @@ func _sync_state(new_position: Vector3, new_hp: int, new_hunger: float, new_fati
 	secondary_weapon = new_secondary_weapon
 	has_leg_armor = new_has_leg_armor
 	troop_type = new_troop_type
+	owner_peer_id = new_owner_peer_id
+	is_rescue_unit = new_is_rescue_unit
 	_update_color()
 
 
@@ -1119,8 +1256,23 @@ func _update_color() -> void:
 		return
 	var ratio: float = float(hp) / float(MAX_HP)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = _unit_base_color().lerp(Color.RED, 1.0 - ratio)
+	# Base-Erstellen-Trupp (siehe is_rescue_unit oben) sticht optisch klar
+	# hervor — gold statt der individuellen Trupp-Farbe, gleiche Farbsprache
+	# wie das bestehende Markier-System (Tree.gd/CarWreck.gd, "besonders/
+	# hervorgehoben" = golden).
+	var base_color: Color = Color(0.85, 0.7, 0.15) if is_rescue_unit else _unit_base_color()
+	mat.albedo_color = base_color.lerp(Color.RED, 1.0 - ratio)
 	mesh.set_surface_override_material(0, mat)
+
+
+func become_rescue_unit(new_owner_peer_id: int) -> void:
+	# Von World.request_send_rescue_unit() aufgerufen (schon host-seitig,
+	# siehe docs/mechanics-review.md) — Besitzerwechsel + Flag laufen an
+	# alle Peers über den ohnehin schon jeden Frame laufenden
+	# _sync_state()-Broadcast mit (siehe dort), kein eigenes RPC nötig.
+	owner_peer_id = new_owner_peer_id
+	is_rescue_unit = true
+	_update_color()
 
 
 func _unit_base_color() -> Color:

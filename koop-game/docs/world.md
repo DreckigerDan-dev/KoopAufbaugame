@@ -51,6 +51,14 @@ Chunk-Streaming. Fog of War seit 2026-08-01 umgesetzt, siehe unten.
     ein zufälliger Bauplatz pro Zone bekommt `has_survivor = true` (siehe
     [`docs/recruitment.md`](recruitment.md)).
   - `VEHICLES_PER_ZONE := 2` Fahrzeuge, siehe [`docs/vehicle.md`](vehicle.md).
+  - **`RESOURCES_PER_CITY_ZONE := 6`** (2026-08-04, siehe
+    `docs/mechanics-review.md`, "Ressourcen-Wirtschaft") — Bäume/Stein-/
+    Ziegelhaufen/Autowracks (`CITY_RESOURCE_TYPES`) gab es vorher NUR in
+    der Wildnis (`_random_wilderness_position()`), jetzt zusätzlich auch
+    verteilt innerhalb jeder Stadt-Zone (`_spaced_position()`, gleiches
+    Muster wie Fahrzeuge/Zombie-Nest oben) — kürzere Laufwege gerade am
+    Anfang. 6 × 5 Zonen = 30 zusätzliche Knoten kartenweit, zählen normal
+    gegen die jeweilige `_TOTAL`-Konstante/Nachwachs-Obergrenze mit.
   - Ein Zombie-Nest, siehe [`docs/zombies.md`](zombies.md), "Zombie-Nest".
   - `ZOMBIES_PER_ZONE := 4` Zombies auf einem Ring, Radius jetzt PRO ZONE
     hergeleitet (`radius + ZOMBIE_SPAWN_RING_OFFSET(60)`, vorher als fester
@@ -457,6 +465,31 @@ Zombie-Nachtbonus (siehe [`docs/zombies.md`](zombies.md),
 - **Kein echter Kalender** — die Uhrzeit läuft nach 24:00 einfach wieder
   bei 00:00 los, kein fortlaufender Tageszähler.
 
+## Pause (nur Host, 2026-08-04)
+
+Nutzerwunsch (siehe `docs/mechanics-review.md`, "Zeitskala") — Möglichkeit,
+die Zeit anzuhalten, um in Ruhe zu managen, ohne dass Nächte/Hordes
+weiterlaufen.
+
+- **`World._game_paused: bool`**, umgeschaltet über
+  `request_toggle_pause()` (nur Peer-ID 1 = Host darf, gleiche
+  Host-only-Prüfung wie `start_game()`), an alle Peers gespiegelt
+  (`_sync_game_paused()`), weil `_handle_day_night()` lokal auf JEDEM
+  Peer läuft (siehe oben) und sonst auseinanderliefe.
+- **Button im Pause-Menü** (`PauseMenu.tscn`, `PauseGameButton`, nur für
+  den Host sichtbar, gleiches Muster wie der Speichern-Button).
+- **`HUD/PauseLabel`** zeigt bei JEDEM Peer sichtbar "PAUSIERT" an,
+  solange pausiert ist.
+- **Kein zentraler `process_mode`-Umbau über den Szenenbaum** — bewusst
+  kleinerer, vorhersehbarerer Eingriff: `World._process()` gated seinen
+  eigenen host-only-Simulationsblock UND `_handle_day_night()` mit
+  `_game_paused`; jedes Entity-Script mit eigenem `_process()`
+  (`Zombie`/`Survivor`/`Building`/`GuardPost`/`ZombieNest`/`Vehicle`/
+  `Field`) fragt `get_tree().current_scene.is_paused()` selbst am
+  Anfang seines eigenen `_process()` ab. Kamera/UI (`_handle_pan()`,
+  `_update_hud()` etc.) bleiben während der Pause bewusst aktiv.
+- Noch nicht vom Nutzer getestet.
+
 ## UI-Overhaul (2026-08-01)
 
 Nutzerwunsch: "ein komplettes UI overhaul mit dropdown menu verschiedene
@@ -568,6 +601,141 @@ unverändert, reine Pfad-Änderung. Panel dabei verkleinert (`offset_bottom`
 der vorherige Platzbedarf war nicht mehr nötig.
 
 **Noch nicht vom Nutzer getestet.**
+
+### UI-Überarbeitung Runde 2 (2026-08-04, Punkt 29 der Gesamtliste)
+
+Nutzer schickte ein Referenz-Screenshot aus "Infection Free Zone"
+(`bilder/ui.PNG`) mit dem Hinweis, sich daran zu orientieren, aber
+"vielleicht paar stats vertauschen ... damit es nicht wie eine Kopie
+aussieht" — explizit als reine Struktur-/Richtungsvorlage gemeint, nicht
+zum 1:1-Nachbauen (das Referenzspiel hat fertige Icon-Assets, wir haben
+weiterhin 0% eigene Assets). Auf Nachfrage "mach erstmal wie du meinst,
+wir müssen später eh hin und her wechseln, nur damit man eine Richtung
+bekommt" — als erster Wurf ohne Anspruch auf Feinschliff umgesetzt,
+weitere Iteration ausdrücklich erwartet:
+
+- **Ressourcen-Panel: Zwei-Tabs-Aufteilung wieder entfernt, dafür
+  kompakte Einzeiler.** Die Referenz zeigt alle Ressourcen gleichzeitig in
+  einer knappen Zeile statt tab-umschaltbar — `_update_resources_label()`
+  baut pro Kategorie jetzt EINE Zeile (`"Kategoriename: Wert1, Wert2, ..."`)
+  statt vorher mehrzeilig (ein Eintrag pro Ressource). `ResourcesUI/Panel`
+  dabei ohne `TabContainer`, alle vier Kategorien direkt untereinander im
+  `VBoxContainer` — spürbar kompakter als der alte mehrzeilige Block trotz
+  Tab-Wegfall. **Bleibt oben RECHTS** (siehe Korrektur unten).
+- **Auswahl-/Status-Anzeige (`HUD/Label`+`HUD/StatusLabel`) bekommt
+  erstmals einen Panel-Hintergrund** (`HUD/InfoPanel`, analog zur
+  Quest-Tracker-Karte im Referenzbild) statt nur freistehendem Text mit
+  Kontur — Position unverändert oben links.
+- **`MainTabsUI`-Panel (Bauen/Herstellen/Einheiten/Handel/Trupp) vergrößert**
+  (Breite 360→404px, Höhe moderat erhöht, siehe Korrektur unten) —
+  Auslöser: Nutzer-Feedback direkt nach dem ersten Baustellen-Test ("bau
+  menü ist nicht so sichtbar"), die feste Panel-Höhe wurde mit Bau-Buttons +
+  Ausbauen-Abschnitt + Wachposten-Liste + der neuen Baustellen-Liste zu
+  eng. Bewusst nur eine größere feste Höhe statt eines echten
+  `ScrollContainer`-Umbaus (kleinerer Eingriff für einen ersten Wurf) —
+  reicht laut Überschlagsrechnung (siehe Korrektur unten) vermutlich
+  weiterhin NICHT für den kompletten Fixinhalt plus variable Listen, ein
+  `ScrollContainer` bleibt die eigentlich saubere Lösung für eine
+  spätere Iteration.
+- Minimap unten rechts unverändert.
+
+**Korrektur nach erstem Screenshot-Test (2026-08-04, `bilder/ui 1.PNG`):**
+Nutzer-Feedback "irgendwie schaut das nicht so wie gewünscht aus" — der
+ursprüngliche erste Wurf hatte die Ressourcen-Leiste tatsächlich nach oben
+LINKS verschoben (bewusst seitenverkehrt zur Referenz) UND das
+`MainTabsUI`-Panel auf 620px Höhe gebracht. Das ging schief, weil die
+UI-Koordinaten NICHT in der tatsächlichen Fensterauflösung laufen,
+sondern im projektweiten Basis-Viewport (`window/stretch/mode=
+"canvas_items"`, kein explizites `window/size/viewport_height` gesetzt →
+Godot-Standard 648px) — bei nur 648 Gesamthöhe nahm das 620px hohe
+Bauen-Panel fast den ganzen Bildschirm ein und überlappte dadurch massiv
+mit dem neu positionierten Ressourcen-Panel UND der Status-Karte, beide
+ebenfalls oben links. Ergebnis im Screenshot: Ressourcen-Text und
+Bau-Buttons lagen sichtbar übereinander.
+
+Behoben: Ressourcen-Panel bleibt (Fehler eingesehen) doch oben RECHTS wie
+ursprünglich — dort gibt es reichlich freien Platz, keine Konkurrenz mit
+dem links verankerten Bauen-Panel. Status-Karte bleibt ebenfalls an ihrer
+ursprünglichen Position oben links (8–166px). `MainTabsUI`-Panel-Höhe auf
+einen Wert reduziert, der innerhalb der 648px-Basishöhe tatsächlich Platz
+lässt: `offset_top` -420→-470 (statt -620), Höhe damit 404→454px (moderate
++50px statt der zu aggressiven +200px), oberer Rand bei y≈178, mit 12px
+Abstand zur Status-Karte darüber (endet bei y≈166) — kein Überlappen mehr,
+aber auch nur ein kleiner tatsächlicher Zugewinn an Platz für die
+Baustellen-Liste. **Lektion:** UI-Anker-Offsets in diesem Projekt IMMER
+gegen die 648px-Basishöhe rechnen, nicht gegen die tatsächliche
+Fensterauflösung.
+
+**Noch nicht vom Nutzer erneut getestet** — Korrektur behebt das gemeldete
+Überlappen, ob die Baustellen-Liste jetzt tatsächlich ausreichend sichtbar
+ist, bleibt zu prüfen (siehe Hinweis zum `ScrollContainer` oben, falls
+nicht).
+
+**Zweite Korrektur, gleicher Test (2026-08-04):** "wird besser aber zu
+viel ressourcen am besten nur die bau materialien das mit waffen bücher
+etc. soll dann in ein unter tab" — die vier Kategorien liefen nach der
+ersten Korrektur wieder alle gleichzeitig sichtbar (kein Tab-Wegfall
+rückgängig gemacht). Jetzt: **Baurohstoffe (Index 0) bleiben dauerhaft
+sichtbar** direkt im `VBoxContainer` (kein Klick nötig, das ist die
+alltäglich relevante Ressource fürs Bauen), die anderen drei Kategorien
+(Überleben/Ausrüstung/Forschungsbücher) sitzen jetzt in einem kleinen
+`TabContainer` darunter (`custom_minimum_size` 56px hoch, drei Tabs, nur
+einer gleichzeitig sichtbar). `World.resource_category_labels` (Array,
+Reihenfolge weiterhin passend zu `RESOURCE_CATEGORIES`) zeigt für Index
+1-3 jetzt in die `TabContainer`-Unterordner, Index 0 bleibt direkt im
+`VBoxContainer` — `_update_resources_label()` selbst unverändert, reine
+Pfad-Änderung. Panel dabei verkleinert (`offset_bottom` 164→148,
+`VBoxContainer`-Breite etwas schmaler) — durch den Tab-Wegfall für drei
+von vier Kategorien wird wieder weniger Höhe gebraucht.
+
+**Noch nicht vom Nutzer getestet.**
+
+**Dritte Korrektur, gleicher Test (2026-08-04):** "wird besser die
+schrifft geht aber aus dem bildschirm raus" — die einzeilige
+Kategorie-Zeile (z. B. "Baurohstoffe: Holz 40/500, Metall 12/500, Stein
+20/500, Ziegel 10/500") war bei 4-5 Einträgen pro Kategorie schlicht
+breiter als die verfügbare Panel-Breite (376px); `Label` hat standardmäßig
+KEINEN Zeilenumbruch, lief also seitlich über den Bildschirmrand hinaus
+statt umzubrechen. Zwei Korrekturen zusammen:
+
+- **`_update_resources_label()`:** Kapazität wird nicht mehr PRO Ressource
+  wiederholt (`"Holz 40/500"` → `"Holz 40"`), sondern einmal am
+  Zeilenende (`"... (je max 500)"`) — deutlich kürzere Zeilen, Kapazität
+  ist ohnehin für alle Ressourcen identisch.
+- **`autowrap_mode = 3`** (word-smart) auf allen vier Kategorie-Labels als
+  Absicherung, falls eine Zeile trotzdem noch zu lang ist (v. a.
+  "Forschungsbücher" mit fünf langen Buchnamen) — bricht dann sauber auf
+  mehrere Zeilen um statt seitlich rauszulaufen. `TabContainer`
+  (`custom_minimum_size`) und Panel entsprechend höher (56→140px bzw.
+  148→260px Gesamthöhe), damit umgebrochene mehrzeilige Texte nicht
+  ihrerseits unten abgeschnitten werden.
+
+**Vom Nutzer bestätigt (2026-08-04):** "deutlich besser als vorher" —
+Ressourcen-Panel-Umbau (Runde 2 + alle drei Korrekturen) damit
+abgeschlossen. Restliches Feedback zu Punkt 29 (falls die
+Baustellen-Liste im `MainTabsUI`-Panel trotz der moderaten
+Höhenerhöhung noch zu eng ist) weiterhin offen, siehe "ScrollContainer"-
+Hinweis weiter oben.
+
+**Vierte Korrektur — `HUD/InfoPanel` (2026-08-04):** Nutzer bemerkte
+danach "was ist links oben im eck für eine schwarze box", dann "nur ne
+leere schwarze box, kein text drauf" — der bei der ersten Korrektur
+hinzugefügte Panel-Hintergrund hinter `HUD/Label`/`HUD/StatusLabel` war
+DAUERHAFT sichtbar, obwohl `hud_label` seit dem HUD-Aufräumen vom
+2026-08-03 ("das mit trupp 1 hp 100 kann weg", siehe `_update_hud()`) die
+meiste Zeit komplett LEER ist (nur "F: Aussteigen" beim Fahrzeug, sonst
+nichts) — vorher (ohne Panel-Hintergrund) fiel das nie auf, weil leerer
+Text einfach unsichtbar war, jetzt aber sehr wohl der leere schwarze
+Kasten dahinter. Behoben: `hud_info_panel.visible` folgt jetzt, ob
+tatsächlich Inhalt da ist (`not lines.is_empty() or status_label.visible`
+in `_update_hud()`, zusätzlich beim Ablaufen einer Statusmeldung im
+`_process()`-Timer-Block aktualisiert) — Panel taucht nur noch auf, wenn
+wirklich Text/eine Statusmeldung angezeigt wird, `visible = false` auch
+als `.tscn`-Startwert.
+
+**Vom Nutzer bestätigt (2026-08-04):** "passt ist weg". Punkt 29
+(UI-Überarbeitung Runde 2) damit inklusive aller vier Korrekturrunden
+abgeschlossen.
 
 ### Fünfter Tab: Trupp-Detailfenster (2026-08-03)
 

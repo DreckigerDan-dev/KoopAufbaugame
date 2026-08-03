@@ -3,7 +3,7 @@ extends StaticBody3D
 ## (siehe docs/building.md, "Lager"). Reiner Datenträger wie
 ## MedicalStation.gd/Workshop.gd, kein eigenes Verhalten außer der
 ## einmaligen Kapazitäts-Gutschrift bei Erstellung. capacity_bonus wird
-## VOR dem eigentlichen Spawnen berechnet (World.request_upgrade_building(),
+## VOR dem eigentlichen Spawnen berechnet (World.finish_construction(),
 ## aus dem Volumen des ausgebauten Gebäudes) und hier nur noch angewendet.
 
 var storage_id: int = 0

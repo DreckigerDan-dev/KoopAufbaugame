@@ -1,10 +1,12 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scenes/world/World.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/world/PauseMenu.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/world/Minimap.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/world/MapView.tscn" id="7"]
 [ext_resource type="MeshLibrary" path="res://assets/street_tiles.meshlib" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/world/GameOverUI.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/world/WorldSyncOverlay.tscn" id="10"]
 
 [sub_resource type="Environment" id="Environment_day_night"]
 background_mode = 1
@@ -159,6 +161,28 @@ current = true
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
+[node name="PauseLabel" type="Label" parent="HUD"]
+visible = false
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -100.0
+offset_top = 70.0
+offset_right = 100.0
+offset_bottom = 110.0
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 26
+text = "PAUSIERT"
+
+[node name="InfoPanel" type="Panel" parent="HUD"]
+visible = false
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 410.0
+offset_bottom = 166.0
+
 [node name="Label" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 16.0
@@ -200,69 +224,61 @@ theme_override_font_sizes/font_size = 18
 [node name="Panel" type="Panel" parent="ResourcesUI"]
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -260.0
-offset_top = 16.0
+offset_left = -420.0
+offset_top = 8.0
 offset_right = -16.0
-offset_bottom = 290.0
+offset_bottom = 260.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="ResourcesUI/Panel"]
 offset_left = 12.0
-offset_top = 10.0
-offset_right = 232.0
-offset_bottom = 264.0
+offset_top = 8.0
+offset_right = 388.0
+offset_bottom = 244.0
 theme_override_constants/separation = 4
 
 [node name="ClockLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
 theme_override_font_sizes/font_size = 16
 text = "00:00"
 
-[node name="TitleLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
-theme_override_font_sizes/font_size = 18
-text = "Ressourcen"
+[node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 15
+text = "—"
 
 [node name="TabContainer" type="TabContainer" parent="ResourcesUI/Panel/VBoxContainer"]
-custom_minimum_size = Vector2(0, 150)
+custom_minimum_size = Vector2(0, 140)
 
-[node name="Rohstoffe" type="VBoxContainer" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
-theme_override_constants/separation = 4
+[node name="Überleben" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
 
-[node name="BuildCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
-theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "Baurohstoffe"
-
-[node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
-theme_override_font_sizes/font_size = 16
+[node name="SurvivalResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Überleben"]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 372.0
+offset_bottom = 108.0
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 15
 text = "—"
 
-[node name="BooksCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
-theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "Forschungsbücher"
-
-[node name="BooksResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe"]
-theme_override_font_sizes/font_size = 16
-text = "—"
-
-[node name="Ausrüstung" type="VBoxContainer" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
-theme_override_constants/separation = 4
-
-[node name="SurvivalCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
-theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "Überleben"
-
-[node name="SurvivalResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
-theme_override_font_sizes/font_size = 16
-text = "—"
-
-[node name="GearCategoryLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
-theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "Ausrüstung"
+[node name="Ausrüstung" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
 
 [node name="GearResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
-theme_override_font_sizes/font_size = 16
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 372.0
+offset_bottom = 108.0
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 15
+text = "—"
+
+[node name="Bücher" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
+
+[node name="BooksResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher"]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 372.0
+offset_bottom = 108.0
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 15
 text = "—"
 
 [node name="ZombieCountLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
@@ -277,8 +293,8 @@ anchor_top = 1.0
 anchor_right = 0.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -420.0
-offset_right = 376.0
+offset_top = -470.0
+offset_right = 420.0
 offset_bottom = -16.0
 
 [node name="TabContainer" type="TabContainer" parent="MainTabsUI/Panel"]
@@ -338,6 +354,10 @@ text = "Zu Lager ausbauen (30 Holz)"
 visible = false
 text = "Zu Schlafraum ausbauen (20 Holz)"
 
+[node name="ConstructionSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+
+[node name="ConstructionList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+
 [node name="AdvancedMedicalSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
 visible = false
 
@@ -368,6 +388,10 @@ text = "Gruppe 2"
 text = "Gruppe 3"
 
 [node name="UnitsList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+
+[node name="RescueSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+
+[node name="RescueList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
 
 [node name="Trupp" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
 visible = false
@@ -508,3 +532,7 @@ theme_override_constants/separation = 2
 [node name="MinimapUI" parent="." instance=ExtResource("6")]
 
 [node name="MapViewUI" parent="." instance=ExtResource("7")]
+
+[node name="GameOverUI" parent="." instance=ExtResource("9")]
+
+[node name="WorldSyncOverlay" parent="." instance=ExtResource("10")]

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dmicf2f2ku56r"
-path="res://.godot/imported/ecken sind falsch.PNG-1c6add19cc831cd5801d92aefa3868d8.ctex"
+uid="uid://c6wpplr27tbhn"
+path="res://.godot/imported/godot.PNG-197e420a803ee41033c33a87e789773c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://bilder/ecken sind falsch.PNG"
-dest_files=["res://.godot/imported/ecken sind falsch.PNG-1c6add19cc831cd5801d92aefa3868d8.ctex"]
+source_file="res://bilder/godot.PNG"
+dest_files=["res://.godot/imported/godot.PNG-197e420a803ee41033c33a87e789773c.ctex"]
 
 [params]
 

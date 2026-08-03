@@ -6,6 +6,7 @@ extends CanvasLayer
 
 @onready var panel: Control = $Panel
 @onready var save_button: Button = $Panel/VBoxContainer/SaveButton
+@onready var pause_game_button: Button = $Panel/VBoxContainer/PauseGameButton
 @onready var settings_button: Button = $Panel/VBoxContainer/SettingsButton
 @onready var resume_button: Button = $Panel/VBoxContainer/ResumeButton
 @onready var main_menu_button: Button = $Panel/VBoxContainer/MainMenuButton
@@ -16,10 +17,19 @@ func _ready() -> void:
 	visible = false
 	save_button.visible = multiplayer.is_server()
 	save_button.pressed.connect(_on_save_pressed)
+	# Pause (2026-08-04, nur Host, siehe docs/mechanics-review.md,
+	# "Zeitskala") — gleiches host-only-Sichtbarkeitsmuster wie save_button.
+	pause_game_button.visible = multiplayer.is_server()
+	pause_game_button.pressed.connect(_on_pause_game_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	settings_menu.closed.connect(_on_settings_closed)
 	resume_button.pressed.connect(close)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
+
+
+func _on_pause_game_pressed() -> void:
+	get_tree().current_scene.request_toggle_pause.rpc_id(1, multiplayer.get_unique_id())
+	pause_game_button.text = "Spiel fortsetzen" if get_tree().current_scene.is_paused() else "Spiel pausieren"
 
 
 func toggle() -> void:

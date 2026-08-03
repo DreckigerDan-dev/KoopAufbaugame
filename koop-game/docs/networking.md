@@ -105,6 +105,100 @@ per `_catch_up_*.rpc_id(peer_id, ...)` nach — harmlos redundant (jede
 existiert), aber notwendig, damit ein spät beitretender Peer nicht in
 einer halb-leeren Welt landet.
 
+## Welt-Sync-Sperre (`WorldSyncOverlay`, 2026-08-04)
+
+Nutzer-Testbericht (echter Zwei-Spieler-Test): "zweiter Spieler hat lange
+Minimap-Ladezeiten und konnte keine Startbase wählen". Ursache: bei
+aktuell 1750 Gebäuden + hunderten Bäumen/Ressourcen (siehe
+`docs/benchmarks.md`) läuft jede einzelne Entität über einen eigenen
+`MultiplayerSpawner`-Spawn, rein host-seitig in `_generate_world()`. Der
+Host hat danach sofort alles lokal, ein Nicht-Host-Peer muss aber jede
+einzelne dieser >2500 Spawn-Nachrichten über das Netzwerk empfangen —
+das dauert spürbar lange. Der bestehende Ladebildschirm
+(`docs/loading.md`) deckt das nicht ab: er verschwindet, sobald die
+`World.tscn`-**Datei** geladen ist, nicht wenn die Welt beim Client
+tatsächlich angekommen ist. Der Spieler landete also in einer noch
+halb-leeren Welt — leere Minimap, keine Gebäude-Collider zum Anklicken
+für die Startbase-Wahl.
+
+**Lösung:** `World._start_world_sync_wait()` (nur im Nicht-Host-Zweig von
+`_ready()` aufgerufen) blendet `WorldSyncOverlay` (Vollbild-Blocker,
+`mouse_filter = MOUSE_FILTER_STOP`, verhindert Klicks auf die Welt
+darunter) ein und verbindet sich mit `child_entered_tree` der
+Entity-Container (`buildings_container`/`vehicles_container`/
+`trees_container`/`car_wrecks_container`/`stone_piles_container`/
+`brick_piles_container`/`zombie_nests_container`). **Bewusst NICHT** über
+das `spawned`-Signal der jeweiligen `MultiplayerSpawner` (erste Version,
+Bug): ein normal beitretender Peer (nicht nur Spätbeitritte) bekommt
+Gebäude/Fahrzeuge/etc. über ZWEI Wege — direkte Spawner-Replikation aus
+`_generate_world()` UND die `_catch_up_*`-RPCs (`_spawn_for_peer()`,
+ausgelöst durch `request_catch_up()`, das jeder Client in `_ready()`
+aufruft). Die Catch-up-RPCs fügen ihre Nodes per `add_child()` direkt in
+den Container ein, ganz ohne den Spawner — dessen `spawned`-Signal feuert
+dafür nie, `child_entered_tree` auf dem Container dagegen für beide Wege
+gleichermaßen.
+
+Gleichzeitiger PULL wie `request_city_zones()`/`request_catch_up()`:
+`request_world_gen_totals.rpc_id(1)` fragt beim Host die aktuell wahre
+Gesamtzahl ab (`_current_world_gen_totals()` liest einfach die schon
+vorhandenen `_next_*_id`-Zähler aus — die erhöhen sich exakt einmal pro
+gespawnter Entität, egal ob aus `_generate_world()` oder
+`_load_game_state()`, keine zusätzlichen Zähl-Variablen an jeder
+einzelnen `spawn()`-Stelle nötig). Der Client vergleicht seinen lokal per
+Signal mitgezählten Stand gegen diese Ziel-Zahl; erst wenn beides
+übereinstimmt, verschwindet das Overlay (`_check_world_sync_complete()`)
+und `_select_at()` lässt wieder Klicks durch (zusätzlicher expliziter
+Guard dort, nicht nur auf Overlay-Mausfilter verlassen).
+
+**Zweiter Bugfix im selben Zug:** `_spawn_for_peer()` bricht jetzt sofort
+ab, wenn `peer_id == multiplayer.get_unique_id()` — `_spawn_all_players()`
+rief das beim Partie-Start auch für die eigene Host-Peer-ID auf, was am
+Ende immer beim `_catch_up_day_time`-RPC mit "RPC ... on yourself is not
+allowed by selected mode" fehlschlug (im Debugger gefunden). Der Host
+braucht nie einen Catch-up für sich selbst.
+
+Deckt automatisch auch spät beitretende Peers ab (gleiches PULL-Prinzip
+wie überall sonst) — `_current_world_gen_totals()` liefert bei jedem
+Aufruf den aktuellen wahren Stand, egal ob seit Weltstart noch
+Flüchtlings-Gebäude (`_maybe_spawn_refugee()`) dazukamen.
+
+**Sicherheitsnetz:** `WORLD_SYNC_TIMEOUT` (30s) — falls eine einzelne
+Spawn-Nachricht durch die bekannte Godot-Lücke oben verlorengeht und die
+Ziel-Zahl nie exakt erreicht wird, gibt `_force_world_sync_complete()`
+nach Ablauf trotzdem frei, statt den Client für immer hinter der Sperre
+hängen zu lassen.
+
+**Nachtrag 2026-08-04, echter Zwei-Spieler-Test der Sperre:** Debug-
+Logging (`[WorldSync]`-Prints) zeigte etwas Schlimmeres als reine
+Langsamkeit — beim beitretenden Peer blieb der Gebäude-Zähler fest bei
+193 von 1755 stehen, danach kam NICHTS mehr an (auch nicht die eigene
+Ziel-Zahlen-Antwort), und wenig später tauchte im Debugger überall
+`"No multiplayer peer is assigned. Unable to get unique ID."` auf — die
+Netzwerkverbindung war komplett abgestürzt, nicht nur langsam. Ursache:
+`_spawn_for_peer()` feuerte beim Beitritt für Gebäude/Bäume/Wracks/Steine/
+Ziegel **über 4000 einzelne `.rpc_id()`-Aufrufe synchron in einer
+Funktion** ab — das hat die ENet-Verbindung des Peers überlastet.
+
+**Fix, zwei Teile:**
+1. **Bündel-RPCs:** `_catch_up_buildings_bulk()`/`_catch_up_trees_bulk()`/
+   `_catch_up_car_wrecks_bulk()`/`_catch_up_stone_piles_bulk()`/
+   `_catch_up_brick_piles_bulk()` ersetzen die fünf schwersten
+   Einzel-Catch-up-Funktionen — `_spawn_for_peer()` sammelt jetzt pro Typ
+   ein Array und schickt EINEN RPC-Aufruf statt hunderter/tausender. Die
+   `WorldSyncOverlay`-Zählung (siehe oben) bleibt davon unberührt, weil sie
+   auf `child_entered_tree` der Container lauscht, nicht auf den Spawner —
+   das feuert unabhängig davon, ob ein Kind einzeln oder in einer Schleife
+   aus einem Bündel-RPC hinzugefügt wird.
+2. **Zahlen zurückgenommen:** `BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE`
+   zurück auf 100/50 (Summe 350, der ursprüngliche Ausgangswert vor allen
+   Stresstest-Runden), `TREES_PER_FOREST_ZONE` zurück auf 40,
+   `TREES_TOTAL`/`CAR_WRECKS_TOTAL`/`STONE_PILES_TOTAL`/`BRICK_PILES_TOTAL`
+   zurück auf 200/80/100/100 — zusätzliche Sicherheitsmarge obendrauf zur
+   strukturellen Bündelung.
+
+**Vom Nutzer erneut getestet und bestätigt (2026-08-04)** — funktioniert.
+Debug-Logging wieder entfernt.
+
 ## Cross-Node-Feedback-Muster
 
 Mehrere Systeme lösen Effekte in `World.gd` aus, ohne direkt eine
@@ -125,8 +219,12 @@ aufrufenden Nodes existieren: `report_status()` (siehe
   Peer vorbei (`server_disconnected`/`connection_failed` führen zurück
   ins Hauptmenü).
 - **Kein State-Catch-up über reine Node-Existenz hinaus** bei manchen
-  Feldern (z. B. `Building.is_looted`, `GuardPost.built`) — siehe die
-  jeweiligen "Bekannte Grenzen"-Abschnitte in den Entity-Docs.
+  Feldern (z. B. `Wall`-HP eines schon beschädigten Segments,
+  `GuardPost.worker_count`, Fog of War) — siehe die jeweiligen "Bekannte
+  Grenzen"-Abschnitte in den Entity-Docs. `Building.is_looted` und
+  `GuardPost.built` sind inzwischen behoben (siehe `scavenging.md`/
+  `building.md`), hier als Beispiele entfernt, um nicht wieder zu
+  veralten.
 
 ## Testen
 

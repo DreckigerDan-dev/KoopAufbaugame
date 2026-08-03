@@ -25,6 +25,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Pause (siehe Zombie.gd für dieselbe Begründung/docs/mechanics-review.md).
+	if get_tree().current_scene.is_paused():
+		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
 		return

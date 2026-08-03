@@ -12,6 +12,10 @@ enum GameState {
 const STATE_SCENES := {
 	GameState.MAIN_MENU: "res://scenes/main_menu/MainMenu.tscn",
 	GameState.LOBBY: "res://scenes/lobby/Lobby.tscn",
+	# Wird NICHT mehr direkt von change_state() angefahren (siehe dort) —
+	# LoadingScreen.gd liest diesen Eintrag, um World.tscn asynchron im
+	# Hintergrund zu laden. Einzige Quelle für den Pfad, damit er nicht an
+	# zwei Stellen gepflegt werden muss.
 	GameState.IN_GAME: "res://scenes/world/World.tscn",
 }
 
@@ -27,8 +31,9 @@ func _on_peer_connected(id: int) -> void:
 	# Peer gezielt seinen AKTUELLEN State (statt dass der Client lokal blind
 	# LOBBY annimmt, siehe MainMenu._on_connection_succeeded()). Ist der Host
 	# schon IN_GAME (egal ob per "Spiel starten", Solo oder Laden dorthin
-	# gekommen), landet der neue Peer direkt in World.tscn und holt sich dort
-	# über request_catch_up()/request_city_zones() den Rest (siehe World.gd,
+	# gekommen), durchläuft der neue Peer denselben Ladebildschirm (siehe
+	# change_state()) und holt sich in World.tscn danach über
+	# request_catch_up()/request_city_zones() den Rest (siehe World.gd,
 	# _ready()).
 	if not multiplayer.is_server():
 		return
@@ -41,6 +46,16 @@ func change_state(new_state: GameState) -> void:
 	var old_state := current_state
 	current_state = new_state
 	state_changed.emit(old_state, new_state)
+	if new_state == GameState.IN_GAME:
+		# Ladebildschirm dazwischen (Punkt 27 der Gesamtliste, siehe
+		# docs/world.md) statt direktem change_scene_to_file() zu
+		# World.tscn — LoadingScreen.gd lädt die Welt asynchron im
+		# Hintergrund und wechselt selbst erst um, sobald fertig. Gilt für
+		# JEDEN Peer gleich (auch spät beitretende, siehe
+		# _on_peer_connected() oben), weil change_state() dafür ebenfalls
+		# durchläuft.
+		get_tree().change_scene_to_file("res://scenes/loading/LoadingScreen.tscn")
+		return
 	var scene_path: String = STATE_SCENES.get(new_state, "")
 	if scene_path.is_empty():
 		return

@@ -1,5 +1,155 @@
 # Offene Tests
 
+## Balance-Fixes aus dem Mechaniken-Bericht (2026-08-04)
+
+Größter Umfang seit dem Bau-Markier-Modus — 6 zusammenhängende Änderungen,
+gründlich gegentesten.
+
+**Home-Base zerstörbar + Rettung:**
+1. ⬜ Eigene Home-Base von Zombies angreifen lassen (500 HP, dauert) —
+   sollte sich sichtbar rot einfärben, bei 0 HP eine graue Ruine
+   hinterlassen (normal abreißbar für Standard-Ressourcen).
+2. ⬜ Nach Zerstörung: eigenes Panel "Hilfe anfragen"/"Aufgeben" sollte
+   erscheinen. Bei ≥2 Spielern: "Hilfe anfragen" sichtbar, Mitspieler
+   sieht die Anfrage im Einheiten-Tab (RescueList).
+3. ⬜ Mitspieler wählt eigenen Trupp aus, drückt "Trupp senden" — Trupp
+   sollte golden werden, Besitzer wechseln, verlorener Spieler sollte
+   danach wieder eine Start-Basis wählen können (neue Trupps + Basis).
+4. ⬜ "Aufgeben" (oder Solo) → echter Game-Over-Bildschirm, "Neu starten"
+   und "Zurück zum Hauptmenü" sollten beide funktionieren.
+5. ⬜ Speichern/Laden: Home-Base-HP bleibt erhalten (nicht auf 500
+   zurückgesetzt, falls vorher beschädigt).
+
+**Rekrutierung:**
+6. ⬜ Mehrere Gebäude durchsuchen (ohne das feste Rekrutierungs-Gebäude)
+   — ab und zu (grob 1 von 6-7) sollte ein neuer Trupp auftauchen.
+7. ⬜ Nach einigen Minuten sollte irgendwo in der Wildnis ein
+   Schutzsuchender (kleines, sandfarbenes Gebäude) auftauchen und normal
+   durchsuchbar sein. Nach 2 erfolgreichen Rekrutierungen über diesen Weg
+   sollte ein dritter Schutzsuchender KEINEN neuen Trupp mehr geben
+   (Statusmeldung "zieht weiter").
+
+**Zombie-Skalierung:**
+8. ⬜ Mit 2 Spielern: Horde-Nächte sollten sichtbar größer sein als mit
+   nur 1 Spieler (grob doppelt so viele Zombies).
+
+**Pause:**
+9. ⬜ Host: "Spiel pausieren" im Pause-Menü — Zombies/Trupps/Tag-Nacht-Uhr
+   sollten komplett stehen bleiben, "PAUSIERT" oben sollte erscheinen
+   (auch beim Mitspieler-Client). Kamera/UI sollten weiter bedienbar
+   bleiben. "Spiel fortsetzen" macht alles wieder rückgängig.
+10. ⬜ Mitspieler (nicht Host) sollte KEINEN Pause-Button sehen.
+
+**Ressourcen/Bedürfnisse:**
+11. ⬜ Neues Spiel starten — Start-Ressourcen sollten spürbar mehr sein
+    als vorher (Zonen-Erweiterung + Wachposten sollten sofort möglich
+    sein).
+12. ⬜ In einer Stadt-Zone sollten jetzt auch ein paar Bäume/Steinhaufen/
+    Ziegelhaufen/Autowracks stehen, nicht nur in der Wildnis.
+13. ⬜ Hunger sollte spürbar langsamer sinken als vorher (vorher komplett
+    leer in etwas über einer Minute, jetzt über mehrere Minuten).
+
+## Korrektheits-Fixe aus dem Code-Review (2026-08-04)
+
+Reine Bugfixes, kein neues Feature — trotzdem gezielt gegentesten, da sie
+Ressourcen-Wirtschaft betreffen.
+
+1. ⬜ Mehrere Bautrupps (2-3) gleichzeitig auf denselben Baum/dasselbe
+   Autowrack ansetzen (einzeln nacheinander anklicken, nicht übers
+   Markier-System) — sollte jetzt nur EINEN Ertrag beim Fällen geben,
+   nicht mehrfach.
+2. ⬜ Zombie gleichzeitig von Wachposten UND einem angreifenden Survivor
+   (Gegenschaden) tödlich treffen lassen — sollte nur EINEN Loot-Drop
+   geben, nicht zwei.
+3. ⬜ Ein Rezept erforschen (Buch verbrauchen), speichern, zum Hauptmenü,
+   laden — Crafting-Button sollte weiterhin "herstellen" zeigen, nicht
+   wieder "erforschen" (siehe `save_load.md`).
+4. ⬜ Spät beitretender Peer sieht einen schon fertigen Wachposten eines
+   anderen Spielers sofort in der normalen (nicht "im Bau"-gelben) Farbe.
+
+## Ladebildschirm (siehe `loading.md`, 2026-08-04)
+
+**Vom Nutzer bestätigt (2026-08-04):** "passt hab paar mal getesten" —
+Grundfunktion (Anzeige, Sprüche, kein Einfrieren mehr) läuft. Einzelne
+Detailpunkte unten nicht explizit erwähnt, vermutlich im "passt"
+mit eingeschlossen (kein Gegenteiliges berichtet).
+
+1. ✅ "Spiel starten" in der Lobby (oder Solo/Laden im Hauptmenü) zeigt
+   jetzt kurz den Ladebildschirm (dunkler Hintergrund, "Lädt ...",
+   zufälliger Spruch, Fortschrittsbalken) statt eines Einfrierens, bevor
+   die Welt erscheint.
+2. ⬜ Fortschrittsbalken bewegt sich sichtbar von 0 auf 100, bleibt nicht
+   bei 0 stehen und springt nicht sofort auf 100. (Nicht explizit erwähnt.)
+3. ⬜ Bei zwei Clients (Debug → Customize Run Instances): beide sehen den
+   Ladebildschirm unabhängig voneinander, kein Hängenbleiben, wenn ein
+   Client langsamer lädt als der andere.
+4. ⬜ Spät beitretender Peer (Host schon `IN_GAME`) durchläuft beim
+   Beitritt ebenfalls kurz den Ladebildschirm, landet danach korrekt in
+   der laufenden Welt (Catch-up funktioniert wie vorher).
+5. ⬜ "Laden"-Button im Hauptmenü (Speicherstand) funktioniert weiterhin —
+   `SaveManager.pending_load` wird trotz des zwischengeschalteten
+   Ladebildschirms korrekt von `World._ready()` aufgegriffen.
+
+## Bau-Markier-Modus mit zuweisbaren Bautrupps (siehe `building.md`, "Baustellen", 2026-08-04)
+
+Größter Umbau der aktuellen Feature-Phase (Punkt 28) — mehrschrittiger
+Flow, braucht gründliches Testen.
+
+1. ⬜ Eigenes, geplündertes+geclaimtes Gebäude anklicken, "Zu
+   Krankenstation ausbauen" (o. Ä.) drücken — Gebäude verschwindet NICHT
+   sofort, färbt sich stattdessen amber, taucht in der neuen "Baustellen"-
+   Liste im Bauen-Tab auf (0 Trupps, 0% Fortschritt). Ressourcen sofort
+   abgezogen.
+2. ⬜ Mehrere Bautrupps auswählen, auf die amberfarbene Baustelle klicken
+   ODER "Trupp zuweisen" in der Liste drücken — alle ausgewählten Trupps
+   laufen hin und werden als Arbeiter gezählt (Anzeige "X Trupps" in der
+   Liste steigt).
+3. ⬜ Fortschritt beschleunigt sich sichtbar mit mehr zugewiesenen Trupps
+   (z. B. 1 vs. 3 Bautrupps auf derselben Baustelle vergleichen) — sollte
+   ungefähr linear schneller gehen.
+4. ⬜ Bei Fertigstellung: Gebäude wird durch die Zielstruktur ersetzt
+   (Krankenstation/Werkstatt/Lager/Schlafraum), alle zugewiesenen Trupps
+   werden automatisch wieder frei (nicht mehr stationiert).
+5. ⬜ "Trupp abziehen" zieht einen zugewiesenen Trupp wieder ab, der dann
+   wieder frei beweg-/auswählbar ist.
+6. ⬜ "Stornieren" storniert den Bauauftrag, Ressourcen kommen zurück,
+   Gebäude fällt zurück auf normal geclaimt (blau statt amber), alle
+   zugewiesenen Trupps werden frei.
+7. ⬜ Nur Bautrupps (nicht Feldtrupps) können einer Baustelle zugewiesen
+   werden — Feldtrupp auswählen und auf eine Baustelle klicken sollte eine
+   Fehlermeldung zeigen, keine Bewegung auslösen.
+8. ⬜ Speichern + Laden (oder spät beitretender Peer): offener Bauauftrag
+   inkl. Zieltyp und Fortschritt bleibt erhalten — ABER zugewiesene Trupps
+   gehen bewusst verloren (siehe `docs/building.md`, "Baustellen",
+   "Bewusste Lücke"), müssen manuell neu zugewiesen werden. Prüfen, ob das
+   in der Praxis wie erwartet wirkt (kein Absturz, keine Geister-Trupps).
+9. ⬜ Performance-Gegenprobe: `Building.gd` hat jetzt erstmals ein eigenes
+   `_process()` (host-only) für ALLE Gebäude, nicht nur die mit offenem
+   Bauauftrag — jetzt 1750 Gebäude im Stresstest (siehe `benchmarks.md`,
+   2026-08-04 nochmal von 1050 hochgeschraubt, "schraub einfach hoch ich
+   teste dann") — kurzer FPS-Vergleich, ob das spürbar reinschlägt (sollte
+   durch den frühen `if not has_open_construction: return` sehr billig
+   sein, aber noch nicht gemessen). Gleicher Test deckt auch die neue
+   Bäume-/Ressourcen-Erhöhung (150/800/320/400/400) mit ab.
+
+## Formation natürlicher: Geschwindigkeits-Varianz + gestaffelter Start (siehe `commander.md`, 2026-08-04)
+
+Nutzer-Feedback nach dem Kreis-Formation-Update: "truppen laufen auf einer
+linie sollen er natürlicher laufen".
+
+1. ⬜ Mehrere eigene Trupps auswählen, gemeinsamen Bewegungsbefehl über
+   eine längere Strecke geben (querfeldein, nicht nur wenige Meter) —
+   die Gruppe sollte jetzt sichtbar NICHT mehr wie eine geschlossene Reihe
+   im Gleichschritt loslaufen (Anführer sofort, Rest leicht zeitversetzt
+   und mit leicht unterschiedlichem Tempo).
+2. ⬜ Shift-Klick (zusätzlicher Wegpunkt an bestehende Schlange anhängen)
+   löst den gestaffelten Start NICHT erneut aus — ein bereits laufender
+   Trupp darf beim Anhängen nicht plötzlich stehen bleiben/verzögern.
+3. ⬜ Fahrzeuge weiterhin normal steuerbar (Straßen-Pathing unverändert) —
+   `Vehicle.order_move()` hat jetzt denselben zusätzlichen Parameter wie
+   `Survivor.order_move()`, rein aus Signatur-Kompatibilität mit dem
+   generischen Aufruf in `World._select_at()`.
+
 ## Formation: Anführer + Kreis statt Raster (siehe `commander.md`, 2026-08-03)
 
 Nutzer-Feedback aus dem ersten echten Koop-Test: "truppen laufen immernoch
@@ -431,6 +581,12 @@ Erst-Test nötig, nicht nur Detail-Nachtest.
 
 1. ⬜ Müdigkeit + Moral fallen sichtbar über Zeit (kompakte Trupp-Liste
    `Mü%d Mo%d`, Trupp-Detailfenster, HUD-Text zeigen alle denselben Wert).
+   **Nutzer-Feedback (2026-08-04):** "geht zu schnell runter, ich lauf zu
+   einem gebäude und habe beides auf 0" — Verfallsraten daraufhin
+   verlangsamt (`FATIGUE_DECAY_RATE` 0.8→0.15/s, `MORALE_DECAY_RATE`
+   0.4→0.075/s, siehe `survivor.md`). Erneuter Test mit den neuen, viel
+   langsameren Raten (~11/~22 Minuten bis 0 statt vorher ~2/~4 Minuten)
+   noch offen.
 2. ⬜ "Zu Schlafraum ausbauen"-Button erscheint beim Anklicken eines
    eigenen, geclaimten Gebäudes (Kosten 20 Holz), Ausbauen ersetzt das
    Gebäude durch einen Schlafraum an derselben Stelle.
@@ -798,3 +954,29 @@ diesem Zeitpunkt.
    schon gebauten Wachturm eines anderen Spielers korrekt.
 7. ⬜ (Nach einem Speichern/Laden-Durchlauf) ein gebauter Wachturm bleibt
    erhalten, liefert nach dem Laden weiterhin seinen Sichtbonus.
+
+## Welt-Sync-Sperre (siehe `networking.md`, 2026-08-04 — Bugfix nach Nutzer-Testbericht)
+
+**Update:** erste Testrunde deckte einen zweiten, schwereren Bug auf
+(Verbindungsabbruch durch >4000 einzelne Catch-up-RPCs) — behoben durch
+Bündel-RPCs + zurückgenommene Stresstest-Zahlen (350 Gebäude statt 1750),
+siehe `networking.md`.
+
+**Vom Nutzer bestätigt (2026-08-04):** "passt alles" — erneuter
+Zwei-Spieler-Test nach beiden Fixes.
+
+1. ✅ Zwei-Spieler-Test (Debug → Customize Run Instances → 2 → F5, Host
+   startet die Partie): der NICHT-Host-Client sieht kurz nach dem
+   Betreten von `World.tscn` einen Vollbild-Blocker ("Welt wird
+   synchronisiert ...", Fortschrittsbalken) statt sofort in einer noch
+   halb-leeren Welt zu landen.
+2. ✅ Klicks auf die Welt (insbesondere auf ein Stadt-Gebäude zur
+   Startbase-Wahl) haben während der Blocker sichtbar ist KEINE Wirkung.
+3. ✅ Der Blocker verschwindet von selbst, sobald die Welt beim Client
+   tatsächlich vollständig angekommen ist (Minimap zeigt danach direkt
+   alle Gebäude, nicht nur einen Teil) — Klick auf ein Gebäude wählt
+   danach korrekt die Startbase (das eigentlich gemeldete Problem).
+4. ✅ Host selbst sieht den Blocker NIE (hat alles sofort lokal).
+5. ⬜ (Mit einem dritten, später beitretenden Client) Blocker erscheint
+   auch beim Spätbeitritt und verschwindet nach Catch-up korrekt —
+   gleicher PULL-Mechanismus wie beim regulären Partie-Start.

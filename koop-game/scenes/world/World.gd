@@ -168,7 +168,11 @@ const ZOMBIE_NEST_GROUND_Y := 1.35
 # Horde-Nächte dürfen ihn bewusst kurz überschreiten (einmaliger Ausschlag
 # von HORDE_SIZE bzw. an Blutmond-Nächten BLOOD_MOON_HORDE_SIZE, siehe dort
 # — anders als beim Zombie-Nest keine kontinuierliche Nachspawn-Quelle).
-const MAX_ZOMBIES := 200
+# 200 → 400 (2026-08-04, siehe docs/mechanics-review.md, "Zombie-Bedrohung
+# über Zeit") — die Hordengröße skaliert jetzt mit der Spieleranzahl
+# (siehe _trigger_horde_night()), der alte Deckel wäre bei 4 Spielern viel
+# zu schnell erreicht gewesen.
+const MAX_ZOMBIES := 400
 # Spatial Grid für Zombie-Nachbarschaftssuche (siehe docs/zombies.md,
 # "Performance: Spatial Grid" — Punkt 2 der Performance-Liste, Reaktion auf
 # den 500-Zombie/15-FPS-Benchmark). Behebt den echten O(z²)-Kampf-Hotspot:
@@ -214,6 +218,13 @@ var _zombie_grid: Dictionary = {}  # Vector2i -> Array[Node3D]
 # hinein.
 const ZOMBIE_DESPAWN_RADIUS := 580.0
 const ZOMBIE_DESPAWN_CHECK_INTERVAL := 10.0
+# Sicherheitsnetz für die Welt-Sync-Sperre (siehe _start_world_sync_wait()) —
+# falls eine einzelne Spawn-Nachricht verlorengeht (bekannte Godot-Lücke,
+# siehe docs/networking.md, "MultiplayerSpawner + Catch-up-Pattern") und die
+# Ziel-Zahl dadurch nie ganz erreicht wird, lieber nach diesem Timeout
+# freigeben als den Client für immer hinter der Overlay-Sperre hängen zu
+# lassen.
+const WORLD_SYNC_TIMEOUT := 30.0
 var _zombie_despawn_timer: float = 0.0
 # Debug-Stresstest-Hotkey (siehe _unhandled_input()) — spawnt sofort
 # DEBUG_ZOMBIE_SPAWN_COUNT Zombies verteilt um die Kamera, ohne auf die
@@ -358,7 +369,7 @@ const START_SURVIVOR_SPACING := 1.5
 
 ## Baumenü-Umbau (Nutzerwunsch): direkt platzierbar sind nur noch
 ## GUARD_POST/WALL/GATE/FIELD. MEDICAL_STATION/WORKSHOP bleiben als Werte
-## erhalten (weiterhin für Kosten-Lookup und request_upgrade_building()
+## erhalten (weiterhin für Kosten-Lookup und request_start_construction()
 ## gebraucht), sind aber über kein Bau-Button/_build_type mehr erreichbar —
 ## sie entstehen jetzt ausschließlich durchs Ausbauen eines bereits
 ## geplünderten UND geclaimten eigenen Gebäudes, siehe docs/building.md,
@@ -650,13 +661,33 @@ const CITY_ZONE_RADIUS_SMALL := 150.0
 # benchmark") nochmal von 100/50 auf 300/150 verdreifacht (Summe 1050
 # statt 350) — reiner Stresstest für die Performance, keine
 # Balancing-Entscheidung. Slot-Reserve reicht laut Kommentar oben locker.
-const BUILDINGS_PER_LARGE_ZONE := 300
-const BUILDINGS_PER_SMALL_ZONE := 150
+# 2026-08-04 ("schraub einfach hoch ich teste dann") nochmal auf 500/250
+# angehoben (Summe 1750) — weitere Runde desselben Stresstests, diesmal
+# zusätzlich relevant für Building._process() (Bau-Markier-Modus, Punkt 28:
+# JEDES Building hat jetzt ein eigenes, wenn auch billiges, host-only
+# _process(), nicht mehr komplett passiv).
+# 2026-08-04, wieder zurück auf 100/50 (Summe 350, ursprünglicher
+# Ausgangswert): der Zwei-Spieler-Stresstest bei 1750 hat die
+# Netzwerkverbindung des zweiten Peers komplett zum Absturz gebracht
+# (`multiplayer.multiplayer_peer` verschwand mitten in der Partie, siehe
+# docs/networking.md, "Welt-Sync-Sperre") — Ursache war die schiere Menge
+# an einzelnen Catch-up-RPC-Aufrufen beim Beitritt (siehe
+# `_catch_up_buildings_bulk()`), die selbst bei ~193 von 1755 Gebäuden
+# schon zum Abbruch führte. Bündelung behebt die Ursache strukturell,
+# diese Rücknahme ist die zusätzliche Sicherheitsmarge obendrauf.
+const BUILDINGS_PER_LARGE_ZONE := 100
+const BUILDINGS_PER_SMALL_ZONE := 50
 const VEHICLES_PER_ZONE := 2
 # Differenzierte Fahrzeugtypen (Punkt 19 der Gesamtliste) — String-Keys aus
 # Vehicle.VEHICLE_STATS, siehe dort für Werte/Begründung. Zufällig pro
 # Spawn gewählt (siehe _generate_city_zone()), kein fester Typ pro Slot.
 const VEHICLE_TYPES := ["car", "motorcycle", "truck"]
+# Rohstoffe innerhalb von Stadt-Zonen (2026-08-04, siehe
+# docs/mechanics-review.md, "Ressourcen-Wirtschaft") — 6 pro Zone × 5
+# Zonen = 30 zusätzliche Knoten kartenweit, kürzere Laufwege gerade am
+# Anfang statt nur Wildnis-Sammeln.
+const RESOURCES_PER_CITY_ZONE := 6
+const CITY_RESOURCE_TYPES := ["tree", "stone_pile", "brick_pile", "car_wreck"]
 const ZOMBIES_PER_ZONE := 4
 # Abstand der vier Zombie-Ring-Spawnpunkte ÜBER den jeweiligen Zonenrand
 # hinaus (vorher fest in ZOMBIE_SPAWN_RING_RADIUS verrechnet, jetzt pro
@@ -719,8 +750,11 @@ const FOREST_ZONE_RADIUS := 150.0
 # visuelle Unterschied zu einem "hier stehen halt ein paar Bäume"-Gebiet.
 # 2026-08-03 (Nutzerwunsch: "mehr bäume im wald") von 40 auf 80 verdoppelt
 # — reiner Stresstest wie bei BUILDINGS_PER_*_ZONE oben, keine
-# Balancing-Entscheidung.
-const TREES_PER_FOREST_ZONE := 80
+# Balancing-Entscheidung. 2026-08-04 ("schraub einfach hoch") nochmal fast
+# verdoppelt. 2026-08-04, wieder zurück auf 40 (ursprünglicher
+# Ausgangswert) — gleicher Grund wie bei BUILDINGS_PER_*_ZONE oben
+# (Verbindungsabbruch beim Zwei-Spieler-Test).
+const TREES_PER_FOREST_ZONE := 40
 # Ein Jagdstand pro Wald-Zone (Vision: Infos/02 Item-Liste.md, "Waldrand"-
 # Loot: Munition/Waffen/Fernglas — Fernglas hat keinen eigenen Ressourcen-
 # Typ, deshalb nur Munition+Waffe). Bewusst NICHT Teil von
@@ -741,10 +775,16 @@ var _forest_zone_centers: Array[Vector3] = []
 # der Flaschenhals). Stattdessen feste, moderat erhöhte Gesamtzahlen
 # (vorher 10/4/5/5). 2026-08-03 (Nutzerwunsch: "allgemein mehr
 # ressourcen", zum Benchmark) nochmal verdoppelt (vorher 200/80/100/100).
-const TREES_TOTAL := 400
-const CAR_WRECKS_TOTAL := 160
-const STONE_PILES_TOTAL := 200
-const BRICK_PILES_TOTAL := 200
+# 2026-08-04 ("schraub einfach hoch ich teste dann") nochmal verdoppelt —
+# weitere Stresstest-Runde, noch nicht gemessen.
+# 2026-08-04, wieder zurück auf 200/80/100/100 (Stand vor den beiden
+# Stresstest-Verdopplungen) — gleicher Grund wie bei BUILDINGS_PER_*_ZONE
+# oben (Verbindungsabbruch beim Zwei-Spieler-Test, siehe docs/networking.md,
+# "Welt-Sync-Sperre").
+const TREES_TOTAL := 200
+const CAR_WRECKS_TOTAL := 80
+const STONE_PILES_TOTAL := 100
+const BRICK_PILES_TOTAL := 100
 # Mindestabstand zwischen neu gespawnten Ressourcenknoten und
 # Gebäuden/Fahrzeugen/Zombie-Nest/anderen Ressourcenknoten (Nutzerwunsch:
 # "alles was im Spiel spawnt soll ein bisschen Platz dazwischen haben"),
@@ -777,6 +817,22 @@ const BANDIT_LOOT_RESOURCES := ["food", "medicine", "ammo"]
 const BANDIT_LOOT_MIN := 3
 const BANDIT_LOOT_MAX := 8
 var _bandit_restock_timer: float = 0.0
+# Schutzsuchende (2026-08-04, Rekrutierungs-Erweiterung, siehe
+# docs/mechanics-review.md, "Spieler-Kapazität") — periodisch (gleiche
+# Größenordnung wie BANDIT_RESTOCK_INTERVAL) taucht mit einer Chance ein
+# aufsammelbarer Überlebender irgendwo in der Wildnis auf, wiederverwendet
+# den bestehenden has_survivor-Rekrutierungs-Mechanismus 1:1 (Survivor.
+# _finish_search() -> World.spawn_recruit()/spawn_refugee_recruit()).
+# REFUGEE_MAX_ACTIVE verhindert unbegrenztes Ansammeln, falls niemand
+# hinläuft. REFUGEE_RECRUIT_CAP_PER_PEER (2, Nutzerwunsch) gilt NUR für
+# diesen Kanal — das ursprüngliche feste Rekrutierungs-Gebäude und die
+# neue LOOT_RECRUIT_CHANCE (siehe unten) bleiben ungedeckelt.
+const REFUGEE_SPAWN_INTERVAL := 180.0
+const REFUGEE_SPAWN_CHANCE := 0.4
+const REFUGEE_MAX_ACTIVE := 3
+const REFUGEE_RECRUIT_CAP_PER_PEER := 2
+var _refugee_spawn_timer: float = 0.0
+var _refugee_recruits_granted: Dictionary = {}  # peer_id -> Anzahl
 # Vier Baurohstoffe statt eines generischen "materials" (siehe
 # docs/base.md, "Vier Baurohstoffe") — jeder Bautyp braucht genau eine
 # thematisch passende Art: Wachposten (Holzturm), Mauer (Steinwall), Tor
@@ -850,6 +906,24 @@ const STORAGE_CAPACITY_PER_VOLUME := 40.0
 # Werkstatt besitzt (siehe docs/building.md, "Werkstatt") — gilt nicht auf
 # die Werkstatt selbst (keine Kettenreaktion beim Bau der ersten).
 const WORKSHOP_DISCOUNT := 0.8
+# Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
+# "Baustellen") — Bauzeit in Trupp-Sekunden (Building.
+# CONSTRUCTION_WORK_PER_TROOP verringert das pro zugewiesenem Bautrupp und
+# Sekunde um 1). Lager skaliert mit dem Gebäude-Volumen wie schon seine
+# Kapazität (STORAGE_CAPACITY_PER_VOLUME), die anderen drei haben einen
+# festen Startwert (nach Testen nachjustierbar).
+const CONSTRUCTION_WORK: Dictionary = {
+	BuildType.BED: 20.0,
+	BuildType.MEDICAL_STATION: 30.0,
+	BuildType.WORKSHOP: 35.0,
+}
+const STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 1.5
+const CONSTRUCTION_TARGET_NAMES: Dictionary = {
+	BuildType.MEDICAL_STATION: "Krankenstation",
+	BuildType.WORKSHOP: "Werkstatt",
+	BuildType.STORAGE: "Lager",
+	BuildType.BED: "Schlafraum",
+}
 # Crafting-System, Stufe 1 (siehe docs/building.md, "Herstellen" — Punkt 12
 # der Gesamtliste). Wichtige Abgrenzung wie beim Waffen-/Rüstungssystem:
 # nicht die volle Vision (Infos/02 Item-Liste.md: viele Rezeptstufen,
@@ -956,22 +1030,30 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var hud_label: Label = $HUD/Label
 @onready var status_label: Label = $HUD/StatusLabel
 @onready var base_choice_label: Label = $HUD/BaseChoiceLabel
+# Panel-Hintergrund hinter hud_label/status_label (UI-Überarbeitung Runde 2,
+# 2026-08-04, siehe docs/world.md) — hud_label ist die meiste Zeit leer
+# (nur "F: Aussteigen" oder gar nichts, siehe _update_hud()), ein Panel
+# DAUERHAFT dahinter wäre eine nutzlose leere schwarze Box (Nutzer-Feedback:
+# "nur ne leere schwarze box, kein text drauf"). Deshalb nur sichtbar,
+# solange tatsächlich Text/Statusmeldung angezeigt wird.
+@onready var hud_info_panel: Panel = $HUD/InfoPanel
+@onready var pause_label: Label = $HUD/PauseLabel
 # Kategorisiertes Ressourcen-Panel (siehe RESOURCE_CATEGORIES oben) — ein
 # Label pro Kategorie statt einer einzigen Liste mit allen 16 Arten.
-# UI-Übersichtlichkeit (2026-08-03, Nutzerwunsch "UI überarbeiten... dass
-# es übersichtlicher ist") — die vier Kategorien liefen vorher als ein
-# Dauer-Block untereinander, jetzt in zwei Tabs aufgeteilt
-# ("Rohstoffe" = Baurohstoffe+Forschungsbücher, "Ausrüstung" = Überleben+
-# Ausrüstung), genau der schon länger zurückgestellte Nutzerwunsch aus
-# `docs/world.md`, "Ressourcen-Panel kategorisiert" ("sinnvoller wäre in
-# zwei unterschiedliche tabs"). Reihenfolge hier bleibt 1:1 zu
-# RESOURCE_CATEGORIES, nur die .tscn-Pfade zeigen jetzt in die
-# TabContainer-Unterordner statt direkt in die VBoxContainer.
+# UI-Überarbeitung Runde 2 (2026-08-04, Punkt 29 der Gesamtliste, angelehnt
+# an eine vom Nutzer geschickte Referenz aus "Infection Free Zone", siehe
+# docs/world.md). Nutzer-Feedback nach dem ersten Test: "zu viel Ressourcen,
+# am besten nur die Baumaterialien, das mit Waffen/Bücher etc. soll dann
+# in ein unter-tab" — Baurohstoffe (Index 0) bleiben DAUERHAFT sichtbar
+# direkt im VBoxContainer, die anderen drei Kategorien (Überleben/
+# Ausrüstung/Forschungsbücher) sitzen jetzt in einem kleinen
+# `TabContainer` darunter, nur eine davon gleichzeitig sichtbar. Reihenfolge
+# hier bleibt 1:1 zu RESOURCE_CATEGORIES.
 @onready var resource_category_labels: Array = [
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe/BuildResourcesLabel,
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung/SurvivalResourcesLabel,
+	$ResourcesUI/Panel/VBoxContainer/BuildResourcesLabel,
+	$ResourcesUI/Panel/VBoxContainer/TabContainer/Überleben/SurvivalResourcesLabel,
 	$ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung/GearResourcesLabel,
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Rohstoffe/BooksResourcesLabel,
+	$ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher/BooksResourcesLabel,
 ]
 @onready var clock_label: Label = $ResourcesUI/Panel/VBoxContainer/ClockLabel
 @onready var zombie_count_label: Label = $ResourcesUI/Panel/VBoxContainer/ZombieCountLabel
@@ -1039,6 +1121,16 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var build_ghost: MeshInstance3D = $BuildGhost
 @onready var build_ghost_line: Node3D = $BuildGhostLine
 @onready var workers_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Bauen/WorkersList
+# Bau-Markier-Modus (Punkt 28, siehe docs/building.md, "Baustellen") —
+# gleiches Muster wie workers_list oben.
+@onready var construction_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Bauen/ConstructionList
+# Rettungsmechanik (2026-08-04, siehe docs/mechanics-review.md, "Fehlende
+# Enden/Ziele") — gleiches Muster wie workers_list/construction_list.
+@onready var rescue_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Einheiten/RescueList
+@onready var game_over_ui: CanvasLayer = $GameOverUI
+# Welt-Sync-Sperre (siehe docs/networking.md, "Welt-Sync-Sperre") — nur für
+# Nicht-Host-Peers relevant, siehe _start_world_sync_wait().
+@onready var world_sync_overlay: CanvasLayer = $WorldSyncOverlay
 # Ausbauen (siehe docs/building.md, "Ausbauen") — eigener Abschnitt im
 # "Bauen"-Tab statt eines eigenen Panels, sichtbar nur wenn eine eigene
 # geclaimte Gebäude-Zone ausgewählt ist (_selected_claimed_building).
@@ -1149,6 +1241,17 @@ var _next_nest_zombie_id: int = CITY_ZONE_COUNT * ZOMBIES_PER_ZONE
 # _trigger_horde_night()) und die Wildnis-Ressourcenverteilung (siehe
 # _spawn_wilderness_resources(), Abstand zu Stadt-Zonen).
 var _city_zone_centers: Array[Vector3] = []
+# Welt-Sync-Sperre (Bugfix 2026-08-04: bei 1750 Gebäuden + hunderten Bäumen/
+# Ressourcen dauert die MultiplayerSpawner-Replikation zu einem Client
+# spürbar lange — vorher konnte der Client in diesem Fenster auf leeren
+# Boden klicken (keine Startbase wählbar) und sah eine fast leere Minimap,
+# siehe WorldSyncOverlay.gd. `_world_sync_complete` startet bei `true` (gilt
+# sofort für den Host, der alles lokal hat) und wird nur für Nicht-Host-Peers
+# in _start_world_sync_wait() auf `false` gesetzt, bis _check_world_sync_
+# complete() Ziel- und Ist-Zahlen als übereinstimmend meldet.
+var _world_sync_complete: bool = true
+var _world_gen_targets: Dictionary = {}
+var _world_gen_received: Dictionary = {}
 var _next_tree_id: int = 0
 var _next_car_wreck_id: int = 0
 var _next_stone_pile_id: int = 0
@@ -1179,6 +1282,17 @@ var _next_zombie_nest_id: int = 0
 # "Bekannte Grenzen").
 var _trade_offers: Array = []
 var _next_trade_offer_id: int = 1
+# Home-Base-Zerstörung/Rettungsmechanik (2026-08-04, Punkt 6 des
+# Mechaniken-Berichts, siehe docs/mechanics-review.md, "Fehlende
+# Enden/Ziele") — gleiches Muster wie _trade_offers: nur der Host führt
+# Buch, an alle Peers gespiegelt, kein Catch-up/keine Speicherstand-
+# Persistenz (kurzlebiger Zwischenzustand, gleiche Vereinfachung).
+# _lost_peers: peer_id -> true, sobald die eigene Home-Base zerstört wurde
+# UND noch kein Base-Erstellen-Trupp eingetroffen ist — sperrt
+# request_choose_start_base() (siehe dort), bis entweder ein Mitspieler
+# hilft oder der Spieler aufgibt.
+var _lost_peers: Dictionary = {}
+var _rescue_requests: Array = []
 # Nur neu aufbauen, wenn sich NetworkManager.players wirklich geändert hat
 # (sonst würde die laufende Dropdown-Auswahl des Nutzers alle
 # WORKER_UI_REFRESH_INTERVAL Sekunden zurückgesetzt).
@@ -1186,6 +1300,14 @@ var _trade_peer_ids_cache: Array = []
 var _build_mode: bool = false
 var _build_type: BuildType = BuildType.GUARD_POST
 var _worker_ui_timer: float = 0.0
+# Pause (2026-08-04, nur Host, siehe docs/mechanics-review.md, "Zeitskala") —
+# gesynct an alle Peers (nicht nur host-lokal), weil _handle_day_night()
+# lokal auf JEDEM Peer läuft (siehe dort) und sonst auseinanderlaufen würde.
+# Einzelne Entity-Scripts (Zombie/Survivor/Building/GuardPost/ZombieNest/
+# Vehicle) fragen is_paused() jeweils selbst am Anfang ihres eigenen
+# _process() ab, statt eines zentralen process_mode-Umbaus über den ganzen
+# Szenenbaum (deutlich kleinerer, vorhersehbarerer Eingriff).
+var _game_paused: bool = false
 # Tag/Nacht-Zyklus (siehe NIGHT_START_HOUR/NIGHT_END_HOUR oben) — läuft lokal auf
 # jedem Peer, siehe _handle_day_night(). Startet bei 62.5s = 05:00 Uhr
 # (5/24*CYCLE_LENGTH, Nutzerwunsch) statt 00:00 — gilt nur für den
@@ -1303,6 +1425,11 @@ func _ready() -> void:
 		# funktioniert dadurch gleichermaßen beim normalen Partie-Start UND
 		# bei einem spät beitretenden Peer, ganz ohne eigenen Sonderfall.
 		request_city_zones.rpc_id(1)
+		# Welt-Sync-Sperre (siehe _world_sync_complete-Kommentar oben) — muss
+		# VOR den beiden Catch-up-RPCs verbunden werden, sonst könnten die
+		# ersten paar spawned-Signale (falls Antworten außergewöhnlich schnell
+		# ankommen) verpasst werden.
+		_start_world_sync_wait()
 		# Gleicher PULL für die Catch-up-Daten (Survivor/Home-Base/Zombies/...,
 		# siehe request_catch_up()) — der frühere reine Push-Weg über
 		# NetworkManager.player_connected konnte bei einem spät beitretenden
@@ -1641,8 +1768,14 @@ func _trigger_horde_night() -> void:
 	# Gesamtliste) — jede Nte Nacht ist deutlich größer/brute-lastiger,
 	# eigene Vorwarnung statt der normalen Horde-Nacht-Meldung.
 	var blood_moon: bool = is_blood_moon_night()
-	var horde_size: int = BLOOD_MOON_HORDE_SIZE if blood_moon else HORDE_SIZE
-	var brute_count: int = BLOOD_MOON_BRUTE_COUNT if blood_moon else HORDE_BRUTE_COUNT
+	# Skalierung mit Spieleranzahl (2026-08-04, siehe docs/mechanics-review.md,
+	# "Zombie-Bedrohung über Zeit") — vorher war HORDE_SIZE bei 1 Spieler
+	# genauso groß wie bei 4, Koop zu viert war dadurch pro Kopf spürbar
+	# leichter statt gleich schwer. max(..., 1) für den Fall, dass
+	# NetworkManager.players (noch) leer ist.
+	var player_count: int = max(NetworkManager.players.size(), 1)
+	var horde_size: int = (BLOOD_MOON_HORDE_SIZE if blood_moon else HORDE_SIZE) * player_count
+	var brute_count: int = (BLOOD_MOON_BRUTE_COUNT if blood_moon else HORDE_BRUTE_COUNT) * player_count
 	var warning: String = "BLUTMOND! Eine gewaltige Horde formiert sich!" if blood_moon else "Die Nacht bricht an — eine Horde nähert sich!"
 	for peer_id in NetworkManager.players.keys():
 		report_status(peer_id, warning)
@@ -1713,6 +1846,17 @@ func _on_player_connected(peer_id: int, _info: Dictionary) -> void:
 
 
 func _spawn_for_peer(peer_id: int) -> void:
+	# Bugfix 2026-08-04 (Fehler im Debugger gefunden: "RPC 'catch_up_day_time'
+	# on yourself is not allowed by selected mode") — _spawn_all_players()
+	# ruft das beim Partie-Start für JEDEN Peer in NetworkManager.players auf,
+	# EINSCHLIESSLICH des Hosts selbst. Alle Catch-up-Schleifen unten sind für
+	# die eigene Peer-ID ohnehin No-Ops (Container zu dem Zeitpunkt noch leer,
+	# siehe _ready()), aber der abschließende Tag/Nacht-Catch-up läuft
+	# unbedingt und versucht dann ein RPC an sich selbst — vom `authority`-
+	# Modus ohne `call_local` nicht erlaubt. Der Host braucht ohnehin nie
+	# einen Catch-up für sich selbst, früher Ausstieg ist hier immer korrekt.
+	if peer_id == multiplayer.get_unique_id():
+		return
 	# Bekannte Godot-Lücke: MultiplayerSpawner repliziert bereits gespawnte
 	# Nodes NICHT automatisch an Peers, die erst später beitreten (siehe
 	# docs/3d-migration.md) — deshalb hier zuerst alle schon existierenden
@@ -1729,11 +1873,16 @@ func _spawn_for_peer(peer_id: int) -> void:
 	for existing in survivors_container.get_children():
 		_catch_up_survivor.rpc_id(peer_id, existing.trupp_id, existing.owner_peer_id, existing.position)
 	for existing in home_bases_container.get_children():
-		_catch_up_home_base.rpc_id(peer_id, existing.owner_peer_id, existing.position)
+		_catch_up_home_base.rpc_id(peer_id, existing.owner_peer_id, existing.position, existing.hp)
 	for existing in zombies_container.get_children():
 		_catch_up_zombie.rpc_id(peer_id, existing.zombie_id, existing.position, existing.is_brute)
 	for existing in guard_posts_container.get_children():
-		_catch_up_guard_post.rpc_id(peer_id, existing.guard_post_id, existing.owner_peer_id, existing.position)
+		# `built` seit jeher mit dabei (Korrektheits-Fix 2026-08-04, vorher in
+		# docs/building.md als bekannte Lücke vermerkt) — sonst zeigte ein
+		# spät beitretender Peer jeden schon fertigen Wachposten fälschlich
+		# im "noch im Bau"-Gelb, ohne dass sich das je von selbst korrigiert
+		# hätte (kein periodischer Resync für GuardPost.built).
+		_catch_up_guard_post.rpc_id(peer_id, existing.guard_post_id, existing.owner_peer_id, existing.position, existing.built)
 	for existing in walls_container.get_children():
 		_catch_up_wall.rpc_id(peer_id, existing.wall_id, existing.owner_peer_id, existing.position, existing.rotation.y, existing.is_gate)
 	for existing in medical_stations_container.get_children():
@@ -1744,14 +1893,35 @@ func _spawn_for_peer(peer_id: int) -> void:
 		_catch_up_storage.rpc_id(peer_id, existing.storage_id, existing.owner_peer_id, existing.position)
 	for existing in beds_container.get_children():
 		_catch_up_bed.rpc_id(peer_id, existing.bed_id, existing.owner_peer_id, existing.position)
+	# Bündel-RPCs statt einem Aufruf pro Knoten (Bugfix 2026-08-04: bei den
+	# damaligen Zahlen — 1755 Gebäude, 1555 Bäume, 331/408/406 Wracks/
+	# Steine/Ziegel — hat allein diese Schleife hier über 4000 einzelne
+	# `.rpc_id()`-Aufrufe synchron abgefeuert und die ENet-Verbindung des
+	# beitretenden Peers zum Absturz gebracht (`multiplayer.multiplayer_peer`
+	# verschwand mitten in der Partie, siehe docs/networking.md,
+	# "Welt-Sync-Sperre"). Jetzt EIN Aufruf pro Typ mit einem Array aus
+	# Einzel-Einträgen — die Empfänger-Funktion (`_catch_up_*_bulk()`) läuft
+	# dieselbe add_child()-Schleife einfach lokal auf der Gegenseite.
+	var tree_entries := []
 	for existing in trees_container.get_children():
-		_catch_up_tree.rpc_id(peer_id, existing.tree_id, existing.position)
+		tree_entries.append({"id": existing.tree_id, "position": existing.position})
+	if not tree_entries.is_empty():
+		_catch_up_trees_bulk.rpc_id(peer_id, tree_entries)
+	var car_wreck_entries := []
 	for existing in car_wrecks_container.get_children():
-		_catch_up_car_wreck.rpc_id(peer_id, existing.wreck_id, existing.position)
+		car_wreck_entries.append({"id": existing.wreck_id, "position": existing.position})
+	if not car_wreck_entries.is_empty():
+		_catch_up_car_wrecks_bulk.rpc_id(peer_id, car_wreck_entries)
+	var stone_pile_entries := []
 	for existing in stone_piles_container.get_children():
-		_catch_up_stone_pile.rpc_id(peer_id, existing.pile_id, existing.position)
+		stone_pile_entries.append({"id": existing.pile_id, "position": existing.position})
+	if not stone_pile_entries.is_empty():
+		_catch_up_stone_piles_bulk.rpc_id(peer_id, stone_pile_entries)
+	var brick_pile_entries := []
 	for existing in brick_piles_container.get_children():
-		_catch_up_brick_pile.rpc_id(peer_id, existing.pile_id, existing.position)
+		brick_pile_entries.append({"id": existing.pile_id, "position": existing.position})
+	if not brick_pile_entries.is_empty():
+		_catch_up_brick_piles_bulk.rpc_id(peer_id, brick_pile_entries)
 	for existing in fields_container.get_children():
 		_catch_up_field.rpc_id(peer_id, existing.field_id, existing.owner_peer_id, existing.position)
 	for existing in outposts_container.get_children():
@@ -1764,8 +1934,9 @@ func _spawn_for_peer(peer_id: int) -> void:
 	# Catch-up nötig) — schließt die vorher bekannte, akzeptierte Lücke
 	# "kein Catch-up für spät beitretende Peers bzgl. HP/Zerstört-Zustand"
 	# für diese drei Typen mit.
+	var building_entries := []
 	for existing in buildings_container.get_children():
-		_catch_up_building.rpc_id(peer_id, {
+		building_entries.append({
 			"id": existing.building_id,
 			"position": existing.position,
 			"zone_center": existing.zone_center,
@@ -1779,7 +1950,14 @@ func _spawn_for_peer(peer_id: int) -> void:
 			"has_bandit_loot": existing.has_bandit_loot,
 			"bandit_loot": existing.bandit_loot,
 			"loot_category": existing.loot_category,
+			"has_open_construction": existing.has_open_construction,
+			"construction_target_type": existing.construction_target_type,
+			"construction_progress": existing.construction_progress,
+			"construction_required": existing.construction_required,
+			"is_refugee": existing.is_refugee,
 		})
+	if not building_entries.is_empty():
+		_catch_up_buildings_bulk.rpc_id(peer_id, building_entries)
 	for existing in vehicles_container.get_children():
 		_catch_up_vehicle.rpc_id(peer_id, existing.vehicle_id, existing.position, existing.hp, existing.owner_peer_id, existing.vehicle_type)
 	for existing in zombie_nests_container.get_children():
@@ -1859,11 +2037,11 @@ func _catch_up_survivor(id: int, peer_id: int, spawn_position: Vector3) -> void:
 
 
 @rpc("authority", "reliable")
-func _catch_up_home_base(peer_id: int, spawn_position: Vector3) -> void:
+func _catch_up_home_base(peer_id: int, spawn_position: Vector3, hp: int) -> void:
 	var base_name := "homebase_%d" % peer_id
 	if home_bases_container.has_node(base_name):
 		return
-	var base := _create_home_base({"peer_id": peer_id, "position": spawn_position})
+	var base := _create_home_base({"peer_id": peer_id, "position": spawn_position, "hp": hp})
 	home_bases_container.add_child(base)
 
 
@@ -1877,11 +2055,11 @@ func _catch_up_zombie(index: int, spawn_position: Vector3, is_brute: bool) -> vo
 
 
 @rpc("authority", "reliable")
-func _catch_up_guard_post(id: int, peer_id: int, spawn_position: Vector3) -> void:
+func _catch_up_guard_post(id: int, peer_id: int, spawn_position: Vector3, built: bool) -> void:
 	var post_name := "guardpost_%d" % id
 	if guard_posts_container.has_node(post_name):
 		return
-	var post := _create_guard_post({"id": id, "peer_id": peer_id, "position": spawn_position})
+	var post := _create_guard_post({"id": id, "peer_id": peer_id, "position": spawn_position, "built": built})
 	guard_posts_container.add_child(post)
 
 
@@ -1936,39 +2114,47 @@ func _catch_up_bed(id: int, peer_id: int, spawn_position: Vector3) -> void:
 
 
 @rpc("authority", "reliable")
-func _catch_up_tree(id: int, spawn_position: Vector3) -> void:
-	var tree_name := "tree_%d" % id
-	if trees_container.has_node(tree_name):
-		return
-	var tree := _create_tree({"id": id, "position": spawn_position})
-	trees_container.add_child(tree)
+func _catch_up_trees_bulk(entries: Array) -> void:
+	# Bündel-RPC statt einer Funktion pro Baum, siehe _spawn_for_peer()-
+	# Kommentar oben (Bugfix 2026-08-04, Verbindungsabbruch bei tausenden
+	# Einzel-RPCs). Gleiche has_node()-Guard-Logik wie vorher, nur pro
+	# Eintrag in der Schleife statt pro Funktionsaufruf.
+	for entry in entries:
+		var tree_name := "tree_%d" % entry["id"]
+		if trees_container.has_node(tree_name):
+			continue
+		var tree := _create_tree(entry)
+		trees_container.add_child(tree)
 
 
 @rpc("authority", "reliable")
-func _catch_up_car_wreck(id: int, spawn_position: Vector3) -> void:
-	var wreck_name := "car_wreck_%d" % id
-	if car_wrecks_container.has_node(wreck_name):
-		return
-	var wreck := _create_car_wreck({"id": id, "position": spawn_position})
-	car_wrecks_container.add_child(wreck)
+func _catch_up_car_wrecks_bulk(entries: Array) -> void:
+	for entry in entries:
+		var wreck_name := "car_wreck_%d" % entry["id"]
+		if car_wrecks_container.has_node(wreck_name):
+			continue
+		var wreck := _create_car_wreck(entry)
+		car_wrecks_container.add_child(wreck)
 
 
 @rpc("authority", "reliable")
-func _catch_up_stone_pile(id: int, spawn_position: Vector3) -> void:
-	var pile_name := "stone_pile_%d" % id
-	if stone_piles_container.has_node(pile_name):
-		return
-	var pile := _create_stone_pile({"id": id, "position": spawn_position})
-	stone_piles_container.add_child(pile)
+func _catch_up_stone_piles_bulk(entries: Array) -> void:
+	for entry in entries:
+		var pile_name := "stone_pile_%d" % entry["id"]
+		if stone_piles_container.has_node(pile_name):
+			continue
+		var pile := _create_stone_pile(entry)
+		stone_piles_container.add_child(pile)
 
 
 @rpc("authority", "reliable")
-func _catch_up_brick_pile(id: int, spawn_position: Vector3) -> void:
-	var pile_name := "brick_pile_%d" % id
-	if brick_piles_container.has_node(pile_name):
-		return
-	var pile := _create_brick_pile({"id": id, "position": spawn_position})
-	brick_piles_container.add_child(pile)
+func _catch_up_brick_piles_bulk(entries: Array) -> void:
+	for entry in entries:
+		var pile_name := "brick_pile_%d" % entry["id"]
+		if brick_piles_container.has_node(pile_name):
+			continue
+		var pile := _create_brick_pile(entry)
+		brick_piles_container.add_child(pile)
 
 
 @rpc("authority", "reliable")
@@ -1999,12 +2185,17 @@ func _catch_up_watchtower(id: int, peer_id: int, spawn_position: Vector3) -> voi
 
 
 @rpc("authority", "reliable")
-func _catch_up_building(data: Dictionary) -> void:
-	var building_name := "building_%d" % data["id"]
-	if buildings_container.has_node(building_name):
-		return
-	var building := _create_building(data)
-	buildings_container.add_child(building)
+func _catch_up_buildings_bulk(entries: Array) -> void:
+	# Bündel-RPC statt einer Funktion pro Gebäude, siehe _spawn_for_peer()-
+	# Kommentar oben (Bugfix 2026-08-04, Verbindungsabbruch bei tausenden
+	# Einzel-RPCs — bei Gebäuden am schwersten, weil jeder Eintrag ein
+	# vollständiges Loot-/Bau-Zustand-Dictionary mitträgt).
+	for entry in entries:
+		var building_name := "building_%d" % entry["id"]
+		if buildings_container.has_node(building_name):
+			continue
+		var building := _create_building(entry)
+		buildings_container.add_child(building)
 
 
 @rpc("authority", "reliable")
@@ -2081,6 +2272,13 @@ func _create_home_base(data: Dictionary) -> Node:
 	base.name = "homebase_%d" % data["peer_id"]
 	base.position = data["position"]
 	base.owner_peer_id = data["peer_id"]
+	# Optionales Zusatzfeld für Catch-up/Spielstand-Laden (siehe
+	# docs/mechanics-review.md, "Fehlende Enden/Ziele") — gleiches Muster
+	# wie is_looted/owner_peer_id/hp bei Building.gd. Normale Neugenerierung
+	# übergibt es nie, HomeBase.gd setzt den Standard (MAX_HP) selbst über
+	# den Feld-Initialisierer.
+	base.hp = data.get("hp", base.MAX_HP)
+	base._update_visual()
 	if data["peer_id"] == multiplayer.get_unique_id():
 		# Kamera direkt zur eigenen Basis, statt am Kartenursprung zu starten.
 		pivot.position = Vector3(base.position.x, 0, base.position.z)
@@ -2248,6 +2446,18 @@ func _create_building(data: Dictionary) -> Node:
 	# Spielstand-Laden.
 	building.has_bandit_loot = data.get("has_bandit_loot", false)
 	building.bandit_loot = data.get("bandit_loot", {})
+	# Bau-Markier-Modus (Punkt 28, siehe docs/building.md, "Baustellen") —
+	# gleiches optionales Zusatzfeld-Muster wie is_looted/owner_peer_id/hp
+	# oben. _construction_workers bewusst NICHT mitgegeben (siehe docs/
+	# building.md, "Bekannte Grenzen") — zugewiesene Trupps überleben
+	# Speichern/Laden bzw. Catch-up nicht, nur Zieltyp und Fortschritt.
+	building.has_open_construction = data.get("has_open_construction", false)
+	building.construction_target_type = data.get("construction_target_type", 0)
+	building.construction_progress = data.get("construction_progress", 0.0)
+	building.construction_required = data.get("construction_required", 0.0)
+	# Schutzsuchende (siehe docs/mechanics-review.md) — gleiches optionales
+	# Zusatzfeld-Muster wie oben.
+	building.is_refugee = data.get("is_refugee", false)
 	building._update_visual()
 	return building
 
@@ -2464,6 +2674,33 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 		var pos := _spaced_position(center, radius, ground_y)
 		vehicle_spawner.spawn({"id": _next_vehicle_id, "position": pos, "vehicle_type": vehicle_type})
 		_next_vehicle_id += 1
+	# Rohstoffe auch innerhalb von Stadt-Zonen (2026-08-04, Nutzerwunsch:
+	# "in den städten auch bäume steine etc. platzieren das man schneller
+	# bauen kann", siehe docs/mechanics-review.md, "Ressourcen-Wirtschaft")
+	# — vorher gab es Bäume/Steine/Ziegel/Wracks NUR in der Wildnis
+	# (_random_wilderness_position()), lange Laufwege gerade am Anfang.
+	# Zählt NICHT gegen die jeweilige TOTAL-Konstante/Nachwachs-Obergrenze
+	# (_regrow_resources() zählt weltweit über die Gruppe, diese Knoten
+	# tragen also einfach zur Gesamtzahl bei).
+	for i in RESOURCES_PER_CITY_ZONE:
+		var resource_type: String = CITY_RESOURCE_TYPES[randi() % CITY_RESOURCE_TYPES.size()]
+		match resource_type:
+			"tree":
+				var pos := _spaced_position(center, radius, TREE_GROUND_Y)
+				tree_spawner.spawn({"id": _next_tree_id, "position": pos})
+				_next_tree_id += 1
+			"stone_pile":
+				var pos := _spaced_position(center, radius, STONE_PILE_GROUND_Y)
+				stone_pile_spawner.spawn({"id": _next_stone_pile_id, "position": pos})
+				_next_stone_pile_id += 1
+			"brick_pile":
+				var pos := _spaced_position(center, radius, BRICK_PILE_GROUND_Y)
+				brick_pile_spawner.spawn({"id": _next_brick_pile_id, "position": pos})
+				_next_brick_pile_id += 1
+			"car_wreck":
+				var pos := _spaced_position(center, radius, CAR_WRECK_GROUND_Y)
+				car_wreck_spawner.spawn({"id": _next_car_wreck_id, "position": pos})
+				_next_car_wreck_id += 1
 	var nest_pos := _spaced_position(center, radius, ZOMBIE_NEST_GROUND_Y)
 	zombie_nest_spawner.spawn({"id": _next_zombie_nest_id, "position": nest_pos})
 	_next_zombie_nest_id += 1
@@ -2541,6 +2778,130 @@ func request_catch_up() -> void:
 	if not multiplayer.is_server():
 		return
 	_spawn_for_peer(multiplayer.get_remote_sender_id())
+
+
+# Welt-Sync-Sperre (siehe _world_sync_complete-Kommentar oben und
+# docs/networking.md, "Welt-Sync-Sperre"). Deckt sowohl den normalen
+# gleichzeitigen Partie-Start als auch spät beitretende Peers ab, ganz ohne
+# eigenen Sonderfall — _current_world_gen_totals() liefert bei JEDEM Aufruf
+# den aktuell wahren Gesamtstand (auch wenn zwischenzeitlich z. B. ein
+# Flüchtlings-Gebäude dazukam, siehe _maybe_spawn_refugee()), und der
+# anfragende Peer vergleicht einfach so lange gegen seinen eigenen,
+# lokal per `spawned`-Signal mitgezählten Stand, bis beide übereinstimmen.
+func _start_world_sync_wait() -> void:
+	_world_sync_complete = false
+	world_sync_overlay.show_overlay()
+	for entry in _world_gen_containers():
+		var container: Node3D = entry["container"]
+		var key: String = entry["key"]
+		container.child_entered_tree.connect(_on_world_gen_entity_spawned.bind(key))
+	request_world_gen_totals.rpc_id(1)
+	get_tree().create_timer(WORLD_SYNC_TIMEOUT).timeout.connect(_force_world_sync_complete)
+
+
+func _force_world_sync_complete() -> void:
+	# Sicherheitsnetz, siehe WORLD_SYNC_TIMEOUT-Kommentar oben — eine einzelne
+	# fehlende Entität ist ein deutlich kleineres Problem als ein für immer
+	# blockierter Client.
+	if _world_sync_complete:
+		return
+	_world_sync_complete = true
+	world_sync_overlay.hide_overlay()
+
+
+func _world_gen_containers() -> Array[Dictionary]:
+	# Zählt Kinder, die zu diesen Containern hinzugefügt werden — bewusst
+	# NICHT mehr über das `spawned`-Signal der jeweiligen MultiplayerSpawner
+	# (ursprünglicher Bug dieser Funktion, siehe Git-Historie): Für einen
+	# NORMAL beitretenden Peer (nicht nur Spätbeitritte) kommen Gebäude/
+	# Fahrzeuge/etc. über ZWEI unterschiedliche Wege an — direkte
+	# MultiplayerSpawner-Replikation (aus `_generate_world()`'s `spawn()`-
+	# Aufrufen) UND die `_catch_up_*`-RPCs (siehe `_spawn_for_peer()`,
+	# ausgelöst durch `request_catch_up()`, das JEDER Client in `_ready()`
+	# aufruft — nicht nur Spätbeitritte). Die Catch-up-RPCs fügen ihre Nodes
+	# per `add_child()` DIREKT ein, ganz ohne den Spawner zu benutzen —
+	# dessen `spawned`-Signal feuert für diesen Weg nie. `child_entered_tree`
+	# auf dem gemeinsamen Container-Node feuert dagegen für BEIDE Wege
+	# gleichermaßen, weil am Ende so oder so derselbe Container das Kind
+	# bekommt.
+	return [
+		{"container": buildings_container, "key": "BuildingSpawner"},
+		{"container": vehicles_container, "key": "VehicleSpawner"},
+		{"container": trees_container, "key": "TreeSpawner"},
+		{"container": car_wrecks_container, "key": "CarWreckSpawner"},
+		{"container": stone_piles_container, "key": "StonePileSpawner"},
+		{"container": brick_piles_container, "key": "BrickPileSpawner"},
+		{"container": zombie_nests_container, "key": "ZombieNestSpawner"},
+	]
+
+
+func _on_world_gen_entity_spawned(_node: Node, key: String) -> void:
+	if _world_sync_complete:
+		return  # Läuft nach Abschluss einfach als billiger No-Op weiter (siehe oben), kein Abklemmen der Signale nötig.
+	_world_gen_received[key] = _world_gen_received.get(key, 0) + 1
+	_check_world_sync_complete()
+
+
+func _check_world_sync_complete() -> void:
+	if _world_sync_complete or _world_gen_targets.is_empty():
+		return
+	var received_total := 0
+	var target_total := 0
+	var all_complete := true
+	for key in _world_gen_targets:
+		var target: int = _world_gen_targets[key]
+		var received: int = _world_gen_received.get(key, 0)
+		# mini() statt rohem `received`, damit ein Typ, der zwischen
+		# Zähl-Snapshot (_current_world_gen_totals()) und jetzt schon weiter
+		# lief (z. B. _maybe_spawn_refugee()), die Anzeige nicht über 100%
+		# treibt.
+		received_total += mini(received, target)
+		target_total += target
+		if received < target:
+			all_complete = false
+	if not all_complete:
+		world_sync_overlay.update_progress(received_total, target_total)
+		return
+	_world_sync_complete = true
+	world_sync_overlay.hide_overlay()
+
+
+@rpc("any_peer", "reliable")
+func request_world_gen_totals() -> void:
+	# Client-seitiger PULL, gleiches Muster wie request_city_zones()/
+	# request_catch_up() oben.
+	if not multiplayer.is_server():
+		return
+	_receive_world_gen_totals.rpc_id(multiplayer.get_remote_sender_id(), _current_world_gen_totals())
+
+
+func _current_world_gen_totals() -> Dictionary:
+	# Momentaufnahme der ID-Zähler — sowohl _generate_world() als auch
+	# _load_game_state() (und die laufenden _maybe_spawn_refugee()/
+	# _regrow_resources()-Nachschübe) erhöhen genau diese Zähler exakt einmal
+	# pro gespawnter Entität, daher direkt als Gesamtzahl nutzbar, ganz ohne
+	# zusätzliche Zähl-Variablen an jeder einzelnen spawn()-Stelle. Schlüssel
+	# sind die Spawner-Node-Namen (eindeutig, netzwerktauglich als
+	# Dictionary-Key für die RPC-Übertragung — der Spawner-Node selbst ließe
+	# sich nicht sinnvoll serialisieren).
+	return {
+		"BuildingSpawner": _next_building_id,
+		"VehicleSpawner": _next_vehicle_id,
+		"TreeSpawner": _next_tree_id,
+		"CarWreckSpawner": _next_car_wreck_id,
+		"StonePileSpawner": _next_stone_pile_id,
+		"BrickPileSpawner": _next_brick_pile_id,
+		"ZombieNestSpawner": _next_zombie_nest_id,
+	}
+
+
+@rpc("authority", "reliable")
+func _receive_world_gen_totals(totals: Dictionary) -> void:
+	# Schlüssel stimmen direkt mit denen in _world_gen_received überein
+	# (siehe _on_world_gen_entity_spawned()), keine Node-Auflösung mehr
+	# nötig.
+	_world_gen_targets = totals.duplicate()
+	_check_world_sync_complete()
 
 
 @rpc("authority", "reliable")
@@ -2972,6 +3333,46 @@ func _spawn_bandit_restock() -> void:
 	building.grant_bandit_loot.rpc({resource: amount})
 
 
+func _maybe_spawn_refugee() -> void:
+	# Siehe REFUGEE_SPAWN_INTERVAL oben — anders als _spawn_bandit_restock()
+	# (verändert ein bestehendes Gebäude) spawnt das hier eine BRANDNEUE,
+	# eigenständige Building-Instanz in der Wildnis (gleiches Spawn-Muster
+	# wie Tree/CarWreck/etc., siehe _random_wilderness_position()).
+	var active_count := 0
+	for building in buildings_container.get_children():
+		if building.is_refugee and not building.is_looted:
+			active_count += 1
+	if active_count >= REFUGEE_MAX_ACTIVE:
+		return
+	if randf() > REFUGEE_SPAWN_CHANCE:
+		return
+	var pos := _random_wilderness_position(1.0)
+	building_spawner.spawn({
+		"id": _next_building_id,
+		"position": pos,
+		"zone_center": pos,
+		"size": Vector3(1.6, 2.0, 1.6),
+		"default_color": Color(0.75, 0.65, 0.35),
+		"loot": {"food": 3},
+		"loot_category": "food",
+		"has_survivor": true,
+		"is_refugee": true,
+	})
+	_next_building_id += 1
+
+
+func spawn_refugee_recruit(peer_id: int, spawn_position: Vector3) -> void:
+	# Aufgerufen von Survivor._finish_search() statt spawn_recruit(), wenn
+	# building.is_refugee true war — einziger Rekrutierungs-Kanal mit
+	# Deckel (siehe REFUGEE_RECRUIT_CAP_PER_PEER oben).
+	var granted: int = _refugee_recruits_granted.get(peer_id, 0)
+	if granted >= REFUGEE_RECRUIT_CAP_PER_PEER:
+		report_status(peer_id, "Der Schutzsuchende zieht weiter — du hast schon genug Verstärkung gefunden.")
+		return
+	_refugee_recruits_granted[peer_id] = granted + 1
+	spawn_recruit(peer_id, spawn_position)
+
+
 func _random_wilderness_position(ground_y: float) -> Vector3:
 	# Wie _spaced_position(), aber zusätzlich außerhalb ALLER Stadt-Zonen
 	# (sonst könnte ein Baum mitten auf einer Straße wachsen) — eigene
@@ -3080,6 +3481,13 @@ func _collect_save_data() -> Dictionary:
 			"position": base.position,
 			"resources": base.resources.duplicate(),
 			"storage_capacity": base.storage_capacity,
+			# Korrektheits-Fix (2026-08-04): fehlte hier komplett. Bücher
+			# werden beim Erforschen verbraucht (request_research()) — ohne
+			# dieses Feld hätte ein Speichern+Laden jede schon erforschte
+			# Freischaltung dauerhaft rückgängig gemacht, OHNE das
+			# verbrauchte Buch zurückzugeben (permanenter Fortschrittsverlust).
+			"unlocked_recipes": base.unlocked_recipes.duplicate(),
+			"hp": base.hp,
 		})
 	data["home_bases"] = home_bases
 
@@ -3212,6 +3620,11 @@ func _collect_save_data() -> Dictionary:
 			"has_bandit_loot": building.has_bandit_loot,
 			"bandit_loot": building.bandit_loot.duplicate(),
 			"loot_category": building.loot_category,
+			"has_open_construction": building.has_open_construction,
+			"construction_target_type": building.construction_target_type,
+			"construction_progress": building.construction_progress,
+			"construction_required": building.construction_required,
+			"is_refugee": building.is_refugee,
 		})
 	data["buildings"] = buildings
 
@@ -3262,10 +3675,14 @@ func _load_game_state(data: Dictionary) -> void:
 		_forest_zone_centers.append(zone_center)
 
 	for entry in data.get("home_bases", []):
-		var base := home_base_spawner.spawn({"peer_id": entry["peer_id"], "position": entry["position"]})
+		var base := home_base_spawner.spawn({"peer_id": entry["peer_id"], "position": entry["position"], "hp": entry.get("hp", 500)})  # 500 == HomeBase.MAX_HP
 		if is_instance_valid(base):
 			base.resources = entry["resources"]
 			base.storage_capacity = entry["storage_capacity"]
+			# Korrektheits-Fix (2026-08-04, siehe _collect_save_data()) —
+			# `.get()` mit leerem Dictionary-Fallback für Spielstände, die vor
+			# diesem Fix gespeichert wurden (kein harter KeyError).
+			base.unlocked_recipes = entry.get("unlocked_recipes", {})
 
 	for entry in data.get("survivors", []):
 		# hp/hunger/carried_loot/troop_type/is_armed/is_wearing_armor/
@@ -3376,11 +3793,11 @@ func _on_toggle_build_mode_pressed(type: BuildType) -> void:
 func _on_upgrade_building_pressed(upgrade_type: BuildType) -> void:
 	if not is_instance_valid(_selected_claimed_building):
 		return
-	request_upgrade_building.rpc_id(1, _selected_claimed_building.get_path(), upgrade_type, multiplayer.get_unique_id())
-	# Optimistisch sofort zurücksetzen (siehe docs/building.md, "Ausbauen")
+	request_start_construction.rpc_id(1, _selected_claimed_building.get_path(), upgrade_type, multiplayer.get_unique_id())
+	# Optimistisch sofort zurücksetzen (siehe docs/building.md, "Baustellen")
 	# statt auf die serverseitige Bestätigung zu warten — dieselbe
-	# UI-Auswahl könnte sonst versehentlich einen zweiten Ausbau desselben,
-	# eigentlich schon ersetzten Gebäudes anstoßen.
+	# UI-Auswahl könnte sonst versehentlich einen zweiten Bauauftrag auf
+	# demselben Gebäude anstoßen, bevor der erste sichtbar eingetragen ist.
 	_selected_claimed_building = null
 
 
@@ -3480,7 +3897,7 @@ func request_build_structure(type: BuildType, build_position: Vector3, requestin
 	# eigenes RPC (request_build_wall_line), weil sie mehrere Segmente pro
 	# Aufruf brauchen (siehe docs/walls.md). Krankenstation/Werkstatt sind
 	# hier NICHT mehr erreichbar (Baumenü-Umbau, Nutzerwunsch) — die
-	# entstehen jetzt über request_upgrade_building(), siehe dort.
+	# entstehen jetzt über einen Bauauftrag, siehe request_start_construction().
 	if not multiplayer.is_server():
 		return
 	var cost := _cost_for_build_type(type, requesting_peer_id)
@@ -3508,21 +3925,31 @@ func request_build_structure(type: BuildType, build_position: Vector3, requestin
 			_next_guard_post_id += 1
 
 
+func _construction_work_required(upgrade_type: BuildType, building: Node3D) -> float:
+	if upgrade_type == BuildType.STORAGE:
+		# Skaliert mit dem Gebäude-Volumen wie schon die Lagerkapazität
+		# selbst (siehe STORAGE_CAPACITY_PER_VOLUME) — ein größeres Gebäude
+		# braucht länger, um zum Lager umgebaut zu werden.
+		return _building_volume(building) * STORAGE_CONSTRUCTION_WORK_PER_VOLUME
+	return CONSTRUCTION_WORK.get(upgrade_type, 30.0)
+
+
 @rpc("any_peer", "call_local", "reliable")
-func request_upgrade_building(building_path: NodePath, upgrade_type: BuildType, requesting_peer_id: int) -> void:
-	# Baumenü-Umbau (siehe docs/building.md, "Ausbauen"): Krankenstation/
-	# Werkstatt entstehen nicht mehr durch freies Platzieren, sondern durch
-	# Ausbauen eines bereits geplünderten UND vom Spieler selbst geclaimten
-	# Gebäudes. Ersetzt das Building am selben Platz durch die jeweilige
-	# Struktur — kein neues RPC für die Entfernung nötig,
-	# building.take_damage(building.hp) räumt es sauber (netzwerksicher)
-	# über den schon bestehenden Abriss-Pfad weg (siehe
-	# docs/survivor.md, "Gebäude abreißen"), ohne dabei (anders als beim
-	# echten Abreißen) Rohstoffe auszuzahlen.
+func request_start_construction(building_path: NodePath, upgrade_type: BuildType, requesting_peer_id: int) -> void:
+	# Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
+	# "Baustellen") — ersetzt den früheren Sofort-Bau (vorher
+	# request_upgrade_building()): startet nur noch einen offenen
+	# Bauauftrag auf dem Building selbst. Kosten werden weiterhin sofort
+	# abgezogen (verhindert, dass ein Spieler mehrere Bauaufträge mit
+	# Ressourcen startet, die er gar nicht hat), das eigentliche Ersetzen
+	# passiert erst in finish_construction(), sobald genug Bautrupp-
+	# Sekunden zusammengekommen sind (Building._process()).
 	if not multiplayer.is_server():
 		return
 	var building := get_node_or_null(building_path)
 	if building == null or building.owner_peer_id != requesting_peer_id:
+		return
+	if building.has_open_construction:
 		return
 	var cost := _cost_for_build_type(upgrade_type, requesting_peer_id)
 	if not _can_afford(requesting_peer_id, cost):
@@ -3533,12 +3960,40 @@ func request_upgrade_building(building_path: NodePath, upgrade_type: BuildType, 
 	for key in cost:
 		cost_delta[key] = -cost[key]
 	base.add_resources.rpc(cost_delta)
+	building.start_construction(upgrade_type, _construction_work_required(upgrade_type, building))
+
+
+func finish_construction(building: Node3D) -> void:
+	# Von Building._process() aufgerufen, sobald construction_progress das
+	# nötige Arbeitspensum erreicht — macht denselben Umbau, den früher
+	# request_upgrade_building() sofort gemacht hat (siehe docs/building.md,
+	# "Baustellen"). Nur host-seitig relevant (Building._process() läuft
+	# eh nur dort), Check hier trotzdem zur Sicherheit wie überall sonst.
+	if not multiplayer.is_server():
+		return
+	# int statt BuildType typisiert — Building.construction_target_type ist
+	# selbst nur int (siehe Building.gd, "Bau-Markier-Modus"), match()
+	# vergleicht ohnehin nur die Laufzeitwerte, keine statische Typprüfung
+	# nötig.
+	var upgrade_type: int = building.construction_target_type
+	var requesting_peer_id: int = building.owner_peer_id
 	var build_position: Vector3 = building.position
-	# Volumen VOR dem Entfernen berechnen (siehe docs/building.md, "Lager")
-	# — building.take_damage() räumt den Node zwar erst am Frame-Ende
-	# tatsächlich weg (queue_free()), aber sauberer, die Mesh-Größe
-	# auszulesen, bevor der Abriss-Pfad überhaupt losläuft.
 	var volume := _building_volume(building)
+	# Sofort zurücksetzen, NICHT erst nach take_damage()/queue_free() —
+	# Building._process() ruft finish_construction() sonst theoretisch ein
+	# zweites Mal auf, falls es (aus welchem Grund auch immer) noch einen
+	# weiteren Frame lang läuft, bevor die Node tatsächlich verschwindet
+	# (queue_free() entfernt Nodes erst am Frame-Ende, nicht synchron) —
+	# das hätte sonst eine zweite Zielstruktur an derselben Stelle gespawnt.
+	building.has_open_construction = false
+	# Alle noch zugewiesenen Trupps freigeben, BEVOR das Building
+	# verschwindet — sonst bliebe _stationed_at auf einem gleich
+	# entfernten Node hängen (order_stop() -> _unstation() ->
+	# unregister_worker() mutiert _construction_workers, deshalb
+	# duplicate()).
+	for worker in building.get_construction_workers().duplicate():
+		if is_instance_valid(worker):
+			worker.order_stop(requesting_peer_id)
 	building.take_damage(building.hp)
 	match upgrade_type:
 		BuildType.WORKSHOP:
@@ -3554,6 +4009,29 @@ func request_upgrade_building(building_path: NodePath, upgrade_type: BuildType, 
 		_:
 			medical_station_spawner.spawn({"id": _next_medical_station_id, "peer_id": requesting_peer_id, "position": build_position})
 			_next_medical_station_id += 1
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_cancel_construction(building_path: NodePath, requesting_peer_id: int) -> void:
+	# Gegenstück zu request_start_construction() — storniert einen offenen
+	# Bauauftrag MIT Rückerstattung der eingesetzten Ressourcen (siehe
+	# docs/building.md, "Baustellen"). Erstattet die Kosten zum AKTUELLEN
+	# Preis (_cost_for_build_type() live berechnet, z. B. Werkstatt-Rabatt)
+	# statt den ursprünglich gezahlten Betrag separat zu merken — in der
+	# Praxis identisch, außer der Spieler verliert/bekommt zwischendurch
+	# eine eigene Werkstatt.
+	if not multiplayer.is_server():
+		return
+	var building := get_node_or_null(building_path)
+	if building == null or building.owner_peer_id != requesting_peer_id or not building.has_open_construction:
+		return
+	var refund := _cost_for_build_type(building.construction_target_type, requesting_peer_id)
+	var base := _find_home_base_for_peer(requesting_peer_id)
+	base.add_resources.rpc(refund)
+	for worker in building.get_construction_workers().duplicate():
+		if is_instance_valid(worker):
+			worker.order_stop(requesting_peer_id)
+	building.cancel_construction()
 
 
 func _building_volume(building: Node3D) -> float:
@@ -3646,6 +4124,104 @@ func _on_recall_worker_pressed(post: Node3D) -> void:
 	if not is_instance_valid(post):
 		return
 	post.request_recall_worker.rpc_id(1, multiplayer.get_unique_id())
+
+
+func _assign_selected_to_construction(building: Node3D) -> void:
+	# Bau-Markier-Modus (Punkt 28, siehe docs/building.md, "Baustellen") —
+	# beliebig viele ausgewählte Bautrupps auf einmal einem offenen
+	# Bauauftrag zuweisen ("3 dorthin, 4 dorthin"). Gemeinsam genutzt vom
+	# Welt-Klick auf die Baustelle (_select_at()) und dem "Trupp
+	# zuweisen"-Button in der Baustellen-Liste unten.
+	for unit in selected:
+		if is_instance_valid(unit) and unit.has_method("order_station_at_building"):
+			unit.order_station_at_building.rpc_id(1, building.get_path(), multiplayer.get_unique_id())
+
+
+func _refresh_construction_ui() -> void:
+	# Gleiches Komplett-Neuaufbau-Muster wie _refresh_worker_ui() — listet
+	# ALLE eigenen Gebäude mit offenem Bauauftrag auf, unabhängig davon,
+	# welches Gebäude gerade per Klick ausgewählt ist.
+	for child in construction_list.get_children():
+		child.queue_free()
+	var peer_id := multiplayer.get_unique_id()
+	for building in buildings_container.get_children():
+		if building.owner_peer_id != peer_id or not building.has_open_construction:
+			continue
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		var target_name: String = CONSTRUCTION_TARGET_NAMES.get(building.construction_target_type, "?")
+		var percent := int(round(100.0 * building.construction_progress / max(building.construction_required, 0.01)))
+		label.text = "Baustelle %s: %d%% (%d Trupps)" % [target_name, percent, building.construction_worker_count]
+		row.add_child(label)
+		var assign_button := Button.new()
+		assign_button.text = "Trupp zuweisen"
+		assign_button.pressed.connect(_on_assign_construction_pressed.bind(building))
+		row.add_child(assign_button)
+		if building.construction_worker_count > 0:
+			var recall_button := Button.new()
+			recall_button.text = "Trupp abziehen"
+			recall_button.pressed.connect(_on_recall_construction_pressed.bind(building))
+			row.add_child(recall_button)
+		var cancel_button := Button.new()
+		cancel_button.text = "Stornieren"
+		cancel_button.pressed.connect(_on_cancel_construction_pressed.bind(building))
+		row.add_child(cancel_button)
+		construction_list.add_child(row)
+
+
+func _on_assign_construction_pressed(building: Node3D) -> void:
+	if not is_instance_valid(building):
+		return
+	_assign_selected_to_construction(building)
+
+
+func _on_recall_construction_pressed(building: Node3D) -> void:
+	if not is_instance_valid(building):
+		return
+	building.request_recall_worker.rpc_id(1, multiplayer.get_unique_id())
+
+
+func _on_cancel_construction_pressed(building: Node3D) -> void:
+	if not is_instance_valid(building):
+		return
+	request_cancel_construction.rpc_id(1, building.get_path(), multiplayer.get_unique_id())
+
+
+func _refresh_rescue_ui() -> void:
+	# Rettungsmechanik (siehe docs/mechanics-review.md, "Fehlende
+	# Enden/Ziele") — zeigt ALLE offenen Hilfe-Anfragen ANDERER Spieler
+	# (nicht die eigene, falls man selbst gerade verloren hat), gleiches
+	# Komplett-Neuaufbau-Muster wie _refresh_worker_ui().
+	for child in rescue_list.get_children():
+		child.queue_free()
+	var own_peer_id := multiplayer.get_unique_id()
+	for request in _rescue_requests:
+		var from_peer: int = request["from_peer"]
+		if from_peer == own_peer_id:
+			continue
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		var player_name: String = NetworkManager.players.get(from_peer, {}).get("name", "Spieler %d" % from_peer)
+		label.text = "%s braucht Hilfe (Basis zerstört)" % player_name
+		row.add_child(label)
+		var send_button := Button.new()
+		send_button.text = "Trupp senden"
+		send_button.pressed.connect(_on_send_rescue_pressed.bind(from_peer))
+		row.add_child(send_button)
+		rescue_list.add_child(row)
+
+
+func _on_send_rescue_pressed(target_peer_id: int) -> void:
+	# Nutzt den ERSTEN aktuell ausgewählten eigenen Trupp (Nutzerentscheidung:
+	# ein Trupp wird dauerhaft zum Base-Erstellen-Trupp umgewandelt, siehe
+	# docs/mechanics-review.md) — kein Fahrzeug (kein has_method("order_
+	# harvest")/"order_station_at_building"-Check nötig, nur echte Trupps
+	# haben eine sinnvolle Bedeutung als Base-Erstellen-Einheit).
+	for unit in selected:
+		if is_instance_valid(unit) and unit.has_method("become_rescue_unit"):
+			request_send_rescue_unit.rpc_id(1, target_peer_id, unit.get_path(), multiplayer.get_unique_id())
+			return
+	report_status(multiplayer.get_unique_id(), "Erst einen eigenen Trupp auswählen, der geschickt werden soll.")
 
 
 func _refresh_crafting_ui() -> void:
@@ -3794,7 +4370,7 @@ func _find_own_basic_medical_station(peer_id: int) -> Node3D:
 @rpc("any_peer", "call_local", "reliable")
 func request_upgrade_medical_station(requesting_peer_id: int) -> void:
 	# Erweiterte Krankenstation (siehe docs/building.md) — anders als
-	# request_upgrade_building() (Building → MedicalStation/Werkstatt/...)
+	# request_start_construction() (Building → MedicalStation/Werkstatt/...)
 	# wird hier eine BESTEHENDE MedicalStation in-place erweitert (kein
 	# Gebäudetausch, nur ein Flag, siehe MedicalStation.upgrade_to_advanced()).
 	if not multiplayer.is_server():
@@ -4221,7 +4797,7 @@ func _on_toggle_group_pressed(survivor: Node3D, group_number: int) -> void:
 
 
 func _process(delta: float) -> void:
-	if multiplayer.is_server():
+	if multiplayer.is_server() and not _game_paused:
 		# Muss VOR den Zombie-/Wachposten-_process()-Aufrufen desselben Frames
 		# laufen (World ist deren Vorfahre im Szenenbaum, Godot verarbeitet
 		# _process() in Baum-Reihenfolge, Eltern vor Kindern) — sonst würden
@@ -4243,11 +4819,21 @@ func _process(delta: float) -> void:
 		if _bandit_restock_timer >= BANDIT_RESTOCK_INTERVAL:
 			_bandit_restock_timer = 0.0
 			_spawn_bandit_restock()
+		_refugee_spawn_timer += delta
+		if _refugee_spawn_timer >= REFUGEE_SPAWN_INTERVAL:
+			_refugee_spawn_timer = 0.0
+			_maybe_spawn_refugee()
 	_handle_pan(delta)
 	_handle_gamepad_input(delta)
 	_update_hud()
 	_update_build_ghost()
-	_handle_day_night(delta)
+	if not _game_paused:
+		# Läuft lokal auf JEDEM Peer (siehe _handle_day_night()), muss also
+		# hier und nicht nur im is_server()-Block oben gegatet werden —
+		# sonst liefen Clients beim Pausieren einfach mit ihrer eigenen
+		# Uhr weiter, während der Host (und die eigentliche Simulation)
+		# steht.
+		_handle_day_night(delta)
 	_fog_update_timer += delta
 	if _fog_update_timer >= FOG_UPDATE_INTERVAL:
 		_fog_update_timer = 0.0
@@ -4256,6 +4842,8 @@ func _process(delta: float) -> void:
 	if _worker_ui_timer >= WORKER_UI_REFRESH_INTERVAL:
 		_worker_ui_timer = 0.0
 		_refresh_worker_ui()
+		_refresh_construction_ui()
+		_refresh_rescue_ui()
 		_refresh_units_ui()
 		_update_build_button_texts()
 		_update_unit_detail_panel()
@@ -4266,6 +4854,10 @@ func _process(delta: float) -> void:
 		_status_message_timer -= delta
 		if _status_message_timer <= 0.0:
 			status_label.visible = false
+			# Panel ausblenden, falls auch hud_label gerade leer ist (siehe
+			# hud_info_panel-Kommentar oben) — sonst bliebe die leere Box
+			# nach Ablauf der Statusmeldung stehen.
+			hud_info_panel.visible = not hud_label.text.is_empty()
 
 
 func _raycast_position(screen_pos: Vector2) -> Variant:
@@ -4543,6 +5135,20 @@ func request_choose_start_base(building_path: NodePath, requesting_peer_id: int)
 		return
 	if _find_home_base_for_peer(requesting_peer_id) != null:
 		return  # Hat schon eine Basis gewählt, kein zweiter Versuch möglich.
+	# Rettungsmechanik (siehe docs/mechanics-review.md, "Fehlende
+	# Enden/Ziele") — ein Spieler, der seine Home-Base verloren hat, darf
+	# NICHT einfach kostenlos neu wählen (würde den Verlust bedeutungslos
+	# machen), sondern erst, nachdem ein Mitspieler ihm einen
+	# Base-Erstellen-Trupp geschickt hat (`Survivor.is_rescue_unit`).
+	if _lost_peers.get(requesting_peer_id, false):
+		var rescue_unit := _find_rescue_unit(requesting_peer_id)
+		if rescue_unit == null:
+			report_status(requesting_peer_id, "Du brauchst erst einen Base-Erstellen-Trupp von einem Mitspieler.")
+			return
+		rescue_unit.is_rescue_unit = false
+		_lost_peers.erase(requesting_peer_id)
+		_sync_lost_peers.rpc(_lost_peers)
+		_hide_lost_panel.rpc_id(requesting_peer_id)
 	var building: Node3D = get_node_or_null(building_path)
 	if building == null or not building.is_in_group("searchable") or building.owner_peer_id != 0:
 		report_status(requesting_peer_id, "Dieses Gebäude ist schon vergeben.")
@@ -4573,6 +5179,157 @@ func request_choose_start_base(building_path: NodePath, requesting_peer_id: int)
 	for i in START_SURVIVOR_COUNT:
 		var lateral: float = (i - (START_SURVIVOR_COUNT - 1) / 2.0) * START_SURVIVOR_SPACING
 		_spawn_survivor(requesting_peer_id, survivor_position + sideways * lateral)
+
+
+func home_base_destroyed(base: Node3D) -> void:
+	# Von HomeBase.take_damage() aufgerufen, sobald hp <= 0 (siehe
+	# docs/mechanics-review.md, "Fehlende Enden/Ziele") — Building.gd kennt
+	# seine World-Spawner nicht selbst, gleiches Cross-Node-Prinzip wie
+	# überall sonst (report_status()/spawn_recruit()/finish_construction()).
+	if not multiplayer.is_server():
+		return
+	var peer_id: int = base.owner_peer_id
+	var ruin_position: Vector3 = base.position
+	# Ruine bleibt liegen und ist wie ein normales, schon geplündertes,
+	# unbesetztes Gebäude abreißbar (Nutzerwunsch: "kaputte Gebäude für
+	# paar Ressourcen bergen") — spart einen eigenen Ruinen-Typ, reine
+	# Wiederverwendung von Building.gd/order_demolish_building().
+	building_spawner.spawn({
+		"id": _next_building_id,
+		"position": ruin_position,
+		"zone_center": ruin_position,
+		"size": Vector3(3, 1.5, 3),
+		"default_color": Color(0.2, 0.2, 0.2),
+		"loot": {},
+		"is_looted": true,
+		"owner_peer_id": 0,
+	})
+	_next_building_id += 1
+	base._demolish.rpc()
+	_mark_player_lost(peer_id)
+
+
+func _mark_player_lost(peer_id: int) -> void:
+	_lost_peers[peer_id] = true
+	_sync_lost_peers.rpc(_lost_peers)
+	_show_lost_panel.rpc_id(peer_id)
+	for pid in NetworkManager.players.keys():
+		if pid != peer_id:
+			report_status(pid, "Ein Mitspieler hat seine Home-Base verloren!")
+
+
+@rpc("authority", "reliable")
+func _show_lost_panel() -> void:
+	game_over_ui.show_lost_panel()
+
+
+@rpc("authority", "reliable")
+func _hide_lost_panel() -> void:
+	game_over_ui.hide_lost_panel()
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_lost_peers(lost_peers: Dictionary) -> void:
+	_lost_peers = lost_peers
+
+
+func _find_rescue_unit(peer_id: int) -> Node3D:
+	for survivor in survivors_container.get_children():
+		if survivor.owner_peer_id == peer_id and survivor.is_rescue_unit:
+			return survivor
+	return null
+
+
+func _find_rescue_request(peer_id: int) -> Dictionary:
+	for request in _rescue_requests:
+		if request["from_peer"] == peer_id:
+			return request
+	return {}
+
+
+func _remove_rescue_request(peer_id: int) -> void:
+	for i in _rescue_requests.size():
+		if _rescue_requests[i]["from_peer"] == peer_id:
+			_rescue_requests.remove_at(i)
+			break
+	_sync_rescue_requests.rpc(_rescue_requests)
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_rescue_requests(requests: Array) -> void:
+	_rescue_requests = requests
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_help_offer(requesting_peer_id: int) -> void:
+	# Verlorener Spieler bittet Mitspieler um einen Base-Erstellen-Trupp
+	# (siehe docs/mechanics-review.md) — nur möglich, solange tatsächlich
+	# "verloren" (kein doppeltes Anfragen).
+	if not multiplayer.is_server() or not _lost_peers.get(requesting_peer_id, false):
+		return
+	if not _find_rescue_request(requesting_peer_id).is_empty():
+		return
+	_rescue_requests.append({"from_peer": requesting_peer_id})
+	_sync_rescue_requests.rpc(_rescue_requests)
+	for pid in NetworkManager.players.keys():
+		if pid != requesting_peer_id:
+			report_status(pid, "Ein Mitspieler bittet um Hilfe beim Wiederaufbau (Trupp-Tab)!")
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_send_rescue_unit(target_peer_id: int, survivor_path: NodePath, requesting_peer_id: int) -> void:
+	# Helfender Spieler wählt einen eigenen Trupp aus, der zum
+	# Base-Erstellen-Trupp wird und den Besitzer wechselt — kostet den
+	# Helfer dauerhaft eine Einheit (Nutzerentscheidung, siehe
+	# docs/mechanics-review.md).
+	if not multiplayer.is_server() or not _lost_peers.get(target_peer_id, false):
+		return
+	var survivor := get_node_or_null(survivor_path)
+	if survivor == null or survivor.owner_peer_id != requesting_peer_id:
+		return
+	survivor.become_rescue_unit(target_peer_id)
+	_remove_rescue_request(target_peer_id)
+	report_status(target_peer_id, "Ein Mitspieler hat dir einen Base-Erstellen-Trupp geschickt — wähle eine neue Start-Basis!")
+	report_status(requesting_peer_id, "Trupp geschickt.")
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_give_up(requesting_peer_id: int) -> void:
+	# Verlorener Spieler verzichtet auf Hilfe — löst bei ihm (und nur ihm)
+	# den echten Game-Over-Bildschirm aus (siehe docs/mechanics-review.md).
+	# Kein Zustands-Cleanup nötig: bleibt in _lost_peers, der Spieler
+	# verlässt die Session ohnehin gleich (Neustart/Hauptmenü).
+	if not multiplayer.is_server() or not _lost_peers.get(requesting_peer_id, false):
+		return
+	_remove_rescue_request(requesting_peer_id)
+	_show_game_over.rpc_id(requesting_peer_id)
+
+
+@rpc("authority", "reliable")
+func _show_game_over() -> void:
+	game_over_ui.show_game_over()
+
+
+func is_paused() -> bool:
+	return _game_paused
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_toggle_pause(requesting_peer_id: int) -> void:
+	# Nur der Host (immer Peer-ID 1, siehe NetworkManager.host_game()) darf
+	# pausieren (Nutzerwunsch, siehe docs/mechanics-review.md, "Zeitskala").
+	if not multiplayer.is_server() or requesting_peer_id != 1:
+		return
+	_game_paused = not _game_paused
+	_sync_game_paused.rpc(_game_paused)
+	for pid in NetworkManager.players.keys():
+		report_status(pid, "Spiel pausiert." if _game_paused else "Spiel fortgesetzt.")
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_game_paused(paused: bool) -> void:
+	_game_paused = paused
+	pause_label.visible = paused
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -4634,6 +5391,9 @@ func _update_hud() -> void:
 			lines.append("F: Aussteigen")
 			break
 	hud_label.text = "\n".join(lines)
+	# Panel nur sichtbar, solange es tatsächlich etwas zu zeigen gibt (siehe
+	# hud_info_panel-Kommentar oben) — sonst leere schwarze Box im Eck.
+	hud_info_panel.visible = not lines.is_empty() or status_label.visible
 	_update_resources_label(own_base)
 
 
@@ -4641,10 +5401,11 @@ func _update_resources_label(own_base: Node3D) -> void:
 	# Eigenes Panel statt einer einzelnen HUD-Zeile (siehe docs/base.md,
 	# "Vier Baurohstoffe") — sieben Ressourcenarten in eine Textzeile
 	# gequetscht wäre nach der Rohstoff-Aufteilung kaum noch lesbar
-	# gewesen (Nutzer-Feedback: UI überarbeiten). Seit RESOURCE_CATEGORIES
-	# (siehe oben) ein Label PRO Kategorie statt einer einzigen Liste mit
-	# allen 16 Arten — nächster Schritt derselben "wird unübersichtlich"-
-	# Beobachtung, diesmal auf Kategorie- statt auf Panel-Ebene.
+	# gewesen (Nutzer-Feedback: UI überarbeiten). Ein Label PRO Kategorie
+	# (siehe RESOURCE_CATEGORIES oben). Seit der UI-Überarbeitung Runde 2
+	# (2026-08-04) EINE Zeile pro Kategorie (Kategoriename + alle Werte
+	# kommagetrennt) statt vorher mehrzeilig — kompaktere Leiste statt
+	# Tab-umschaltbarem Block, siehe docs/world.md.
 	if not is_instance_valid(own_base):
 		for label in resource_category_labels:
 			label.text = "—"
@@ -4653,10 +5414,15 @@ func _update_resources_label(own_base: Node3D) -> void:
 	var cap: int = own_base.storage_capacity
 	for i in RESOURCE_CATEGORIES.size():
 		var category: Dictionary = RESOURCE_CATEGORIES[i]
-		var lines: Array = []
+		var parts: Array = []
 		for key in category["keys"]:
-			lines.append("%s: %d/%d" % [RESOURCE_DISPLAY_NAMES.get(key, key), r.get(key, 0), cap])
-		resource_category_labels[i].text = "\n".join(lines)
+			# Kapazität NICHT mehr pro Ressource wiederholt (Nutzer-Feedback
+			# "Schrift geht aus dem Bildschirm raus") — bei bis zu 5 Einträgen
+			# pro Kategorie machte "Name X/500" pro Eintrag die Zeile viel zu
+			# breit für die kompakte Leiste. Einmal am Zeilenende reicht,
+			# Kapazität ist ohnehin für alle Ressourcen gleich.
+			parts.append("%s %d" % [RESOURCE_DISPLAY_NAMES.get(key, key), r.get(key, 0)])
+		resource_category_labels[i].text = "%s: %s (je max %d)" % [category["name"], ", ".join(parts), cap]
 
 
 func _carried_total(loot: Dictionary) -> int:
@@ -4921,6 +5687,13 @@ func _handle_control_group_key(group_number: int, assign: bool) -> void:
 func _select_at(screen_pos: Vector2, additive: bool) -> void:
 	# 3D-Pendant zu Commander._select_at() (2D, Distanz-Check) — echter
 	# Physik-Raycast von der Kamera durch die Klickposition.
+	if not _world_sync_complete:
+		# Zusätzliche Absicherung neben der Eingabesperre durch
+		# WorldSyncOverlay (siehe _start_world_sync_wait()) — die Klicks
+		# sollten wegen der Overlay-Blocker-Fläche ohnehin nie hier ankommen,
+		# aber ein direkter Guard macht die Abhängigkeit explizit, statt sich
+		# rein auf Control-Mouse-Filter-Verhalten zu verlassen.
+		return
 	var from := camera.project_ray_origin(screen_pos)
 	var to := from + camera.project_ray_normal(screen_pos) * RAY_LENGTH
 	var query := PhysicsRayQueryParameters3D.create(from, to)
@@ -4988,8 +5761,18 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 		var building: Node3D = result.collider
 		if building.is_looted and building.owner_peer_id != 0:
 			if building.owner_peer_id == multiplayer.get_unique_id():
-				# Eigenes geclaimtes Gebäude — zum Ausbauen auswählen statt
-				# nichts zu tun.
+				if building.has_open_construction:
+					# Bau-Markier-Modus (Punkt 28, siehe docs/building.md,
+					# "Baustellen") — ausgewählte Bautrupps direkt dieser
+					# Baustelle zuweisen ("3 dorthin, 4 dorthin"), statt das
+					# Gebäude nur für den Ausbau-Dialog auszuwählen (der ist
+					# hier ohnehin nicht mehr zutreffend, es läuft schon ein
+					# Bauauftrag).
+					if not selected.is_empty():
+						_assign_selected_to_construction(building)
+					return
+				# Eigenes geclaimtes Gebäude ohne offenen Bauauftrag — zum
+				# Ausbauen auswählen statt nichts zu tun.
 				_selected_claimed_building = building
 				_update_build_button_texts()
 			return
@@ -5080,7 +5863,11 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 			var unit = selected[i]
 			if is_instance_valid(unit) and unit.has_method("order_move"):
 				var target := base_target + _formation_offset(i, selected.size())
-				unit.order_move.rpc_id(1, target, multiplayer.get_unique_id(), additive)
+				# Formation natürlicher (siehe Survivor.MOVE_SPEED_VARIANCE) —
+				# gestaffelter Loslauf statt alle im selben Frame querfeldein,
+				# Index 0 (Anführer) läuft weiterhin sofort los.
+				var start_delay := float(i) * MOVE_STAGGER_STEP
+				unit.order_move.rpc_id(1, target, multiplayer.get_unique_id(), additive, start_delay)
 		return
 	selected.clear()
 
@@ -5091,6 +5878,10 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 # Koop-Test: Trupps liefen "zu nah zusammen".
 const FORMATION_RADIUS := 2.0
 const GROUP_ATTACK_SPREAD_RADIUS := 10.0
+# Gestaffelter Bewegungsstart (siehe Survivor.MOVE_SPEED_VARIANCE) — Sekunden
+# Verzögerung pro Auswahl-Index, damit eine Gruppe nicht mehr im selben Frame
+# geschlossen losläuft ("Formation natürlicher", Nutzer-Feedback).
+const MOVE_STAGGER_STEP := 0.15
 
 
 func _nearby_enemies(anchor: Node3D, radius: float) -> Array[Node3D]:

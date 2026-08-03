@@ -141,12 +141,29 @@ Sprung) sind neue Direktstarts. **Koop** (Host/Join) bleibt unverändert über
 `Lobby.tscn`. Der Laden-Button ist deaktiviert, wenn `SaveManager.has_save()`
 `false` liefert.
 
+## Korrektheits-Fix: `unlocked_recipes` fehlte (2026-08-04)
+
+`_collect_save_data()`/`_load_game_state()` haben `HomeBase.resources`/
+`storage_capacity` schon immer gesichert, aber `unlocked_recipes` (die
+über Forschungsbücher freigeschalteten Rezepte/Gebäude-Ausbaustufen,
+siehe [`building.md`](building.md), "Forschungsbücher") komplett
+übergangen — ein Korrektheits-Durchgang hat das aufgedeckt. Da Bücher
+beim Erforschen VERBRAUCHT werden (`request_research()`), hätte ein
+Speichern+Laden jede schon erforschte Freischaltung dauerhaft rückgängig
+gemacht, ohne das Buch zurückzugeben (permanenter, nicht behebbarer
+Fortschrittsverlust, solange keine neue Kopie des Buchs gefunden wird).
+Jetzt Teil von `home_bases` im Speicherstand, `.get()` mit leerem
+Dictionary-Fallback für ältere, vor diesem Fix gespeicherte Dateien (kein
+harter Fehler beim Laden).
+
 ## Testen
 
 Eine Weile spielen (Ressourcen sammeln, Gebäude claimen, Mauer bauen, Baum
-anschneiden, Trupp verletzen lassen) → Escape → Speichern → Zurück zum
-Hauptmenü → Laden → prüfen, dass Ressourcen/Gebäude-Besitz/Baumstumpf-HP/
-Trupp-HP wie erwartet wiederhergestellt sind. Kein laufender Godot-Editor in
-der Entwicklungsumgebung verfügbar — bisher nur über statische Checks
+anschneiden, Trupp verletzen lassen, EIN Rezept erforschen) → Escape →
+Speichern → Zurück zum Hauptmenü → Laden → prüfen, dass Ressourcen/
+Gebäude-Besitz/Baumstumpf-HP/Trupp-HP UND die erforschte Freischaltung
+(Crafting-Button zeigt weiterhin "herstellen" statt wieder "erforschen")
+wie erwartet wiederhergestellt sind. Kein laufender Godot-Editor in der
+Entwicklungsumgebung verfügbar — bisher nur über statische Checks
 (Trap-Muster-Grep, `$NodePath`-Integrität, Tab-Einrückung) verifiziert, noch
 nicht tatsächlich im Editor gespielt.

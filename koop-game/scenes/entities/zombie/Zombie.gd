@@ -77,6 +77,15 @@ var _attack_damage: int = 0
 # jeder Schaden an einem Zombie schon von Survivor-Gegenschaden oder
 # Wachposten-Beschuss kommt, beide mit bekanntem owner_peer_id).
 var _last_damage_source_peer_id: int = 0
+# Korrektheits-Fix (2026-08-04) — verhindert doppelte Loot-Vergabe: ohne
+# diese Sperre könnte derselbe Zombie im selben Frame von zwei Quellen
+# tödlich getroffen werden (z. B. GuardPost-Beschuss UND Survivor-
+# Gegenschaden), BEVOR queue_free() ihn am Frame-Ende tatsächlich entfernt
+# — beide take_damage()-Aufrufe sähen dann hp<=0 und würden je einmal
+# grant_zombie_loot() auslösen (doppelter Loot-Drop für einen einzigen
+# Kill). Survivor.take_damage() hat dasselbe hp<=0-Muster, aber keinen
+# wirtschaftlichen Seiteneffekt beim Sterben, deshalb dort unproblematisch.
+var _dead: bool = false
 # Zufälliger Start-Versatz (siehe TARGET_SEARCH_INTERVAL) — verhindert, dass
 # alle Zombies exakt im selben Frame ihre Zielsuche auslösen (wäre sonst nur
 # eine Verschiebung des 500×-Spitzenlasts um ein festes Vielfaches von
@@ -119,6 +128,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Pause (2026-08-04, nur Host, siehe docs/mechanics-review.md,
+	# "Zeitskala") — jedes Entity-Script fragt das selbst ab statt eines
+	# zentralen process_mode-Umbaus über den ganzen Szenenbaum.
+	if get_tree().current_scene.is_paused():
+		return
 	_update_chase_target(delta)
 	if is_instance_valid(_chase_target):
 		_process_chase(delta)
@@ -162,6 +176,13 @@ func _find_nearest_target() -> Node3D:
 	for building in get_tree().get_nodes_in_group("searchable"):
 		if is_instance_valid(building) and building.owner_peer_id != 0:
 			candidates.append(building)
+	# Home-Base zerstörbar (2026-08-04, siehe docs/mechanics-review.md,
+	# "Fehlende Enden/Ziele") — dieselbe Erweiterung wie oben bei geclaimten
+	# Gebäuden, eigene Gruppe statt "searchable" (Home-Base ist kein
+	# durchsuchbares Scavenging-Ziel).
+	for base in get_tree().get_nodes_in_group("home_base"):
+		if is_instance_valid(base):
+			candidates.append(base)
 	var nearest: Node3D = null
 	var nearest_dist := DETECT_RADIUS
 	for unit in candidates:
@@ -296,10 +317,13 @@ func take_damage(amount: int, source_peer_id: int = 0) -> void:
 	# source_peer_id merkt sich, wer den Schaden verursacht hat (siehe
 	# _last_damage_source_peer_id) — beim Tod entscheidet das, wer den
 	# Loot-Drop bekommt (siehe World.grant_zombie_loot()).
+	if _dead:
+		return
 	if source_peer_id != 0:
 		_last_damage_source_peer_id = source_peer_id
 	hp = max(hp - amount, 0)
 	if hp <= 0:
+		_dead = true
 		get_tree().current_scene.grant_zombie_loot(_last_damage_source_peer_id, is_brute)
 		_die.rpc()
 
