@@ -21,10 +21,13 @@ dem Code abgelesen (`World.gd`/`Vehicle.gd`/die jeweiligen `.tscn`),
 Bauplatz relevante Grundfläche); wo die Checkliste keinen Eintrag hat,
 steht ein eigener Vorschlag mit Begründung.
 
-**Wichtig für die Reihenfolge:** Straßenraster/Bauplatz-Abstände werden
-erst final ans erste gelieferte Gebäude angepasst (siehe Absprache
-2026-08-04) — am besten mit **Wohnhaus** anfangen (kleinstes der
-Loot-Gebäude, Checkliste selbst nennt es als Phase-1-Priorität).
+**Erledigt (2026-08-04):** Straßenraster/Bauplatz-Abstände sind jetzt ans
+erste gelieferte Gebäude (Wohnhaus) angepasst — `BUILDING_MIN_SPACING`
+6→10m, `BUILDING_ROW_INSET` 2→5m (siehe `docs/building.md`, "Wohnhaus").
+Gilt vorerst EINHEITLICH für alle Typen, auch die noch kleinen
+Platzhalter — größere Typen wie Supermarkt (18m) brauchen bei ihrer
+eigenen Asset-Lieferung vermutlich eine eigene, breitere Slot-Reservierung
+statt der einheitlichen Reihen-Abstände, noch nicht umgesetzt.
 
 ---
 
@@ -69,7 +72,7 @@ siehe `docs/mechanics-review.md`). Alle bisher reine Platzhalter-Boxen,
 
 | # | Name | Ziel-Grundfläche (B=Blender X × T=Blender Y) | Quelle | Priorität |
 |---|------|------------------------|--------|-----------|
-| 1 | Wohnhaus | 9m × 8m | Checkliste | **HIGH — zuerst bauen** |
+| 1 | Wohnhaus | ✅ **Echtes Asset im Spiel** (`wohnhaustest.glb`, 2026-08-04) — tatsächliche Maße 9,1m × 8,2m × 9,0m Höhe (etwas höher als der 7m-Zielwert im Prompt) | Checkliste (Ziel war 9m × 8m) | ~~HIGH~~ erledigt |
 | 2 | Supermarkt | 18m × 12m | Checkliste | MEDIUM |
 | 3 | Apotheke | 7m × 6m | Checkliste | MEDIUM |
 | 4 | Waffenladen/Polizeistation | 10m × 8m | Checkliste | MEDIUM |
@@ -143,6 +146,49 @@ gebraucht): Werkstatt/Baumarkt (Loot-Gebäude, bewusst ausgelassen —
 Baumaterial soll nicht aus Stadt-Loot kommen), Elektronikgeschäft,
 Auto-Werkstatt, Stromgenerator, Garten-Anlage/Palisaden (Zonen-Bauten aus
 der Vision, zurückgestellt), Van/Kleinbus, Fahrrad, Schubkarre.
+
+---
+
+## Modellier-Prompt: Wohnhaus (zuerst zu bauen)
+
+Beschreibung als Vorlage für Blender — kein KI-Bild-Prompt, sondern ein
+Design-Briefing für dich selbst beim Modellieren, siehe "Empfehlung für
+die Reihenfolge" ganz oben.
+
+**Ziel-Maße (siehe Blender-Achsen-Konvention oben):**
+Dimensions X=9m (Breite) × Y=8m (Tiefe) × Z=7m (Höhe). Polybudget
+~3000–4000 Tris (Checkliste). Location/Rotation bei 0/0/0, Scale bei 1
+lassen — nur Dimensions anpassen.
+
+**Gebäudetyp:** Freistehendes, einfaches Vorstadt-Einfamilienhaus,
+ein bis eineinhalb Stockwerke wirkend (die 7m Höhe kommen realistisch
+eher aus Erdgeschoss + Satteldach als aus zwei vollen Stockwerken —
+ein Vollgeschoss ist üblich ~2,5–3m, der Rest ist Dachfirst).
+
+**Form/Silhouette:** Rechteckiger Baukörper, Satteldach (Giebeldach) als
+markanteste Form — WICHTIG für die Top-Down/Isometrie-Kamera (siehe
+`01 Architektur.md`): die Dachform ist aus der Vogelperspektive das
+Erste, was man vom Gebäude sieht, sollte also klar als "Haus" erkennbar
+sein, nicht als flache Box. Ein kleiner Vorbau/Vordach über der Haustür
+ist ein günstiger Low-Poly-Blickfang, sonst keine weiteren Anbauten
+(Balkon, Garage etc. — bleibt Low-Poly und im Polybudget).
+
+**Öffnungen:** Eine Haustür (Front), 2–4 einfache rechteckige Fenster
+verteilt auf die Fassaden — reine Grundformen (Extrusion/Boolean einer
+Box), keine Fenstersprossen oder Beschläge im Detail.
+
+**Farbe/Material:** Passend zum Low-Poly-Stil (siehe
+`02 Assets mit Blender.md`, "Stilrichtung") — flache Vertex-/Material-
+Farben, keine Fototexturen. Gedeckte, leicht verblasste Töne (z. B.
+verwittertes Beige/Grau-Braun für die Fassade, dunkleres Rot-Braun oder
+Grau fürs Dach) — soll nach Jahren ohne Instandhaltung aussehen (Setting:
+verlassene Stadt nach dem Ausbruch), aber KEINE zusätzliche Verfalls-
+Geometrie (keine kaputten Fenster/Löcher als eigene Meshes — das
+Alters-Gefühl kommt rein über die Farbwahl, nicht über zusätzliche Polys).
+
+**Referenz:** grober Stilvergleich Kenney "Suburban House"/"Building Kit"
+(siehe `02 Assets mit Blender.md`, "Alternative/Ergänzung") — falls eine
+visuelle Orientierung hilft, ohne selbst danach zu modellieren.
 
 ---
 

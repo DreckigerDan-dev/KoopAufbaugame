@@ -89,9 +89,11 @@ Straßen-Raster:
   geschlossen). Nur Blöcke, deren Mittelpunkt innerhalb `radius` liegt,
   zählen (hält die Zone insgesamt kreisförmig statt eckig). Pro Block
   entstehen entlang aller vier Kanten Reihenplätze im Abstand
-  `BUILDING_MIN_SPACING`, leicht nach innen versetzt
-  (`BUILDING_ROW_INSET := 2.0`) von der Straßenkante — liefert absichtlich
-  DEUTLICH mehr Plätze als gebraucht (für eine große Zone mehrere tausend).
+  `BUILDING_MIN_SPACING` (2026-08-04 von 6m auf 10m erhöht, ans erste
+  echte Gebäude-Asset angepasst, siehe `docs/building.md`, "Wohnhaus"),
+  leicht nach innen versetzt (`BUILDING_ROW_INSET`, gleicher Anlass 2m→5m)
+  von der Straßenkante — liefert absichtlich DEUTLICH mehr Plätze als
+  gebraucht (für eine große Zone mehrere tausend, auch nach der Erhöhung).
 - **`_generate_city_zone()`** mischt diese Plätze zufällig
   (`Array.shuffle()`) und bebaut nur `BUILDINGS_PER_*_ZONE` davon — der
   Rest bleibt als unbebaute Lücke stehen. Das hält sowohl die
@@ -912,6 +914,29 @@ ist auf standard machen und bisschen mehr rauszoomen"): `ZOOM_MAX` von
 über dem damaligen `ZOOM_MIN`), jetzt näher an der Mitte des jetzt auch
 größeren Bereichs (10-80) für einen brauchbareren Überblick direkt beim
 Start.
+
+**2026-08-04 nochmal nachjustiert**, wieder nach Vergleich mit einem
+echten Infection Free Zone-Screenshot (dort immer viele Gebäude
+gleichzeitig im Bild): `_zoom_distance`-Startwert von `25.0` auf `40.0`
+— Anlass war das erste echte Gebäude-Asset (Wohnhaus, 9m breit statt der
+bisherigen 2-4m-Platzhalter, siehe `docs/building.md`), das beim alten
+Standard-Zoom fast den ganzen Bildschirm füllte. Bewusst eine
+Kamera-Anpassung statt das Gebäude kleiner zu skalieren (9×8m entspricht
+dem ursprünglichen Checkliste-Zielwert) — `ZOOM_MAX` (80) unverändert.
+
+**Direkt im Anschluss außerdem `ZOOM_MIN` von `10.0` auf `20.0`
+angehoben** (Nutzerfeedback nach dem Standard-Zoom-Test: "kann zu viel
+reinzoomen") — beim alten `ZOOM_MIN` kam die Kamera nah genug heran, um
+nur noch einen Wand-Ausschnitt des jetzt 9m breiten Wohnhauses zu sehen
+statt des ganzen Gebäudes. Gleiches Muster wie die 2026-08-01-Anhebung
+oben (4→10): das Minimum wächst mit, sobald die tatsächlichen
+Asset-Größen zeigen, dass die Kamera näher rankommt als gewollt.
+
+**Noch am selben Tag ein weiteres Mal leicht nachjustiert**, `20.0` →
+`26.0` ("reinzoom bisschen weiter raus, kann bisschen zu nah zoomen") —
+`20.0` war als erster Schritt in die richtige Richtung, aber noch nicht
+genug. Grundlegender Standard-Zoom (40.0)/`ZOOM_MAX` (80.0) unverändert,
+nur das Minimum nochmal etwas näher an den Standard-Zoom herangerückt.
 
 **Bewusst als reine Stil-/Gameplay-Entscheidung geklärt, KEINE
 Performance-Maßnahme:** `_apply_zoom()`/`_zoom()` verschieben die Kamera

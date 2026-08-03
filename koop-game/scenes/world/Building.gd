@@ -30,6 +30,13 @@ var has_survivor: bool = false
 # wiederhergestelltes, noch unlooted/ungeclaimtes Gebäude dieselbe Farbe
 # zurückbekommt statt grau zu wirken.
 var default_color: Color = Color(0.45, 0.38, 0.3)
+# Echtes Asset statt Platzhalter-Box (2026-08-04, siehe docs/building.md,
+# "Wohnhaus") — leer = Platzhalter-Box wie bisher. Als Feld gehalten (nicht
+# nur einmalig in World._create_building() verwendet), aus demselben Grund
+# wie default_color: Catch-up/Spielstand-Laden müssen denselben Wert erneut
+# an World._create_building() zurückgeben können, siehe World._spawn_for_peer()/
+# _collect_save_data().
+var model_path: String = ""
 # Kartenansicht-Legende (siehe World.LOOT_CATEGORY_BY_RESOURCE/MapView.gd,
 # LOOT_CATEGORY_COLORS) — "food"/"medicine"/"equipment"/"books", aus der
 # BUILDING_TYPES-Vorlage abgeleitet, einmalig beim Spawn gesetzt.
@@ -267,9 +274,6 @@ func _demolish() -> void:
 
 
 func _update_visual() -> void:
-	var mesh: MeshInstance3D = get_node_or_null("Mesh")
-	if mesh == null:
-		return
 	var mat := StandardMaterial3D.new()
 	if has_open_construction:
 		# Offener Bauauftrag (siehe "Bau-Markier-Modus" oben) — amberfarben,
@@ -297,4 +301,28 @@ func _update_visual() -> void:
 		# Vorlage bleibt bestehen (schon in World._create_building() als
 		# surface_material_override gesetzt), hier nichts zu tun.
 		return
-	mesh.set_surface_override_material(0, mat)
+	# "Model" (echtes GLB-Asset, siehe World._create_building()) hat Vorrang
+	# vor der versteckten Platzhalter-"Mesh"-Box — gleiches Fallback-Prinzip
+	# wie HomeBase.gd, bewusst dupliziert statt geteilt (siehe docs/building.md,
+	# "Bewusst dupliziert statt geteilt").
+	var model := get_node_or_null("Model")
+	if model != null:
+		for mesh_instance in _find_mesh_instances(model):
+			mesh_instance.set_surface_override_material(0, mat)
+		return
+	var mesh: MeshInstance3D = get_node_or_null("Mesh")
+	if mesh != null:
+		mesh.set_surface_override_material(0, mat)
+
+
+func _find_mesh_instances(node: Node) -> Array:
+	# Rekursiv, siehe HomeBase.gd (dieselbe Begründung, bewusst dupliziert
+	# statt geteilt).
+	var result: Array = []
+	if node == null:
+		return result
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_mesh_instances(child))
+	return result

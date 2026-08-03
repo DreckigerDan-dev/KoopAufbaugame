@@ -2636,6 +2636,49 @@ Ausführlich in [`networking.md`](networking.md), "Welt-Sync-Sperre".
 
 **Vom Nutzer bestätigt: "passt alles".**
 
+**Nachtrag, noch am selben Tag:** Nutzerfrage "was ist der Plan für
+später, wenn mehr Gebäude/große Waldlandschaften dazukommen" deckte eine
+verbliebene Redundanz auf — `_generate_world()` replizierte dieselben
+Anfangs-Gebäude/-Bäume/etc. WEITERHIN zusätzlich einzeln über die
+MultiplayerSpawner (obendrauf zu den jetzt gebündelten Catch-up-RPCs).
+Behoben durch `_create_building_local()`/`_create_tree_local()`/etc. —
+Host baut die Anfangswelt jetzt rein lokal, jeder Peer bekommt sie
+ausschließlich über den ohnehin bestehenden gebündelten Catch-up-Pull.
+**Vom Nutzer erneut bestätigt: "beide Spieler laden und haben beide keine
+Fehler, das passt soweit."**
+
+## Erstes echtes Gebäude-Asset: Wohnhaus (2026-08-04)
+
+`assets/wohnhaustest.glb` (Nutzer-Modell: Dach, Tür, zwei Fenster) ist im
+Spiel verdrahtet — `World._create_building()` baut es dynamisch als
+`Model`-Kind ein, wenn `BUILDING_TYPES` den Typ "Wohnhaus" würfelt (neues
+`model_path`-Feld, nur bei diesem einen Typ gesetzt, alle anderen 13
+Typen bleiben Platzhalter-Boxen). Farb-Feedback (claimen/plündern/
+Baustelle) funktioniert am echten Modell über dieselbe rekursive
+`_find_mesh_instances()`-Technik wie bei Wachturm/Mauer/Home-Base.
+
+Echte Maße aus der glTF-Bounding-Box ausgelesen: 9,1m × 8,2m Grundfläche,
+9,0m Höhe (Prompt sah 7m vor, kam höher raus) — deutlich größer als jeder
+bisherige Platzhalter. Zwei Folge-Bugs beim ersten Test gefunden und
+behoben:
+- **Haus schwebte über dem Boden** — Ursprungspunkt-Mismatch (Modell an
+  der Basis verankert, Code ging von zentriertem Ursprung wie bei der
+  Platzhalter-Box aus), behoben durch lokalen Y-Versatz nur am `Model`-Kind.
+- **Straßenraster zu eng** — `BUILDING_MIN_SPACING` 6→10m,
+  `BUILDING_ROW_INSET` 2→5m, sonst hätten sich Wohnhäuser in einer Reihe
+  überlappt (Nutzerfrage: "Supermarkt 18×12, unsere Tiles nur 12×12").
+- **Kamera zu nah** (Vergleich mit echtem Infection Free Zone-Screenshot):
+  Standard-Zoom 25→40, `ZOOM_MIN` 10→20→26 — bewusst eine Kamera-Anpassung
+  statt das Gebäude kleiner zu skalieren (Maße entsprechen dem
+  Checkliste-Ziel).
+
+Ausführlich in [`building.md`](building.md), "Wohnhaus".
+
+**Vom Nutzer bestätigt: "bis jetzt passt so, vielleicht später bisschen
+Fein-Tuning."** Noch offen: Rotation je nach Straßenkante (Haustür zeigt
+aktuell immer in dieselbe Weltrichtung), Farb-Feedback am echten Modell
+noch nicht separat getestet.
+
 ## Ordner-Hinweis
 
 `scenes/entities/player/` und `scenes/ui/` sind jetzt leere Ordner (Commander

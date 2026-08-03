@@ -11,6 +11,11 @@ extends Node3D
 const SURVIVOR_SCENE := preload("res://scenes/entities/survivor/Survivor.tscn")
 const HOME_BASE_SCENE := preload("res://scenes/entities/base/HomeBase.tscn")
 const BUILDING_SCENE := preload("res://scenes/world/Building.tscn")
+# Erstes echtes Gebäude-Asset (siehe docs/building.md, "Wohnhaus") — als
+# String statt preload(), weil _create_building() ihn per load() nur für
+# den Wohnhaus-Typ braucht (siehe BUILDING_TYPES/model_path-Feld unten),
+# alle anderen Typen bleiben Platzhalter-Boxen.
+const WOHNHAUS_MODEL_PATH := "res://assets/wohnhaustest.glb"
 const VEHICLE_SCENE := preload("res://scenes/entities/vehicle/Vehicle.tscn")
 const ZOMBIE_NEST_SCENE := preload("res://scenes/entities/zombie/ZombieNest.tscn")
 const ZOMBIE_SCENE := preload("res://scenes/entities/zombie/Zombie.tscn")
@@ -44,7 +49,15 @@ const ZOOM_STEP_FACTOR := 0.15
 # warum Zoom die Simulationslast nicht beeinflusst). Bleibt unter dem
 # Default-Start-Zoom (_zoom_distance := 12.0), sonst wäre der Startwert
 # beim ersten Frame außerhalb des gültigen Bereichs.
-const ZOOM_MIN := 10.0
+# 2026-08-04 nochmal von 10.0 auf 20.0 angehoben (Nutzerwunsch: "kann zu
+# viel reinzoomen", nach dem ersten echten Gebäude-Asset) — bei 10.0 kam
+# die Kamera jetzt nah genug heran, um praktisch nur noch einen
+# Wand-Ausschnitt des 9m-Wohnhauses zu sehen statt des ganzen Gebäudes.
+# 2026-08-04, direkt nochmal leicht von 20.0 auf 26.0 nachjustiert
+# (Nutzerfeedback: "reinzoom bisschen weiter raus, kann bisschen zu nah
+# zoomen") — sonst inhaltsgleiche Begründung wie direkt oben, nur als
+# noch nicht ausreichend befundene Zwischenstufe.
+const ZOOM_MIN := 26.0
 # Bewusst NICHT linear mit MAP_SIZE mitskaliert (siehe docs/world.md,
 # "Kartengröße") — bei 5000 wäre "die ganze Karte ins Bild passen" völlig
 # unnütz (einzelne Einheiten wären unsichtbar klein). Moderater Anstieg
@@ -420,7 +433,14 @@ const BOOK_LOOT_TYPES := ["book_weapon", "book_armor", "book_helmet", "book_ammo
 const BUILDING_TYPES: Array[Dictionary] = [
 	{
 		"name": "Wohnhaus",
-		"size": Vector3(2, 3.4, 2),
+		# Echtes Asset (2026-08-04, siehe docs/building.md, "Wohnhaus") — Maße
+		# aus der tatsächlichen glTF-Bounding-Box von wohnhaustest.glb
+		# ausgelesen (X 9,1m × Y 9,0m × Z 8,2m), NICHT die ursprünglichen
+		# Ziel-Maße aus dem Modellier-Prompt (9×7×8) — das Modell kam etwas
+		# höher raus (First bis 9m statt 7m geplant), Collision folgt der
+		# echten Größe statt der Planung.
+		"size": Vector3(9.1, 9.0, 8.2),
+		"model_path": WOHNHAUS_MODEL_PATH,
 		"default_color": Color(0.45, 0.38, 0.3),
 		"main_loot": {"resource": "food", "amount": Vector2i(1, 2)},
 		"secondary_loot": [
@@ -702,7 +722,17 @@ const ZOMBIE_SPAWN_RING_OFFSET := 60.0
 # überlappen können. Dient seit der Straßen-Raster-Umstellung (siehe
 # _generate_street_slots()) zusätzlich als Abstand der Gebäude INNERHALB
 # einer Reihe.
-const BUILDING_MIN_SPACING := 6.0
+# 2026-08-04 von 6.0 auf 10.0 erhöht — erstes echtes Gebäude-Asset
+# (Wohnhaus, siehe docs/building.md) ist 9,1m breit, mit dem alten Wert
+# hätten sich zwei Wohnhäuser in derselben Reihe sichtbar überlappt (siehe
+# Nutzerfrage "Supermarkt ist 18×12, unsere Tiles nur 12×12"). Gilt
+# einheitlich für ALLE Typen (auch die noch kleinen Platzhalter) — erste
+# Kalibrierungsrunde am ersten gelieferten Asset, wie in
+# `05 Assets im Spiel.md` angekündigt. Größere Typen wie Supermarkt (18m)
+# brauchen bei ihrer eigenen Kalibrierung später vermutlich MEHRERE
+# Reihenplätze/eine eigene Slot-Breite pro Typ — hier bewusst noch nicht
+# vorgebaut, siehe docs/world.md, "Straßen-Raster", "Bekannte Grenzen".
+const BUILDING_MIN_SPACING := 10.0
 # Straßen-Raster (2026-08-01, Kartenplanungs-Session — Vorbild Infection
 # Free Zone: echte Häuserreihen entlang klarer Straßen statt Zufallsstreuen,
 # siehe docs/world.md, "Straßen-Raster"). STREET_BLOCK_SIZE ist die
@@ -728,7 +758,11 @@ const STREET_WIDTH := STREET_TILE_SIZE
 const STREET_CELL_SIZE := STREET_BLOCK_SIZE + STREET_WIDTH
 # Wie weit eine Gebäude-Reihe von der Blockkante (= Straßenrand) nach innen
 # versetzt ist, damit Gebäude nicht auf der Straße selbst stehen.
-const BUILDING_ROW_INSET := 2.0
+# 2026-08-04 von 2.0 auf 5.0 erhöht, gleicher Grund wie BUILDING_MIN_SPACING
+# oben — das Wohnhaus ist bis zu 9,1m breit/8,2m tief, die Hälfte davon
+# (~4,55m) ragt vom Reihen-Mittelpunkt nach außen; bei altem INSET (2.0)
+# hätte das Gebäude über die Blockkante hinaus auf die Straße geragt.
+const BUILDING_ROW_INSET := 5.0
 # Sichtbare Straßen-Geometrie: seit 2026-08-02 echte Kachel-Meshes über
 # $StreetGridMap statt eigener BoxMesh-Streifen (siehe
 # _build_zone_street_tiles()), deshalb hier keine STREET_GROUND_Y/
@@ -1209,7 +1243,16 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 # (knapp über ZOOM_MIN), jetzt ein Wert näher an der Mitte des jetzt auch
 # größeren Zoom-Bereichs (10-80) für einen brauchbareren Überblick direkt
 # beim Start.
-var _zoom_distance: float = 25.0
+# 2026-08-04, nochmal von 25.0 auf 40.0 angehoben — Nutzerwunsch nach
+# Vergleich mit einem echten Infection Free Zone-Screenshot (siehe
+# docs/world.md, "Kamera-Zoom-Bereich"): dort sind immer viele Gebäude
+# gleichzeitig im Bild, bei uns füllte ein einzelnes (jetzt echt-großes,
+# 9m) Wohnhaus fast den ganzen Bildschirm. Bewusst eine Kamera-Anpassung
+# statt das Gebäude kleiner zu skalieren — die 9×8m entsprechen dem
+# ursprünglichen Checkliste-Zielwert, kleiner skalieren würde nur dieses
+# eine Asset beheben, nicht das grundsätzliche "zu nah dran"-Gefühl, das
+# schon zweimal zuvor (12→25, ZOOM_MAX 40→60→80) derselbe Grund war.
+var _zoom_distance: float = 40.0
 var _tilt_angle: float = 0.5404
 var _rotating: bool = false
 var _right_click_dragged: bool = false
@@ -1941,6 +1984,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 			"position": existing.position,
 			"zone_center": existing.zone_center,
 			"size": (existing.get_node("Mesh").mesh as BoxMesh).size,
+			"model_path": existing.model_path,
 			"loot": existing.loot,
 			"default_color": existing.default_color,
 			"has_survivor": existing.has_survivor,
@@ -2423,9 +2467,32 @@ func _create_building(data: Dictionary) -> Node:
 	var collision: CollisionShape3D = building.get_node("Collision")
 	collision.shape = box_shape
 	building.default_color = data["default_color"]
-	var default_mat := StandardMaterial3D.new()
-	default_mat.albedo_color = building.default_color
-	mesh_instance.set_surface_override_material(0, default_mat)
+	building.model_path = data.get("model_path", "")
+	if building.model_path != "":
+		# Echtes Asset (siehe docs/building.md, "Wohnhaus") — Vorrang vor der
+		# Platzhalter-Box, gleiches Fallback-Prinzip wie HomeBase.tscn/Wall.gd
+		# ("Bewusst dupliziert statt geteilt", siehe Building._update_visual()).
+		# Mesh-Box bleibt trotzdem mit korrekter Größe bestehen, nur unsichtbar
+		# — _collect_save_data() liest die Gebäude-Größe weiterhin darüber
+		# aus (`(building.get_node("Mesh").mesh as BoxMesh).size`).
+		mesh_instance.visible = false
+		var model: Node3D = load(building.model_path).instantiate()
+		model.name = "Model"
+		# Bugfix 2026-08-04 ("Haus nicht am Boden") — `building.position.y`
+		# ist `size.y/2` (siehe _generate_city_zone()), weil die Platzhalter-
+		# BoxMesh ihren Ursprung in der MITTE hat. Ein in Blender an seiner
+		# Basis modelliertes Asset hat seinen Ursprung dagegen schon UNTEN
+		# (bestätigt an der echten glTF-Bounding-Box von wohnhaustest.glb:
+		# Y lief dort von 0 bis 9, nicht -4,5 bis 4,5) — ohne Ausgleich würde
+		# es um seine halbe Höhe über dem Boden schweben. Lokaler Y-Versatz
+		# hier verschiebt NUR das Model-Kind nach unten, Collision/Mesh-Box
+		# (beide weiterhin zentriert) bleiben unverändert korrekt.
+		model.position.y = -size.y / 2.0
+		building.add_child(model)
+	else:
+		var default_mat := StandardMaterial3D.new()
+		default_mat.albedo_color = building.default_color
+		mesh_instance.set_surface_override_material(0, default_mat)
 	building.loot = data["loot"]
 	building.has_survivor = data.get("has_survivor", false)
 	building.loot_category = data.get("loot_category", "food")
@@ -2546,6 +2613,45 @@ func _create_brick_pile(data: Dictionary) -> Node:
 	return pile
 
 
+# Rein host-lokale Erzeugung OHNE MultiplayerSpawner-Replikation — nur für
+# die massenhafte Anfangs-Welterzeugung gedacht (siehe _generate_world()/
+# _generate_city_zone()/_generate_forest_zone()/_spawn_wilderness_
+# resources()), NICHT für Ereignisse während der laufenden Partie
+# (_regrow_resources()/_maybe_spawn_refugee()/home_base_destroyed()
+# benutzen weiterhin die *_spawner.spawn()-Varianten, weil die ECHTE
+# Live-Replikation zu schon verbundenen Peers brauchen).
+#
+# Grund (Bugfix 2026-08-04, siehe docs/networking.md, "Welt-Sync-Sperre"):
+# jeder Peer bekommt den kompletten Anfangs-Bestand ohnehin schon
+# zuverlässig über request_catch_up() → _catch_up_*_bulk() (gilt für den
+# normalen gleichzeitigen Partie-Start GENAUSO wie für Spätbeitritte, kein
+# Sonderfall). Der MultiplayerSpawner hätte für dieselben ~350-1750
+# Anfangs-Gebäude/Bäume/Ressourcen ZUSÄTZLICH einzeln repliziert — reine
+# Redundanz, die genau der Netzwerklast entspricht, die vorher die
+# Verbindung des beitretenden Peers zum Absturz gebracht hat (die
+# Bündel-RPCs allein hätten das Problem bei einer künftigen Zahlen-
+# Erhöhung nur verschoben, nicht behoben, weil der ANDERE, unveränderte
+# Weg genau dieselbe Menge nochmal einzeln verschickt hätte).
+func _create_building_local(data: Dictionary) -> void:
+	buildings_container.add_child(_create_building(data))
+
+
+func _create_tree_local(data: Dictionary) -> void:
+	trees_container.add_child(_create_tree(data))
+
+
+func _create_car_wreck_local(data: Dictionary) -> void:
+	car_wrecks_container.add_child(_create_car_wreck(data))
+
+
+func _create_stone_pile_local(data: Dictionary) -> void:
+	stone_piles_container.add_child(_create_stone_pile(data))
+
+
+func _create_brick_pile_local(data: Dictionary) -> void:
+	brick_piles_container.add_child(_create_brick_pile(data))
+
+
 func _generate_world() -> void:
 	# Ersetzt die früheren _spawn_zombies()/_spawn_initial_resources()-
 	# Aufrufe (siehe _ready()) — Host würfelt zuerst CITY_ZONE_LARGE_COUNT
@@ -2657,10 +2763,11 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 		var size: Vector3 = template["size"]
 		var slot: Vector3 = slots[i]
 		var pos := Vector3(slot.x, size.y / 2.0, slot.z)
-		building_spawner.spawn({
+		_create_building_local({
 			"id": _next_building_id,
 			"position": pos,
 			"size": size,
+			"model_path": template.get("model_path", ""),
 			"loot": _roll_building_loot(template),
 			"default_color": template["default_color"],
 			"has_survivor": i == recruit_slot,
@@ -2687,19 +2794,19 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 		match resource_type:
 			"tree":
 				var pos := _spaced_position(center, radius, TREE_GROUND_Y)
-				tree_spawner.spawn({"id": _next_tree_id, "position": pos})
+				_create_tree_local({"id": _next_tree_id, "position": pos})
 				_next_tree_id += 1
 			"stone_pile":
 				var pos := _spaced_position(center, radius, STONE_PILE_GROUND_Y)
-				stone_pile_spawner.spawn({"id": _next_stone_pile_id, "position": pos})
+				_create_stone_pile_local({"id": _next_stone_pile_id, "position": pos})
 				_next_stone_pile_id += 1
 			"brick_pile":
 				var pos := _spaced_position(center, radius, BRICK_PILE_GROUND_Y)
-				brick_pile_spawner.spawn({"id": _next_brick_pile_id, "position": pos})
+				_create_brick_pile_local({"id": _next_brick_pile_id, "position": pos})
 				_next_brick_pile_id += 1
 			"car_wreck":
 				var pos := _spaced_position(center, radius, CAR_WRECK_GROUND_Y)
-				car_wreck_spawner.spawn({"id": _next_car_wreck_id, "position": pos})
+				_create_car_wreck_local({"id": _next_car_wreck_id, "position": pos})
 				_next_car_wreck_id += 1
 	var nest_pos := _spaced_position(center, radius, ZOMBIE_NEST_GROUND_Y)
 	zombie_nest_spawner.spawn({"id": _next_zombie_nest_id, "position": nest_pos})
@@ -3250,11 +3357,11 @@ func _generate_forest_zone(center: Vector3) -> void:
 	# Eintrags aus BUILDING_TYPES.
 	for i in TREES_PER_FOREST_ZONE:
 		var pos := _spaced_position(center, FOREST_ZONE_RADIUS, TREE_GROUND_Y)
-		tree_spawner.spawn({"id": _next_tree_id, "position": pos})
+		_create_tree_local({"id": _next_tree_id, "position": pos})
 		_next_tree_id += 1
 	var building_size: Vector3 = FOREST_BUILDING_TEMPLATE["size"]
 	var building_pos := _spaced_position(center, FOREST_ZONE_RADIUS, building_size.y / 2.0, BUILDING_MIN_SPACING)
-	building_spawner.spawn({
+	_create_building_local({
 		"id": _next_building_id,
 		"position": building_pos,
 		"size": building_size,
@@ -3273,19 +3380,19 @@ func _spawn_wilderness_resources() -> void:
 	# Co. oben, bewusst nicht proportional zur Fläche hochskaliert).
 	for i in TREES_TOTAL:
 		var pos := _random_wilderness_position(TREE_GROUND_Y)
-		tree_spawner.spawn({"id": _next_tree_id, "position": pos})
+		_create_tree_local({"id": _next_tree_id, "position": pos})
 		_next_tree_id += 1
 	for i in CAR_WRECKS_TOTAL:
 		var pos := _random_wilderness_position(CAR_WRECK_GROUND_Y)
-		car_wreck_spawner.spawn({"id": _next_car_wreck_id, "position": pos})
+		_create_car_wreck_local({"id": _next_car_wreck_id, "position": pos})
 		_next_car_wreck_id += 1
 	for i in STONE_PILES_TOTAL:
 		var pos := _random_wilderness_position(STONE_PILE_GROUND_Y)
-		stone_pile_spawner.spawn({"id": _next_stone_pile_id, "position": pos})
+		_create_stone_pile_local({"id": _next_stone_pile_id, "position": pos})
 		_next_stone_pile_id += 1
 	for i in BRICK_PILES_TOTAL:
 		var pos := _random_wilderness_position(BRICK_PILE_GROUND_Y)
-		brick_pile_spawner.spawn({"id": _next_brick_pile_id, "position": pos})
+		_create_brick_pile_local({"id": _next_brick_pile_id, "position": pos})
 		_next_brick_pile_id += 1
 
 
@@ -3611,6 +3718,7 @@ func _collect_save_data() -> Dictionary:
 			"position": building.position,
 			"zone_center": building.zone_center,
 			"size": (building.get_node("Mesh").mesh as BoxMesh).size,
+			"model_path": building.model_path,
 			"loot": building.loot.duplicate(),
 			"default_color": building.default_color,
 			"has_survivor": building.has_survivor,

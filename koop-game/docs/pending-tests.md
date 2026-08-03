@@ -980,3 +980,38 @@ Zwei-Spieler-Test nach beiden Fixes.
 5. ⬜ (Mit einem dritten, später beitretenden Client) Blocker erscheint
    auch beim Spätbeitritt und verschwindet nach Catch-up korrekt —
    gleicher PULL-Mechanismus wie beim regulären Partie-Start.
+
+**Nachtrag 2026-08-04, zweiter Durchgang (Redundanz beseitigt):**
+`_generate_world()` benutzt jetzt `_create_building_local()`/
+`_create_tree_local()`/etc. statt der `*_spawner.spawn()`-Aufrufe (siehe
+`networking.md`) — für den Spieler sollte sich NICHTS sichtbar ändern
+(Punkte 1-4 oben gelten unverändert), das war eine reine
+Netzwerk-Effizienz-Verbesserung.
+
+**Vom Nutzer bestätigt (2026-08-04): "beide Spieler laden und haben
+beide keine Fehler, das passt soweit"** — Punkt 6 damit erledigt, keine
+Regression durch die Umstellung auf host-lokale Erzeugung. Debug-Logging
+wieder entfernt.
+
+6. ✅ Host UND Client sehen nach dem Sync exakt dieselbe Anzahl Gebäude/
+   Bäume/Wracks/Steine/Ziegel (keine fehlenden oder doppelten Einträge
+   durch die Umstellung).
+
+## Wohnhaus (echtes Asset, siehe `building.md`, 2026-08-04)
+
+Erster Test zeigte: Haus schwebte über dem Boden (Ursprungspunkt-Bug,
+behoben) + wirkte zu groß/Kamera zu nah (Standard-Zoom 25→40, `ZOOM_MIN`
+10→20→26 erhöht, siehe `world.md`, "Kamera-Zoom-Bereich").
+
+**Vom Nutzer bestätigt (2026-08-04): "bis jetzt passt so, vielleicht
+später bisschen Fein-Tuning"** — Boden-Fix, Standard-Zoom UND `ZOOM_MIN`
+alle in Ordnung, keine weitere Zoom-Anpassung gerade nötig. Rest noch
+offen:
+
+1. ⬜ Farb-Feedback funktioniert am echten Modell (claimen → bläulicher
+   Ton, plündern, Baustelle amberfarben) — nicht nur an der (jetzt
+   unsichtbaren) Platzhalter-Box.
+2. ⬜ (Mit zweitem Client) Wohnhaus zeigt bei beiden Peers dasselbe echte
+   Modell, nicht bei einem die Platzhalter-Box.
+3. ⬜ Nach Speichern/Laden (Solo) behält ein Wohnhaus weiterhin sein
+   echtes Modell.

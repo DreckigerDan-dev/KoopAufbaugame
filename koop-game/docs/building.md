@@ -530,6 +530,50 @@ HP-Farbe bekommen.
 **Noch nicht vom Nutzer visuell bestätigt** (Skalierung/Ausrichtung könnte
 je nach Blender-Exportgröße daneben liegen, wie zuvor bei der Home-Base).
 
+## Wohnhaus (echtes Asset, 2026-08-04)
+
+Erstes Loot-Gebäude-Asset (`assets/wohnhaustest.glb`, Vorgabe siehe
+`Infos/05 Assets im Spiel.md`, "Modellier-Prompt: Wohnhaus"). Anders als
+Wachturm/Holzmauer/Home-Base (jeweils eine EIGENE `.tscn` mit fest
+verdrahtetem `Model`-Node) teilen sich alle 14 Stadt-Gebäudetypen
+dieselbe `Building.tscn` — das Modell wird deshalb NICHT statisch im
+`.tscn` verdrahtet, sondern **dynamisch pro Instanz** in
+`World._create_building()` per `load(model_path).instantiate()`
+hinzugefügt, nur wenn der gewürfelte `BUILDING_TYPES`-Eintrag ein
+`model_path`-Feld hat (aktuell nur Wohnhaus). Alle anderen Typen bleiben
+unverändert Platzhalter-Boxen. Gleiches Fallback-Prinzip wie überall sonst
+(`Mesh`-Box bleibt vorhanden, nur unsichtbar — `_collect_save_data()`
+liest die Gebäude-Größe weiterhin darüber aus). `Building.model_path`
+(neues Feld) wird bei Catch-up/Speichern mit übertragen, damit ein
+Wohnhaus bei einem anderen Peer bzw. nach dem Laden wieder sein echtes
+Modell bekommt statt auf die Box zurückzufallen.
+
+**Farb-Feedback:** `Building._update_visual()` bevorzugt jetzt genau wie
+`HomeBase.gd` einen `$Model`-Node (rekursiv über `_find_mesh_instances()`
+eingefärbt), fällt ohne `Model` auf die alte Einzel-`$Mesh`-Logik zurück
+— identisches Muster wie bei Wachturm/Mauer oben, hier ein drittes Mal
+dupliziert statt geteilt.
+
+**Maße aus der echten glTF-Bounding-Box ausgelesen** (nicht die Zielwerte
+aus dem Prompt): 9,1m × 8,2m Grundfläche, 9,0m Höhe (Prompt sah 7m vor —
+das Modell kam höher raus). `BUILDING_TYPES`-Eintrag/Kollisionsbox nutzen
+diese echten Maße. **Straßenraster-Abstände angepasst**, weil das erste
+reale Gebäude größer als jeder bisherige Platzhalter ist (siehe
+Nutzerfrage "Supermarkt 18×12, Tiles nur 12×12"): `BUILDING_MIN_SPACING`
+6m→10m, `BUILDING_ROW_INSET` 2m→5m (siehe `world.md`, "Straßen-Raster") —
+gilt einheitlich für alle Typen, macht die Straßen insgesamt etwas
+lichter besetzt, bis auch die übrigen Typen echte Assets bekommen.
+
+**Bewusst NICHT gelöst:** Gebäude bekommen bei der Generierung KEINE
+Rotation (`_generate_city_zone()`/`_create_building()` setzen nie
+`rotation`) — bei Platzhalter-Boxen unsichtbar, beim Wohnhaus mit seiner
+erkennbaren Tür/Fassade jetzt sichtbar: die Vorderseite zeigt auf allen
+vier Blockkanten in dieselbe Weltrichtung, nicht zur jeweils angrenzenden
+Straße. Eigener, noch offener Folgeschritt (Rotation je nach Blockkante
+in `_generate_street_slots()` mitgeben).
+
+**Noch nicht vom Nutzer visuell bestätigt.**
+
 ## Wachposten (`GuardPost.gd`)
 
 Baubares Verteidigungsgebäude, host-autoritativ wie Survivor/Zombie.

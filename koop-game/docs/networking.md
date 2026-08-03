@@ -196,7 +196,53 @@ Funktion** ab — das hat die ENet-Verbindung des Peers überlastet.
    zurück auf 200/80/100/100 — zusätzliche Sicherheitsmarge obendrauf zur
    strukturellen Bündelung.
 
-**Vom Nutzer erneut getestet und bestätigt (2026-08-04)** — funktioniert.
+**Nachtrag 2026-08-04, Nutzerfrage "was ist der Plan für später, wenn mehr
+Gebäude/große Waldlandschaften dazukommen":** Punkt 1 oben (Bündel-RPCs)
+behebt nur die Hälfte des Problems — `_spawn_for_peer()`/`request_catch_up()`
+ist zwar jetzt gebündelt, aber `_generate_world()` selbst
+(`_generate_city_zone()`/`_generate_forest_zone()`/
+`_spawn_wilderness_resources()`) rief für dieselben Gebäude/Bäume/Wracks/
+Steine/Ziegel WEITERHIN `building_spawner.spawn()` & Co. individuell auf —
+bei einem gleichzeitigen Partie-Start (nicht nur Spätbeitritt) repliziert
+das automatisch UND REDUNDANT an den schon verbundenen zweiten Peer, on
+top von den (jetzt gebündelten) Catch-up-RPCs. Bei einer künftigen
+Zahlen-Erhöhung wäre also genau dieselbe Absturzgefahr zurückgekommen,
+nur eine Ebene tiefer versteckt.
+
+**Fix:** `_create_building_local()`/`_create_tree_local()`/
+`_create_car_wreck_local()`/`_create_stone_pile_local()`/
+`_create_brick_pile_local()` (neue Helper direkt bei den `_create_*()`-
+Funktionen) ersetzen `*_spawner.spawn()` in genau den drei
+Anfangs-Erzeugungs-Funktionen — reines `container.add_child(_create_X(data))`
+OHNE jede Netzwerk-Replikation. Der Host baut seine eigene Kopie also rein
+lokal, JEDER Peer (Host UND alle anderen) bekommt den Anfangs-Bestand
+stattdessen ausschließlich über die ohnehin schon existierende
+`request_catch_up()`-PULL (die jeder Client in `_ready()` aufruft, nicht
+nur Spätbeitritte) — keine doppelte Übertragung mehr. Damit ist die
+Netzwerklast beim Beitritt jetzt UNABHÄNGIG von der Gebäude-/Baum-Zahl auf
+~5-10 RPC-Aufrufe gedeckelt (nur die Paketgröße wächst noch mit, nicht die
+Aufrufzahl) — sicher für deutlich höhere Zahlen als jetzt, sobald echte
+Assets/größere Wälder dazukommen.
+
+**Bewusst NICHT angefasst:** `_regrow_resources()`/`_maybe_spawn_refugee()`/
+`home_base_destroyed()` (Ruine) benutzen weiterhin `*_spawner.spawn()` —
+das sind Ereignisse WÄHREND der laufenden Partie, die echte Live-
+Replikation zu schon verbundenen Peers brauchen (ein nachwachsender Baum
+muss sofort bei allen erscheinen), und sind ohnehin niedrig-frequent
+(höchstens 1 pro Typ pro Intervall). `_load_game_state()` (Speichern/Laden)
+läuft ebenfalls noch über die einzelnen Spawner-Aufrufe — bewusst nicht
+mit umgebaut, weil Speichern/Laden im Multiplayer aktuell ohnehin bekannt
+nicht funktioniert (separates, noch offenes Problem), gleiche Umstellung
+wäre aber der nächste Schritt, sobald das angegangen wird.
+
+**Faustregel für die Zukunft:** jede deutliche Erhöhung der
+World-Generierungs-Zahlen nochmal ECHT zu zweit testen (Debug → Customize
+Run Instances → 2), nicht nur solo — das Netzwerk-Symptom zeigt sich nur
+beim nicht-Host-Peer, ein Solo-Test hätte auch die ursprüngliche 1750er-
+Eskalation nie aufgedeckt.
+
+**Vom Nutzer erneut getestet und bestätigt (2026-08-04): "beide Spieler
+laden und haben beide keine Fehler, das passt soweit"** — funktioniert.
 Debug-Logging wieder entfernt.
 
 ## Cross-Node-Feedback-Muster
