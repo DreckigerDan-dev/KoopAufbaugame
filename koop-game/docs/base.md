@@ -94,15 +94,18 @@ Baurohstoffe/Überlebensgüter 2026-08-04 nochmal angehoben (Nutzerwunsch:
 "mehr start resourcen das man seine base gleich bischen ausbauen kann",
 siehe `docs/mechanics-review.md`, "Ressourcen-Wirtschaft") — reicht jetzt
 z. B. für eine Zonen-Erweiterung (15 Stein) PLUS einen Wachposten (30
-Holz) direkt zu Spielbeginn. Kein `book_*` im Startbestand — Bücher sind
-NUR über seltenen Zombie-Loot erreichbar (siehe
+Holz) direkt zu Spielbeginn. Kein `book_research` im Startbestand — Bücher
+sind NUR über seltenen Zombie-Loot erreichbar (siehe
 [`docs/zombies.md`](zombies.md)). Ausrüstungs-Startbestand (`weapon`/
 `armor`/`helmet`/`melee_weapon`/`leg_armor`) bewusst bei 1 belassen —
 Einzel-Slots, kein Grund die zu erhöhen.
 
-Sechzehn Ressourcenarten (2026-08-02: `melee_weapon`/`leg_armor` seit
-Punkt 18 der Gesamtliste dazugekommen, siehe [`survivor.md`](survivor.md),
-"Haupt-/Sekundärwaffe"/"Dritter Rüstungs-Slot"). `food` wird beim Essen
+Dreizehn Ressourcenarten (2026-08-04: Universal-Buch-Migration — die
+vorher fünf getrennten `book_*`-Ressourcen sind jetzt eine einzige
+`book_research`, siehe [`building.md`](building.md), "Forschungsbücher";
+2026-08-02: `melee_weapon`/`leg_armor` seit Punkt 18 der Gesamtliste
+dazugekommen, siehe [`survivor.md`](survivor.md), "Haupt-/Sekundärwaffe"/
+"Dritter Rüstungs-Slot"). `food` wird beim Essen
 verbraucht (siehe [`docs/survivor.md`](survivor.md)), `medicine` beim
 Heilen, `wood`/`metal`/`stone`/`brick` beim Bauen/Claimen (siehe unten).
 `weapon`/`armor`/`helmet`/`melee_weapon`/`leg_armor` kommen über

@@ -492,6 +492,43 @@ weiterlaufen.
   `_update_hud()` etc.) bleiben während der Pause bewusst aktiv.
 - Noch nicht vom Nutzer getestet.
 
+## Zeitraffer (nur Host, 2026-08-04)
+
+Nutzerwunsch nach der Infection-Free-Zone-Recherche (siehe
+`Infos/06 Infection Free Zone Recherche.md`, "Kritikpunkte ernst nehmen":
+IFZ-Reviews nennen spürbar zu langsames Tempo ohne Zeitraffer als
+Schwäche) — 1x/2x/3x-Buttons statt eines eigenen Zeitraffer-Systems.
+
+- **Nutzt `Engine.time_scale` direkt** statt eines eigenen, manuell
+  durchgereichten Multiplikators wie beim Pause-Flag oben — skaliert
+  automatisch JEDEN `delta`-Wert im ganzen Spiel (Tag/Nacht, Zombie-KI,
+  Bautrupp-Timer, Ressourcen-Nachwachsen, ...), keine einzelne Stelle
+  musste dafür angefasst werden. Deutlich kleinerer Eingriff als die
+  Pause-Lösung, gerade WEIL hier (anders als bei Pause) wirklich ALLES
+  gleichmäßig mitskalieren soll, nicht nur bestimmte host-only-Blöcke.
+- **`World._time_scale: float`**, gesetzt über `request_set_time_scale()`
+  (nur Peer-ID 1 = Host darf, gleiche Prüfung wie bei Pause), an alle
+  Peers gespiegelt (`_sync_time_scale()`) — jeder Peer setzt sein eigenes
+  `Engine.time_scale` lokal, sonst liefe z. B. der lokal auf jedem Peer
+  laufende Tag/Nacht-Zyklus bei Host und Client unterschiedlich schnell
+  auseinander (gleiches Muster/gleicher Grund wie bei Pause).
+- **`ResourcesUI/Panel/VBoxContainer/SpeedRow`** — drei Toggle-Buttons
+  (1x/2x/3x) direkt über der Uhr, nur für den Host sichtbar
+  (`speed_row.visible = multiplayer.is_server()`, gleiches Muster wie
+  `PauseGameButton`). `_update_speed_buttons()` zeigt die aktive Stufe
+  gedrückt.
+- **`World._exit_tree()` setzt `Engine.time_scale` zurück auf 1.0** —
+  wichtig, weil das eine GLOBALE Engine-Eigenschaft ist, kein
+  Szenen-lokaler Zustand: ohne Reset bliebe ein Zeitraffer-Wert über das
+  Verlassen von `World.tscn` hinaus aktiv (Game Over, Hauptmenü,
+  Trennung) und würde z. B. das Hauptmenü unbeabsichtigt beschleunigt
+  darstellen.
+- Kombiniert sich mit Pause unverändert richtig: Pause prüft weiterhin
+  nur `_game_paused` (gated einzelne host-only-Blöcke/Entity-`_process()`),
+  Zeitraffer skaliert `delta` unabhängig davon — beide zusammen aktiv
+  heißt "pausiert bei eingestellter Geschwindigkeit", genau wie erwartet.
+- Noch nicht vom Nutzer getestet.
+
 ## UI-Overhaul (2026-08-01)
 
 Nutzerwunsch: "ein komplettes UI overhaul mit dropdown menu verschiedene

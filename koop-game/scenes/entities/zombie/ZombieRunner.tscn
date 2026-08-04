@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/entities/zombie/Zombie.gd" id="1"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_runner"]
+radius = 0.25
+height = 1.5
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_runner"]
+radius = 0.25
+height = 1.5
+
+[node name="ZombieRunner" type="StaticBody3D" groups=["zombie"]]
+script = ExtResource("1")
+zombie_type = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_runner")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_runner")

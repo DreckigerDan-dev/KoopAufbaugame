@@ -28,18 +28,30 @@ const COUNTER_DAMAGE := 15
 # Give-up-Prüfung für einen schon verfolgten Ziel bleibt bewusst unthrottled
 # (reine Distanzprüfung, billig, soll ohne Verzögerung reagieren).
 const TARGET_SEARCH_INTERVAL := 0.2
-# Zombie-Typen (siehe docs/zombies.md, "Zombie-Typen") — aus
+# Zombie-Typen (siehe docs/zombies.md, "Zombie-Typen") — ursprünglich aus
 # Infos/01 Architektur.md: "zwei Typen — Standard-Läufer sowie ein zäher
-# Brute (langsam, viel HP, hoher Schaden)". Gleiches Script wie der
-# Standard-Zombie (nur Zahlenwerte unterscheiden sich, keine eigene
-# Verhaltenslogik nötig) — analog zu Wall.gd/`is_gate`, aber als eigene
-# Szene `ZombieBrute.tscn` (größere Kapsel) statt nur einem Export-Flag
-# auf derselben Szene.
-@export var is_brute: bool = false
+# Brute (langsam, viel HP, hoher Schaden)", 2026-08-04 um einen dritten
+# ("Runner": schnell, schwach) erweitert, siehe Infos/07 Backlog-
+# Umsetzungspläne.md, "Mehr Zombie-Typen". Gleiches Script für alle drei
+# (nur Zahlenwerte unterscheiden sich, keine eigene Verhaltenslogik nötig)
+# — analog zu Wall.gd/`is_gate`, aber als eigene Szenen (unterschiedliche
+# Kapsel-Maße lassen sich in `.tscn` nicht per Export umschalten). Ab dem
+# dritten Typ ein echtes Enum statt eines zweiten Bool-Flags (sauberer als
+# eine wachsende Zahl sich gegenseitig ausschließender Bools).
+enum ZombieType { NORMAL, BRUTE, RUNNER }
+@export var zombie_type: ZombieType = ZombieType.NORMAL
 const BRUTE_MAX_HP := 100
 const BRUTE_WANDER_SPEED := 1.2
 const BRUTE_CHASE_SPEED := 3.5
 const BRUTE_ATTACK_DAMAGE := 25
+# Runner: schnell, aber zerbrechlich — CHASE_SPEED deutlich über
+# Survivor.MOVE_SPEED (4.0), also gefährlich trotz wenig HP, wenn er
+# einen Trupp einholt. Maße/Werte grob so gewählt, dass er sich klar
+# anders anfühlt als Standard/Brute, keine echte Balance-Analyse.
+const RUNNER_MAX_HP := 20
+const RUNNER_WANDER_SPEED := 3.0
+const RUNNER_CHASE_SPEED := 7.5
+const RUNNER_ATTACK_DAMAGE := 6
 # Nacht-Schadensbonus (Nutzerwunsch: "Zombies ab 22 Uhr bis 4 Uhr morgens
 # 20% stärker", siehe World.NIGHT_START_HOUR/NIGHT_END_HOUR,
 # World.is_night()) — gilt für Standard-Zombies UND Brutes gleichermaßen
@@ -61,11 +73,12 @@ var _wander_target: Vector3 = Vector3.ZERO
 var _idle_timer: float = 0.0
 var _chase_target: Node3D = null
 var _attack_timer: float = 0.0
-# In _ready() aus is_brute abgeleitet (siehe dort) — @export-Werte stehen
-# erst NACH der Szenen-Deserialisierung fest, ein Feld-Standardwert wie
-# `var hp: int = MAX_HP` würde also immer den Nicht-Brute-Wert nehmen,
-# selbst für eine Brute-Instanz (gleiches Muster wie Wall.gd, `_ready()`
-# setzt `hp` dort aus demselben Grund explizit statt per Feld-Default).
+# In _ready() aus zombie_type abgeleitet (siehe dort) — @export-Werte
+# stehen erst NACH der Szenen-Deserialisierung fest, ein Feld-Standardwert
+# wie `var hp: int = MAX_HP` würde also immer den NORMAL-Wert nehmen,
+# selbst für eine Brute-/Runner-Instanz (gleiches Muster wie Wall.gd,
+# `_ready()` setzt `hp` dort aus demselben Grund explizit statt per
+# Feld-Default).
 var _max_hp: int = 0
 var _wander_speed: float = 0.0
 var _chase_speed: float = 0.0
@@ -113,12 +126,24 @@ var _last_synced_hp: int = 0
 
 
 func _ready() -> void:
-	_max_hp = BRUTE_MAX_HP if is_brute else MAX_HP
+	match zombie_type:
+		ZombieType.BRUTE:
+			_max_hp = BRUTE_MAX_HP
+			_wander_speed = BRUTE_WANDER_SPEED
+			_chase_speed = BRUTE_CHASE_SPEED
+			_attack_damage = BRUTE_ATTACK_DAMAGE
+		ZombieType.RUNNER:
+			_max_hp = RUNNER_MAX_HP
+			_wander_speed = RUNNER_WANDER_SPEED
+			_chase_speed = RUNNER_CHASE_SPEED
+			_attack_damage = RUNNER_ATTACK_DAMAGE
+		_:
+			_max_hp = MAX_HP
+			_wander_speed = WANDER_SPEED
+			_chase_speed = CHASE_SPEED
+			_attack_damage = ATTACK_DAMAGE
 	hp = _max_hp
 	_last_synced_hp = hp
-	_wander_speed = BRUTE_WANDER_SPEED if is_brute else WANDER_SPEED
-	_chase_speed = BRUTE_CHASE_SPEED if is_brute else CHASE_SPEED
-	_attack_damage = BRUTE_ATTACK_DAMAGE if is_brute else ATTACK_DAMAGE
 	_home_position = position
 	_target_search_timer = randf_range(0.0, TARGET_SEARCH_INTERVAL)
 	_pick_new_wander_target()
@@ -324,7 +349,7 @@ func take_damage(amount: int, source_peer_id: int = 0) -> void:
 	hp = max(hp - amount, 0)
 	if hp <= 0:
 		_dead = true
-		get_tree().current_scene.grant_zombie_loot(_last_damage_source_peer_id, is_brute)
+		get_tree().current_scene.grant_zombie_loot(_last_damage_source_peer_id, zombie_type)
 		_die.rpc()
 
 
@@ -360,14 +385,21 @@ func apply_synced_state(new_position: Vector3, new_hp: int) -> void:
 
 func _update_color() -> void:
 	# Grün, dunkelt mit sinkendem HP nach (unterscheidbar von Survivor, der
-	# weiß-zu-rot wird). Brute bekommt einen eigenen, dunkleren
-	# Grundton (siehe docs/zombies.md, "Zombie-Typen") — zusätzlich zur
-	# größeren Kapsel auch farblich auf den ersten Blick unterscheidbar.
+	# weiß-zu-rot wird). Brute/Runner bekommen je einen eigenen Grundton
+	# (siehe docs/zombies.md, "Zombie-Typen") — zusätzlich zur
+	# unterschiedlichen Kapselgröße auch farblich auf den ersten Blick
+	# unterscheidbar.
 	var mesh: MeshInstance3D = get_node_or_null("Mesh")
 	if mesh == null:
 		return
 	var ratio: float = float(hp) / float(_max_hp)
-	var base_color := Color(0.18, 0.22, 0.12) if is_brute else Color(0.2, 0.5, 0.2)
+	var base_color := Color(0.2, 0.5, 0.2)
+	if zombie_type == ZombieType.BRUTE:
+		base_color = Color(0.18, 0.22, 0.12)
+	elif zombie_type == ZombieType.RUNNER:
+		# Blasses/kränkliches Gelbgrün — soll auf den ersten Blick "dünn und
+		# hastig" statt "zäh" wirken, Gegensatz zum dunklen Brute-Ton.
+		base_color = Color(0.55, 0.6, 0.25)
 	# Material einmal anlegen und danach nur noch mutieren statt jedes Mal
 	# neu zu allozieren (siehe _material oben) — set_surface_override_material()
 	# muss trotzdem nur einmal aufgerufen werden, ein bereits gesetztes

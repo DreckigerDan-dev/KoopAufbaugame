@@ -205,52 +205,77 @@ Blick unterscheidbar bleiben.
 
 ## Zombie-Typen
 
-Zwei Typen, ein Script (`Zombie.gd`) — gleiches Muster wie
-`Wall.gd`/`is_gate` (siehe [`docs/building.md`](building.md)), aber als
-zwei getrennte Szenen statt nur einem Export-Flag auf derselben Szene
-(unterschiedliche Kapsel-Maße lassen sich in `.tscn` nicht per Export
-umschalten):
+**Drei Typen seit 2026-08-04** (vorher zwei — siehe `Infos/07 Backlog-
+Umsetzungspläne.md`, "Mehr Zombie-Typen"), ein Script (`Zombie.gd`) —
+grundsätzlich gleiches Muster wie `Wall.gd`/`is_gate` (siehe
+[`docs/building.md`](building.md)), aber als drei getrennte Szenen statt
+nur eines Export-Flags auf derselben Szene (unterschiedliche Kapsel-Maße
+lassen sich in `.tscn` nicht per Export umschalten). Ab dem dritten Typ
+ein echtes Enum (`Zombie.ZombieType { NORMAL, BRUTE, RUNNER }`) statt
+eines zweiten Bool-Flags — sauberer als eine wachsende Zahl sich
+gegenseitig ausschließender Bools, ersetzt das frühere `is_brute: bool`.
 
 - **`Zombie.tscn`** — Standard-Läufer, Kapsel 1,7m × 0,3m (radius),
-  `is_brute = false` (Default).
+  `zombie_type = NORMAL (0)` (Default).
 - **`ZombieBrute.tscn`** — zäher Brute, Kapsel 2,1m × 0,4m (radius),
-  `is_brute = true`, Maße aus `Infos/03 Asset-Checkliste.md`
+  `zombie_type = BRUTE (1)`, Maße aus `Infos/03 Asset-Checkliste.md`
   ("Zombie Brute | 2,1m × 0,5m × 0,4m").
+- **`ZombieRunner.tscn`** (neu) — schnell, aber zerbrechlich, Kapsel 1,5m
+  × 0,25m (radius), `zombie_type = RUNNER (2)`. `CHASE_SPEED` (7,5)
+  deutlich über `Survivor.MOVE_SPEED` (4,0) — gefährlich trotz wenig HP,
+  wenn er einen Trupp einholt. Werte grob gewählt, damit er sich klar
+  anders anfühlt als Standard/Brute, keine echte Balance-Analyse.
 
-`@export var is_brute: bool` steuert in `_ready()` vier
-Instanzvariablen (`_max_hp`, `_wander_speed`, `_chase_speed`,
-`_attack_damage`), die überall dort verwendet werden, wo vorher direkt
-die Konstanten standen:
+`@export var zombie_type: ZombieType` steuert in `_ready()` (per
+`match`) vier Instanzvariablen (`_max_hp`, `_wander_speed`,
+`_chase_speed`, `_attack_damage`), die überall dort verwendet werden, wo
+vorher direkt die Konstanten standen:
 
-| | Standard | Brute |
-|---|---|---|
-| HP | `MAX_HP := 40` | `BRUTE_MAX_HP := 100` |
-| Wander-Speed | `WANDER_SPEED := 2.0` | `BRUTE_WANDER_SPEED := 1.2` |
-| Chase-Speed | `CHASE_SPEED := 5.0` | `BRUTE_CHASE_SPEED := 3.5` |
-| Angriffsschaden | `ATTACK_DAMAGE := 10` | `BRUTE_ATTACK_DAMAGE := 25` |
+| | Standard | Brute | Runner |
+|---|---|---|---|
+| HP | `MAX_HP := 40` | `BRUTE_MAX_HP := 100` | `RUNNER_MAX_HP := 20` |
+| Wander-Speed | `WANDER_SPEED := 2.0` | `BRUTE_WANDER_SPEED := 1.2` | `RUNNER_WANDER_SPEED := 3.0` |
+| Chase-Speed | `CHASE_SPEED := 5.0` | `BRUTE_CHASE_SPEED := 3.5` | `RUNNER_CHASE_SPEED := 7.5` |
+| Angriffsschaden | `ATTACK_DAMAGE := 10` | `BRUTE_ATTACK_DAMAGE := 25` | `RUNNER_ATTACK_DAMAGE := 6` |
 
 Bekannte `@export`-Timing-Falle beachtet (siehe auch `Wall.gd`): ein
 Feld-Default wie `var hp: int = MAX_HP` würde vor der
-Export-Übernahme ausgewertet und für Brute-Instanzen immer den
-Nicht-Brute-Wert liefern. Deshalb `var hp: int = 0` und die echte
-Zuweisung erst in `_ready()`, nachdem `is_brute` feststeht.
+Export-Übernahme ausgewertet und für Brute-/Runner-Instanzen immer den
+NORMAL-Wert liefern. Deshalb `var hp: int = 0` und die echte Zuweisung
+erst in `_ready()`, nachdem `zombie_type` feststeht.
 
-`_update_color()` gibt Brutes einen eigenen, dunkleren Grundton
-(`Color(0.18, 0.22, 0.12)` statt `Color(0.2, 0.5, 0.2)`) — zusätzlich
-zur größeren Kapsel auch farblich auf den ersten Blick unterscheidbar.
+`_update_color()` gibt Brute (`Color(0.18, 0.22, 0.12)`, dunkel) und
+Runner (`Color(0.55, 0.6, 0.25)`, blasses/kränkliches Gelbgrün — soll
+"dünn und hastig" statt "zäh" wirken) je einen eigenen Grundton statt des
+Standard-Grüns (`Color(0.2, 0.5, 0.2)`) — zusätzlich zur unterschiedlichen
+Kapselgröße auch farblich auf den ersten Blick unterscheidbar.
+
+**Loot:** nur Brute nutzt den Bonus-Loot-Tisch (`BRUTE_LOOT_AMOUNT`) beim
+Tod (siehe "Zombie-Loot-Drop" unten) — Runner ist zwar ein eigener Typ,
+aber kein besonderer Loot-Bringer, fällt bewusst auf denselben Tisch wie
+der Standard-Zombie (`ZOMBIE_LOOT_AMOUNT`).
 
 **Spawn-Integration:** `World._create_zombie(data)` liest
-`data.get("is_brute", false)` und instanziert `ZOMBIE_BRUTE_SCENE`
-statt `ZOMBIE_SCENE`, wenn gesetzt. Die vier festen Start-Zombies
-(`_spawn_zombies()`) sind dadurch automatisch Standard-Läufer (kein
-`is_brute`-Key im `data`-Dictionary → Default `false`). Horde-Nächte
-(siehe unten) mischen `HORDE_BRUTE_COUNT := 2` Brutes in die
-`HORDE_SIZE := 10` Zombies pro Welle. Getrennte Ground-Y-Konstanten
-(`ZOMBIE_GROUND_Y := 0.85`, `ZOMBIE_BRUTE_GROUND_Y := 1.05`), da die
-größere Kapsel sonst im Boden versinken würde. Late-Join-Catch-up
-(`_catch_up_zombie()`) reicht `is_brute` als viertes RPC-Argument
-durch, damit später beitretende Peers auch schon existierende Brutes
-korrekt (mit der richtigen Szene/Optik) sehen.
+`data.get("zombie_type", 0)` (rohe Int-Werte 0/1/2 — `World.gd` kennt
+`Zombie.gd` bewusst nicht als Typ, kein `class_name`) und wählt
+`ZOMBIE_SCENE`/`ZOMBIE_BRUTE_SCENE`/`ZOMBIE_RUNNER_SCENE` entsprechend.
+Die vier festen Start-Zombies (`_spawn_zombies()`) und die Zombie-Nest-
+Nachspawns sind dadurch automatisch Standard-Läufer (kein
+`zombie_type`-Key im `data`-Dictionary → Default `0`/NORMAL) — Brute/
+Runner tauchen aktuell NUR in Horde-Nächten auf, nicht beim normalen
+Wandern/Nest-Nachschub. Horde-Nächte (siehe unten) mischen
+`HORDE_BRUTE_COUNT := 2` Brutes UND `HORDE_RUNNER_COUNT := 2` Runner in
+die `HORDE_SIZE := 10` Zombies pro Welle (eigener Anteil, verdrängt
+nicht den Brute-Anteil). Getrennte Ground-Y-Konstanten (`ZOMBIE_GROUND_Y
+:= 0.85`, `ZOMBIE_BRUTE_GROUND_Y := 1.05`, `ZOMBIE_RUNNER_GROUND_Y :=
+0.75`), da unterschiedlich hohe Kapseln sonst im Boden versinken oder
+schweben würden. Late-Join-Catch-up (`_catch_up_zombie()`) reicht
+`zombie_type` als viertes RPC-Argument durch, damit später beitretende
+Peers auch schon existierende Brutes/Runner korrekt (mit der richtigen
+Szene/Optik) sehen. Speicherstand: `.get("zombie_type", 0)`-Fallback für
+Spielstände von vor dieser Erweiterung (vorher `"is_brute": bool`).
+
+**Noch nicht vom Nutzer getestet** (Runner-Werte/-Optik).
 
 ## Zombie-Nest
 

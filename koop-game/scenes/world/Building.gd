@@ -37,6 +37,14 @@ var default_color: Color = Color(0.45, 0.38, 0.3)
 # an World._create_building() zurückgeben können, siehe World._spawn_for_peer()/
 # _collect_save_data().
 var model_path: String = ""
+# Prozedural erzeugtes Modell statt echtem Asset ODER Platzhalter-Box
+# (2026-08-04, Nutzerwunsch: "für die masse die häuser generieren, die
+# spezial POI base krankenhaus etc mach ich") — leer = kein prozedurales
+# Modell (Platzhalter-Box oder model_path greift stattdessen). Enthält
+# "width"/"depth"/"wall_height"/"roof_height"/"wall_color"/"roof_color",
+# siehe World._random_house_proc_params()/_build_procedural_house().
+# Als Feld gehalten, gleicher Grund wie model_path/default_color oben.
+var proc_params: Dictionary = {}
 # Kartenansicht-Legende (siehe World.LOOT_CATEGORY_BY_RESOURCE/MapView.gd,
 # LOOT_CATEGORY_COLORS) — "food"/"medicine"/"equipment"/"books", aus der
 # BUILDING_TYPES-Vorlage abgeleitet, einmalig beim Spawn gesetzt.

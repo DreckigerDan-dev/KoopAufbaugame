@@ -20,3 +20,13 @@ mesh = SubResource("BoxMesh_guardpost")
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_guardpost")
+
+[node name="NoWorkerLabel" type="Label3D" parent="."]
+visible = false
+position = Vector3(0, 3, 0)
+billboard = 1
+no_depth_test = true
+outline_size = 12
+font_size = 48
+modulate = Color(1, 0.3, 0.2, 1)
+text = "Kein Arbeiter zugewiesen"

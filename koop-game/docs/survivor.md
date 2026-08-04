@@ -38,12 +38,22 @@ steht statt zu versinken/schweben) entsprechend auf `0.85` angepasst.
 - **Hunger-Verlangsamung:** unter `HUNGER_LOW_THRESHOLD` (30) sinkt die
   Geschwindigkeit auf `MOVE_SPEED * HUNGER_SPEED_FACTOR` (0.5×), siehe
   `_current_move_speed()`.
-- **Obstacle-Blocking:** `_is_path_blocked(next_position)` raycastet auf
-  `OBSTACLE_LAYER` (Physik-Layer 2, Mauern/Tore) für den nächsten
-  Bewegungsschritt (nicht bis zum Wegpunkt) — steht eine Mauer/ein
-  fremdes Tor im Weg, bleibt der Trupp einfach stehen, kein
-  Ausweichen/Pathfinding. Details zu `blocks()`:
-  [`docs/walls.md`](walls.md).
+- **Obstacle-Blocking + Ausweichen (2026-08-04):** `_is_path_blocked(next_position)`
+  raycastet auf `OBSTACLE_LAYER` (Physik-Layer 2, Mauern/Tore) für den
+  nächsten Bewegungsschritt (nicht bis zum Wegpunkt). KoopGame hat KEIN
+  echtes Pathfinding (kein Navmesh, Bewegung ist reines
+  `position.move_toward()`) — bei blockiertem direktem Weg probiert
+  `_sidestep_position()` stattdessen eine seitliche Bewegung senkrecht zur
+  Zielrichtung (einfache Ausweich-Heuristik, kein Navmesh), bis der Weg
+  wieder frei ist; blieb bisher einfach stehen. Blockiert auch die
+  Ausweich-Seite, wird die Seite gewechselt (`_sidestep_direction`,
+  z. B. an einer Mauer-Ecke), erst wenn beide Seiten blockiert sind,
+  bleibt der Trupp wirklich stehen. Details zu `blocks()`:
+  [`docs/walls.md`](walls.md). **Weiterhin kein echtes Navmesh** — reine
+  lokale Heuristik, kann bei komplexen Mauer-Layouts (z. B. einer
+  U-Form) trotzdem stecken bleiben; ein prozedural gebackenes
+  `NavigationRegion3D` wäre der eigentliche, größere Fix, bewusst
+  zurückgestellt (siehe `Infos/06 Infection Free Zone Recherche.md`).
 
 ## HP + Permadeath
 
@@ -425,6 +435,15 @@ Weiß→Rot-Verlaufs — der HP-Verlauf Richtung Rot läuft für beide Typen
 gleich, nur eben über den jeweiligen Grundton. Kein eigenes Sync-RPC
 nötig, aktualisiert sich automatisch über die ohnehin laufende
 `_sync_state()`-Replikation, sobald `set_troop_type()` den Typ ändert.
+(Historischer Absatz — seit dem Pro-Einheit-Farbton vom 2026-08-03 ist
+Trupp-Art nur noch ein Sättigung/Helligkeit-Zweitsignal, siehe
+`_unit_base_color()` unten.)
+
+**Dritter Typ seit 2026-08-04: `TroopType.UNASSIGNED`** ("Zivilisten-
+Konzept") — Standardzustand jedes neuen Rekruten (nicht der Start-Trupps),
+kann sich nicht bewegen/einsteigen/kämpfen/bauen, bis der Spieler ihn
+manuell oder per Auto-Zuweisungs-Profil einem echten Typ zuweist. Volle
+Details in [`docs/recruitment.md`](recruitment.md), "Zivilisten-Konzept".
 
 ### Ressourcen abbauen: Bäume, Autowracks, Stein-/Ziegelhaufen
 
@@ -432,16 +451,42 @@ Vier gleichwertige "harvestable"-Ressourcenquellen (gemeinsame Gruppe
 `"harvestable"`, siehe unten), für `Survivor.gd` komplett ununterscheidbar:
 
 - **`scenes/entities/tree/Tree.gd`** — `MAX_HP := 60`, `YIELD :=
-  {"wood": 15}`.
+  {"wood": 15}`. **Echtes Asset seit 2026-08-04**
+  (`assets/tannenbaum.glb`) — ein zusammenhängendes Modell statt der
+  vorherigen getrennten Stamm-/Kronen-Platzhalter, deshalb reagiert jetzt
+  der GANZE Baum auf HP/Markierung (vorher nur die Krone, Stamm blieb
+  konstant braun) — keine sinnvolle Trunk/Foliage-Trennung mehr im echten
+  Modell möglich. Größe nicht extra vom Nutzer bestätigt (anders als beim
+  Ziegelhaufen), am Platzhalter orientiert — bei Bedarf nachjustieren.
 - **`scenes/entities/wreck/CarWreck.gd`** — `MAX_HP := 80`, `YIELD :=
   {"metal": 20}`, seltener als Bäume. Bewusst eine **eigene, separate
   Entität** statt die beiden fahrbaren `Vehicle`-Objekte abbaubar zu
   machen — das hätte deren Rolle als Transportmittel entwertet
-  (Zielkonflikt), siehe [`docs/vehicle.md`](vehicle.md).
+  (Zielkonflikt), siehe [`docs/vehicle.md`](vehicle.md). Noch
+  Platzhalter-Box.
 - **`scenes/entities/pile/StonePile.gd`** — `MAX_HP := 50`, `YIELD :=
-  {"stone": 15}`.
+  {"stone": 15}`. **Echtes Asset seit 2026-08-04**
+  (`assets/steinehaufen.glb`, mehrere Einzelstein-Meshes) — gleiches
+  Muster wie beim Ziegelhaufen, `_update_color()` färbt jetzt alle
+  Mesh-Kinder statt nur der zwei (jetzt unsichtbaren) Platzhalter-Kugeln.
 - **`scenes/entities/pile/BrickPile.gd`** — `MAX_HP := 50`, `YIELD :=
-  {"brick": 15}`.
+  {"brick": 15}`. **Echtes Asset seit 2026-08-04**
+  (`assets/ziegelhaufen.glb`, 1,4×0,5×1,4m, mehrere Einzelziegel-Meshes) —
+  gleiches Vorrang-/Y-Ausgleich-Prinzip wie beim Wohnhaus
+  (`docs/building.md`), `BrickPile._update_color()` färbt jetzt alle
+  Mesh-Kinder statt nur der (jetzt unsichtbaren) Platzhalter-Box, damit
+  Markierung (gelb) und HP-Abdunkeln weiterhin sichtbar bleiben.
+
+**Skalierung angehoben (2026-08-04, Nutzerwunsch: "steine, bäume und
+ziegel bisschen größer machen aber nicht viel"):** Baum/Steinhaufen/
+Ziegelhaufen bekommen `scale = Vector3(1.2, 1.2, 1.2)` auf ihrem
+`Model`-Node (+20 %) — reine `.tscn`-Änderung, keine neuen Assets nötig.
+Funktioniert, weil das `Model` an seiner eigenen Basis verankert ist
+(Blender-Konvention, siehe `docs/building.md`, "Wohnhaus") — Skalieren um
+den eigenen Ursprung lässt die Bodenkontakt-Stelle unverändert, nur die
+Geometrie darüber wird größer, kein Y-Ausgleich nötig. Kollisionsformen
+proportional mitskaliert (Baum-Zylinder, Steinhaufen-Kugel, Ziegelhaufen-
+Box). Feld bewusst NICHT mitskaliert (nicht Teil des Nutzerwunsches).
 
 Stein-/Ziegelhaufen ersetzen das ursprüngliche Stein-/Ziegel-Loot aus den
 acht Stadt-Gebäuden (siehe [`docs/scavenging.md`](scavenging.md)) —

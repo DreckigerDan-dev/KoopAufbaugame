@@ -9,6 +9,82 @@ durchsuchte Gebäude") sind historisch und teilweise veraltet
 für den aktuellen Gesamtstand siehe "Erweiterte Rekrutierung
 (2026-08-04)" weiter unten.
 
+## Aktive Rekrutierungs-Aktion: "Ruf aussenden" (2026-08-04)
+
+Ergänzung zum passiven Schutzsuchenden-Timer (siehe "Erweiterte
+Rekrutierung" unten) — Nutzerwunsch aus `Infos/07 Backlog-
+Umsetzungspläne.md`. Button im Einheiten-Tab, direkt unter dem
+Auto-Zuweisungs-Dropdown.
+
+- **`World.request_active_recruit_call(requesting_peer_id)`**
+  (`@rpc("any_peer", "call_local", "reliable")`): erzwingt einen
+  Schutzsuchenden-Spawn-Versuch — ruft `_maybe_spawn_refugee(true)` auf,
+  das jetzt einen `force`-Parameter hat, der NUR den Zufalls-Würfel
+  (`REFUGEE_SPAWN_CHANCE`) überspringt. Der Aktiv-Deckel
+  (`REFUGEE_MAX_ACTIVE := 3`) gilt weiterhin — ein Spieler kann also nicht
+  beliebig viele gleichzeitige Schutzsuchende erzwingen, nur den nächsten
+  freien Slot sofort statt erst nach einem zufälligen Timer-Tick füllen.
+- **`ACTIVE_RECRUIT_CALL_COOLDOWN := 90.0`**, PRO SPIELER (nicht global)
+  in `World._active_recruit_call_cooldowns: Dictionary` (peer_id →
+  restliche Sekunden), jeden Frame runtergezählt (host-seitig, wie der
+  passive `_refugee_spawn_timer`). Verhindert Spam-Klicks, unabhängig
+  davon, was andere Spieler gerade tun.
+- **Kein eigener UI-Cooldown-Countdown** — die Cooldown-Buchführung ist
+  rein host-seitig (nie an Clients repliziert), der Button zeigt bewusst
+  immer denselben Text. Ein Klick während des Cooldowns gibt stattdessen
+  eine `report_status()`-Meldung ("Noch X s bis zum nächsten Ruf.") statt
+  stiller Ablehnung — gleiches Feedback-Prinzip wie überall sonst im
+  Projekt (z. B. "Kein freier Trupp verfügbar." am Wachposten).
+- **Ist der Aktiv-Deckel erreicht** (3 Schutzsuchende schon unterwegs):
+  eigene Meldung ("Schon genug Schutzsuchende unterwegs — später erneut
+  versuchen."), kein Cooldown-Verbrauch in diesem Fall (der Spieler hat ja
+  nichts bekommen, soll es also gleich nochmal versuchen dürfen, sobald
+  einer der bestehenden Schutzsuchenden gefunden/verschwunden ist).
+
+**Noch nicht vom Nutzer getestet.**
+
+## Zivilisten-Konzept: neue Rekruten starten unzugewiesen (2026-08-04)
+
+Nutzerwunsch nach der IFZ-Gap-Analyse (siehe `Infos/06 Infection Free Zone
+Recherche.md`, `Infos/01 Architektur.md` "Ideen-Backlog") — leichte Variante
+des dort diskutierten "Zivilisten-Konzepts", ohne eigene Housing-Kapazität
+o. Ä. zu bauen. Betrifft NUR neue Rekruten (alle drei Kanäle unten), NICHT
+die Start-Trupps (`request_choose_start_base()`, bleiben unverändert FIELD).
+
+- **`Survivor.TroopType.UNASSIGNED`** — dritter Wert neben FIELD/BUILD.
+  Ein unzugewiesener Trupp kann sich nicht bewegen (`order_move()`),
+  nicht ins Fahrzeug steigen (`order_enter_vehicle()`) — beide lehnen mit
+  `report_status()`-Feedback ab — und über die bestehenden FIELD-/BUILD-
+  exklusiven Prüfungen auch nicht suchen/claimen/angreifen/abbauen. Er
+  steht sichtbar (deutlich blasser/grauer eingefärbt, siehe
+  `Survivor._unit_base_color()`) in der Einheiten-Liste, bis der Spieler
+  ihn per Klick auf "→Feld" oder "→Bau" manuell zuweist (zwei getrennte
+  Buttons statt des sonst üblichen FIELD<->BUILD-Togglers, siehe
+  `World._refresh_units_ui()`).
+- **Auto-Zuweisungs-Profil** (Dropdown im Einheiten-Tab, über der
+  Einheiten-Liste, `World.RECRUIT_POLICIES`) — pro Spieler wählbar:
+  - *Manuell (unzugewiesen)* — Standard, siehe oben.
+  - *Automatisch: Feldtrupp* / *Automatisch: Baueinheit* — neuer Rekrut
+    bekommt sofort den gewählten Typ, kein manueller Schritt nötig.
+  - *Automatisch: Wachposten besetzen* — neuer Rekrut wird sofort FIELD
+    UND direkt zum ersten eigenen Wachposten geschickt
+    (`Survivor.order_station()`, gleicher Weg wie der "Trupp anfordern"-
+    Button am Wachposten). Existiert noch kein eigener Wachposten, bleibt
+    der Rekrut lieber unzugewiesen als still als Feldtrupp zu enden.
+  - Rein host-seitige Buchführung (`World._recruit_policy`,
+    `request_set_recruit_policy()`), wirkt erst beim NÄCHSTEN Rekruten,
+    keine Speicherstand-Persistenz nötig (reine Session-Einstellung).
+- **`GuardPost._find_idle_trupp()`** (für den manuellen "Trupp anfordern"-
+  Button) überspringt UNASSIGNED-Trupps jetzt explizit — ein Klick auf
+  den Button soll keinen frisch rekrutierten, noch nicht eingeteilten
+  Zivilisten einziehen.
+- **Bewusst NICHT umgesetzt** (siehe Backlog-Diskussion): eigene Housing-
+  Kapazität/Bett-Kopplung, eigene Zivilisten-Entity getrennt von
+  `Survivor` — beides würde deutlich tiefer ins Grundmodell eingreifen,
+  hier bewusst die leichte Variante gewählt.
+
+Noch nicht vom Nutzer getestet.
+
 ## Erweiterte Rekrutierung (2026-08-04)
 
 Nutzerwunsch nach dem Mechaniken-Bericht (siehe `docs/mechanics-review.md`,

@@ -136,13 +136,98 @@ und wie viele Bücher nötig sind: noch offen, wird bei Bedarf ergänzt.
 
 ## Ideen-Backlog (Post-MVP, nicht jetzt umsetzen)
 
-- Banditen-Fraktion: gelegentlich hinterlassen "Banditen-Camps" kleinen
-  Restloot in bereits geplünderten Gebäuden — Grund für gelegentliches
-  Zurückkehren, ohne vollen Loot-Respawn.
-- Fahrzeuge für Expeditionen/Transport (mehr Trage-Kapazität, schneller,
-  aber lauter → zieht mehr Zombies an).
-- Forschung/Tech-Baum für Ausbaustufen.
-- Nahrungsproduktion (Farmen) als Alternative zu reinem Scavenging.
+Erweitert nach IFZ-Gap-Analyse (siehe [[06 Infection Free Zone Recherche.md]],
+Abschnitt "Direkte Inspirations-Ideen für KoopGame" + Chat-Nachtrag
+2026-08-04 Abend). Bereits umgesetzte Punkte (Banditen-Restloot,
+Fahrzeugtypen, Wachturm, Zivilisten-Konzept) sind hier entfernt, siehe
+`koop-game/docs/status.md` für den aktuellen Stand.
+
+**Für jeden Punkt unten gibt es einen konkreten Umsetzungsplan mit
+Datei-/Funktionsnamen in [[07 Backlog-Umsetzungspläne.md]]** — dort
+zuerst nachschauen, bevor mit einem Punkt begonnen wird.
+
+**Bedürfnisse/Überleben:**
+- Durst als drittes Grundbedürfnis (neben Hunger/Müdigkeit/Moral), gleiches
+  Decay-/Panel-Muster.
+- Krankheit als Zwischenstufe vor Permadeath (vernachlässigte Bedürfnisse
+  → Krankheit → im Extremfall Tod), statt nur direktem HP-Permadeath.
+- Verletzungsgrad-abhängiger Medizinverbrauch statt pauschaler Heilrate.
+
+**Gebäude/Basis:**
+- Sichtbares "Produktion pausiert, kein Worker zugewiesen"-Feedback bei
+  eigenen Zonenbauten.
+- Reparatur-Mechanik für beschädigte Gebäude/Home-Base (aktuell nur
+  Zerstörung → Ruine → Abriss, kein aktiver Reparaturweg).
+- Nahrungsproduktionskette (Feld → Scheune → Kochhaus/Konservenfabrik)
+  als Alternative zu reinem Scavenging.
+- Forschungszentrum als eigenes Gebäude + echter Tech-Baum mit
+  Abhängigkeiten (aktuell nur einzelne Buch-gated Rezepte/Ausbaustufen,
+  eine Stufe, kein Baum).
+  - **Wichtig:** dabei NICHT verschiedene Bücher pro Rezept/Ausbaustufe
+    (wie aktuell `book_medical_upgrade` etc.), sondern EIN universelles
+    Forschungsbuch, das für jede Freischaltung gleich verwendbar ist —
+    einfacheres Ressourcenmodell, ein Loot-Typ statt vieler.
+- Wetter-System mit Vorhersage-Gebäude (bis zu X Tage im Voraus planbar).
+- Fahrzeug-Werkstatt (Reparatur, Panzerung/Ausbau nachrüsten).
+- Aktiv auslösbare Rekrutierungs-Aktion (eigenes "Ruf aussenden"-Gebäude,
+  zusätzlich zum passiven Schutzsuchenden-Event).
+- Gebäude-Adaption statt strikter Loot/Bau-Trennung: bestimmte geplünderte
+  Gebäudetypen behalten nach dem Claimen eine passende Funktion (Werkstatt
+  bleibt Werkstatt) statt komplett neutral zu werden — größere
+  Architektur-Entscheidung, nicht nebenbei umzusetzen.
+
+**Ressourcen:**
+- Treibstoff/Energie für Fahrzeuge (inkl. automatischem Auftanken in
+  Reichweite einer Treibstoffquelle).
+- Dünger (verbessert Feldertrag, alternativ zu Treibstoff verarbeitbar) —
+  hängt an der Nahrungsproduktionskette.
+- Ablaufende Ressourcen (z. B. frische Nahrung verdirbt nach X Tagen)
+  statt zeitlos haltbarer Vorräte.
+
+**Überlebende/Einheiten:**
+- Skill-/Perk-Progression durch Tätigkeit (Scavenging/Fahren/Kämpfen macht
+  einzelne Survivor mit der Zeit besser) — Vorsicht: kann zum
+  "immer nur den Erfahrensten schicken"-Problem führen, siehe Recherche.
+- Kampf-Stances pro Trupp (aggressiv = feuert ohne Provokation, defensiv =
+  nur bei Provokation).
+- Waffen-Tausch-Interface (Lager ↔ Trupp-Slots), statt nur Ausrüsten über
+  das Trupp-Detailfenster.
+- Trupp-Mitglieder-Tausch/Trupp-Aufteilen (aktuell sind Trupps atomar).
+
+**Zombies/Bedrohung:**
+- Mehrere Zombie-Typen/Varianten (schnell+schwach, langsam+zäh, seltene
+  Elite-Variante mit Gruppen-Buff), statt eines einzigen Typs.
+- Lichtscheu-Verhalten (Zombies tagsüber inaktiv/versteckt, nachts aktiv)
+  als zusätzliche Tag/Nacht-Differenzierung über Horde-Nächte hinaus.
+- Kontinuierlicher Lärm-/Aktivitäts-Druck der eigenen Basis (wächst mit
+  Zeit/Aktivität), ergänzend zur kalenderbasierten Blutmond-Eskalation.
+- Schwierigkeitsgrad-Einstellung (Slider/Preset) statt nur eines
+  Standard-Balancings — bei Koop mit gemeinsamer Zombie-Population
+  architektonisch nicht trivial (ein Spieler kann nicht einfach "seinen
+  eigenen" Schwierigkeitsgrad wählen).
+
+**Fraktionen:**
+- Banditen-Fraktion als echte NPC-Gegner mit eigenen Lagern, die
+  nachspawnen (aktuell nur "Banditen-Restloot", reine Loot-Mechanik ohne
+  echte Gegner).
+- Freundliche KI-Überlebendengruppen zum Handeln/Verbünden (unabhängig von
+  echten Mitspielern).
+
+**Fahrzeuge:**
+- Mehrere Fahrten bei zu wenig Trage-Kapazität (Fahrzeug + Trupp beide bis
+  voll beladen, automatisches Pendeln).
+
+**UI/UX (unabhängig von IFZ sinnvoll, nicht nur Nachbau):**
+- Automatische Multi-Ziel-Pfadfindung beim Plündern (ein Befehl, mehrere
+  Ziele nacheinander).
+
+**Bewusst NICHT auf dieser Liste (geprüft und verworfen):**
+- Echtes-Orte-Karten via OpenStreetMap — widerspricht KoopGames
+  prozeduraler Fiktiv-Stadt-Generierung, kein sinnvoller Umbau.
+- Story-Modus/Kapitel/Sieg-Bedingung — laut Nutzer explizit nie gewünscht
+  (siehe `koopgame_mechanics_review_findings`-Memory), bewusste Abweichung.
+- KI-generierte Survivor-Portraits — KoopGame baut Assets bewusst von Hand
+  (Blender), keine Relevanz.
 
 ---
 

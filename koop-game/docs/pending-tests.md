@@ -1,5 +1,167 @@
 # Offene Tests
 
+## Feld-Ghost-Fix + Skalierung (siehe `status.md`, 2026-08-04)
+
+1. ⬜ Baumodus für Feld öffnen — Vorschau-Box ist jetzt sichtbar
+   feldgroß (2,5×2,5m), nicht mehr die kleine Wachposten-Box.
+2. ⬜ Baum/Steinhaufen/Ziegelhaufen im Vergleich zu vorher (bzw. zu einem
+   Trupp daneben) — sichtbar, aber nur leicht größer (~20 %), nicht
+   übertrieben. Bodenkontakt weiterhin korrekt (nicht versunken/schwebend
+   nach der Skalierung).
+3. ⬜ Abbauen/Fällen funktioniert weiterhin normal trotz größerer
+   Kollisionsform (Klickfläche passt zur neuen, etwas größeren Silhouette).
+
+## Steinhaufen, Baum, Feld: echte Assets (siehe `status.md`, 2026-08-04)
+
+1. ⬜ Steinhaufen finden — echtes Modell sichtbar, am Boden stehend
+   (nicht versunken/schwebend).
+2. ⬜ Steinhaufen abbauen — dunkelt sichtbar ab, markiert sich gelb wenn
+   markiert (alle Einzelsteine, nicht nur ein Teil).
+3. ⬜ Baum finden — echtes Tannenbaum-Modell sichtbar, am Boden stehend.
+4. ⬜ Baum fällen — der GANZE Baum (nicht nur die Krone wie vorher) sollte
+   beim Fällen sichtbar Richtung welkes Braun wechseln, beim Markieren
+   golden werden.
+5. ⬜ Feld bauen — zeigt echtes Modell statt der braunen Platzhalter-Box,
+   produziert weiterhin normal alle 8s Nahrung.
+6. ⬜ Bei allen dreien: Größe im Vergleich zu Trupps/Gebäuden wirkt
+   plausibel (nicht winzig oder riesig) — falls nicht, Zielmaße mit dem
+   Nutzer klären und Code-Skalierung anpassen (wie beim Wohnhaus).
+
+## Ziegelhaufen: echtes Asset (siehe `survivor.md`, "Ressourcen abbauen", 2026-08-04)
+
+1. ⬜ In der Wildnis/Stadt-Zone einen Ziegelhaufen finden — zeigt das echte
+   Modell (mehrere Einzelziegel), steht mit der Basis am Boden (nicht
+   versunken/schwebend).
+2. ⬜ Bautrupp abbauen lassen — Haufen dunkelt sichtbar ab, während HP
+   sinkt (wie vorher bei der Platzhalter-Box).
+3. ⬜ Ziegelhaufen markieren (Bautrupp-Markier-System) — färbt sich gelb,
+   auf dem ECHTEN Modell sichtbar (nicht nur der unsichtbaren Box).
+4. ⬜ Nach vollständigem Abbau: verschwindet normal, 15 Ziegel gutgeschrieben.
+
+## Aktive Rekrutierungs-Aktion (siehe `recruitment.md`, "Aktive Rekrutierungs-Aktion", 2026-08-04)
+
+1. ⬜ "Ruf aussenden" im Einheiten-Tab klicken — Statusmeldung "Ruf
+   ausgesendet ..." erscheint, kurz danach ein neuer Schutzsuchender
+   irgendwo in der Wildnis (wie beim passiven Timer).
+2. ⬜ Direkt nochmal klicken (innerhalb 90s) — Statusmeldung "Noch X s
+   bis zum nächsten Ruf.", KEIN neuer Spawn.
+3. ⬜ Warten bis Cooldown abgelaufen, erneut klicken — funktioniert wieder
+   normal.
+4. ⬜ Drei Schutzsuchende gleichzeitig aktiv (REFUGEE_MAX_ACTIVE erreicht,
+   z. B. durch mehrfaches Abwarten des passiven Timers) — "Ruf aussenden"
+   klicken gibt "Schon genug Schutzsuchende unterwegs ..." OHNE den
+   Cooldown zu verbrauchen (direkt nochmal klicken sollte NICHT die
+   Cooldown-Meldung zeigen, sondern wieder dieselbe "schon genug"-Meldung).
+5. ⬜ (Mit zweitem Client) Spieler A ruft, verbraucht seinen eigenen
+   Cooldown — Spieler B kann unabhängig davon sofort selbst rufen (kein
+   gemeinsamer/globaler Cooldown).
+
+## Dritter Zombie-Typ: Runner (siehe `zombies.md`, "Zombie-Typen", 2026-08-04)
+
+1. ⬜ Horde-Nacht abwarten (oder testweise `BLOOD_MOON_INTERVAL_DAYS`/
+   Zeitraffer nutzen) — neben Standard-Läufern und den dunklen, großen
+   Brutes sollten jetzt auch kleinere, blassgelbgrüne, sichtbar
+   schnellere Runner in der Horde auftauchen.
+2. ⬜ Runner fangen lassen (Trupp stehen lassen) — sollte einen Survivor
+   trotz `MOVE_SPEED` einholen können (Runner ist schneller), aber im
+   Kampf schnell sterben (wenig HP) und wenig Schaden austeilen.
+3. ⬜ Runner töten — droppt Loot wie ein normaler Standard-Zombie (kein
+   Brute-Bonusloot).
+4. ⬜ Speichern + Laden während Runner/Brute auf der Karte sind — beide
+   Typen bleiben nach dem Laden korrekt ihr jeweiliger Typ (kein
+   Rückfall auf Standard).
+5. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht existierende
+   Brutes/Runner mit korrekter Größe/Farbe, nicht als Standard-Zombie.
+6. ⬜ Normales Wandern (keine Horde-Nacht) UND Zombie-Nest-Nachspawns
+   bleiben weiterhin ausschließlich Standard-Läufer (Runner/Brute nur in
+   Horde-Nächten, bewusst so).
+
+## "Kein Arbeiter zugewiesen"-Label (siehe `building.md`, "Arbeiter zuweisen", 2026-08-04)
+
+1. ⬜ Wachposten bauen, 5s warten (fertig gebaut) — Label "Kein Arbeiter
+   zugewiesen" sollte über dem Wachturm sichtbar werden, gut lesbar auch
+   aus der Entfernung/durch andere Objekte hindurch.
+2. ⬜ Label-Position prüfen — sitzt es sinnvoll über dem Modell (nicht im
+   Modell versunken, nicht viel zu hoch schwebend)? Ggf. Y-Position in
+   `GuardPost.tscn` nachjustieren.
+3. ⬜ "Arbeiter zuweisen" klicken — Label verschwindet, sobald der Trupp
+   ankommt und sich stationiert.
+4. ⬜ "Arbeiter abziehen" klicken — Label erscheint wieder.
+5. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht einen schon
+   besetzten Wachposten testweise — bekanntes Risiko: Label könnte
+   fälschlich "kein Arbeiter" zeigen, bis der nächste Registrierungs-/
+   Abzieh-Event dort synct (siehe `building.md`, "Bekannte Grenzen").
+
+## Universal-Buch-Migration (siehe `building.md`, "Universal-Buch-Migration", 2026-08-04)
+
+1. ⬜ Ressourcen-Panel, Tab "Rohstoffe" → Kategorie "Forschungsbücher"
+   zeigt jetzt genau EINEN Eintrag ("Forschungsbuch"), nicht mehr fünf.
+2. ⬜ Zombie töten, bis ein Buch droppt — Statusmeldung "Zombie-Beute:
+   Forschungsbuch gefunden!" (nicht mehr "Buch: Waffenbau" o. Ä.).
+3. ⬜ In der Werkstatt (Herstellen-Tab): JEDES der vier Rezepte zeigt vor
+   dem Erforschen denselben Button-Text "... erforschen (Forschungsbuch)"
+   — ein einziges gefundenes Buch sollte JEDES beliebige Rezept
+   freischalten können (nicht mehr an ein bestimmtes Rezept gebunden).
+4. ⬜ Erweiterte Krankenstation erforschen — gleiches Buch wie beim
+   Crafting (kein separates "Medizinische Praxis"-Buch mehr nötig).
+5. ⬜ Ein Buch verbrauchen (ein beliebiges Rezept erforschen) — Buch-Zahl
+   im Ressourcen-Panel sinkt um 1, alle ANDEREN noch nicht erforschten
+   Rezepte zeigen weiterhin ihren eigenen Erforschen-Button (Freischaltung
+   bleibt pro Rezept getrennt, nur der Buch-Pool ist gemeinsam).
+6. ⬜ Gebäude-Nebenloot mit Buch-Chance durchsuchen — liefert
+   "Forschungsbuch", kein zufälliger alter Typ mehr.
+
+## Prozedurale Wohnhäuser (siehe `building.md`, "Prozedurale 'Masse'-Häuser", 2026-08-04)
+
+1. ⬜ Neues Spiel starten, mehrere Stadt-Zonen abgehen — sollten sichtbar
+   sowohl echte Wohnhäuser (`wohnhaustest.glb`) ALS AUCH prozedural
+   generierte Box+Satteldach-Häuser (unterschiedliche Größen/Farbtöne
+   untereinander) auftauchen, grob halb/halb.
+2. ⬜ Prozedurale Häuser stehen mit der Basis am Boden, schweben nicht und
+   versinken nicht (Y-Ausgleich wie beim echten Asset).
+3. ⬜ Kollisionsbox/Klickfläche passt zur tatsächlichen generierten Größe
+   (nicht zur festen Wohnhaus-Vorlagengröße) — anklicken/durchsuchen
+   funktioniert normal, keine unsichtbare Lücke zum Modell.
+4. ⬜ Speichern + Laden: ein prozedural generiertes Haus behält nach dem
+   Laden exakt dieselbe Form/Farbe (kein Neu-Würfeln).
+5. ⬜ (Mit zweitem Client) Catch-up: spät beitretender Peer sieht
+   dieselben prozeduralen Häuser in derselben Form/Farbe wie der Host,
+   kein Unterschied zwischen den Peers.
+
+## Zivilisten-Konzept: unzugewiesene Rekruten + Auto-Zuweisung (siehe `recruitment.md`, 2026-08-04)
+
+1. ⬜ Neuen Trupp rekrutieren (Loot-Zufallschance oder Schutzsuchende) ohne
+   Auto-Zuweisungs-Profil (Standard "Manuell") — Trupp erscheint deutlich
+   blasser/grauer als normale Trupps, in der Einheiten-Liste als "Zivil"
+   mit zwei Buttons ("→Feld"/"→Bau") statt des sonst üblichen Togglers.
+2. ⬜ Unzugewiesenen Trupp per Weltklick zu bewegen versuchen — Trupp bleibt
+   stehen, Statusmeldung "Trupp ist noch unzugewiesen ...".
+3. ⬜ Unzugewiesenen Trupp in ein Fahrzeug schicken versuchen — gleiche
+   Ablehnung wie bei Bewegung.
+4. ⬜ "→Feld" klicken — Trupp wird normaler Feldtrupp (Farbe normalisiert
+   sich, bewegbar, kann suchen/claimen/angreifen).
+5. ⬜ "→Bau" klicken — Trupp wird normaler Bautrupp (kann abbauen).
+6. ⬜ Auto-Zuweisungs-Profil auf "Automatisch: Feldtrupp" stellen, neuen
+   Trupp rekrutieren — erscheint sofort als normaler Feldtrupp, kein
+   Zwischenschritt.
+7. ⬜ Auto-Zuweisungs-Profil auf "Automatisch: Baueinheit" stellen, neuen
+   Trupp rekrutieren — erscheint sofort als Bautrupp.
+8. ⬜ Auto-Zuweisungs-Profil auf "Automatisch: Wachposten besetzen" stellen
+   MIT vorhandenem eigenen Wachposten, neuen Trupp rekrutieren — Trupp
+   wird Feldtrupp UND läuft automatisch zum Wachposten, taucht dort als
+   stationierter Arbeiter auf.
+9. ⬜ Gleiches Profil OHNE vorhandenen eigenen Wachposten — Trupp bleibt
+   unzugewiesen (kein stiller Feldtrupp-Fallback).
+10. ⬜ Wachposten-"Trupp anfordern"-Button MIT einem unzugewiesenen UND
+    einem echten idle Feld-/Bautrupp in der Nähe — zieht den echten Trupp,
+    NICHT den unzugewiesenen Zivilisten, ein.
+11. ⬜ Speichern/Laden: ein unzugewiesener Trupp bleibt nach dem Laden
+    UNASSIGNED (kein stiller Reset auf Feld).
+12. ⬜ (Mit zweitem Client) Auto-Zuweisungs-Profil ist wirklich PRO SPIELER
+    — Spieler A auf "Automatisch: Baueinheit", Spieler B auf "Manuell"
+    stellen, beide rekrutieren — nur A's neuer Trupp wird automatisch
+    zugewiesen, B's bleibt unzugewiesen.
+
 ## Balance-Fixes aus dem Mechaniken-Bericht (2026-08-04)
 
 Größter Umfang seit dem Bau-Markier-Modus — 6 zusammenhängende Änderungen,
@@ -1015,3 +1177,32 @@ offen:
    Modell, nicht bei einem die Platzhalter-Box.
 3. ⬜ Nach Speichern/Laden (Solo) behält ein Wohnhaus weiterhin sein
    echtes Modell.
+
+## Zeitraffer (siehe `world.md`, 2026-08-04, IFZ-Recherche)
+
+1. ⬜ Die 1x/2x/3x-Buttons oben bei der Uhr sind NUR beim Host sichtbar,
+   bei Mitspielern nicht.
+2. ⬜ Klick auf 2x/3x beschleunigt sichtbar ALLES (Tag/Nacht-Zyklus,
+   Zombie-Bewegung, Bautrupp-Fortschritt, eigene Einheiten) — bei ALLEN
+   Peers gleich schnell, nicht nur beim Host.
+3. ⬜ Zurück auf 1x macht die Geschwindigkeit wieder normal.
+4. ⬜ Nach "Zurück zum Hauptmenü"/Game Over bei aktivem 2x/3x läuft das
+   Hauptmenü/eine neue Partie wieder normal schnell (kein hängengebliebener
+   Zeitraffer).
+5. ⬜ Zeitraffer + Pause zusammen: pausieren bei 2x/3x aktiv, dann
+   fortsetzen — sollte weiterhin mit der zuletzt gewählten Geschwindigkeit
+   laufen, nicht auf 1x zurückspringen.
+
+## Ausweich-Heuristik für Trupps (siehe `survivor.md`, 2026-08-04, IFZ-Recherche)
+
+1. ⬜ Trupp per Rechtsklick hinter eine eigene, durchgezogene Mauer
+   schicken (kein Tor im Weg) — sollte jetzt seitlich an der Mauer entlang
+   ausweichen und das Ende umrunden, statt einfach davor stehen zu
+   bleiben.
+2. ⬜ Bei einer Mauer-Ecke/U-Form: prüfen, ob der Trupp wirklich durchkommt
+   oder trotzdem stecken bleibt (bekannte Grenze der Heuristik, kein
+   echtes Navmesh — siehe Doku).
+3. ⬜ Normale Bewegung ohne Hindernisse bleibt unverändert (kein
+   unnötiges Zittern/Seitwärtslaufen, wenn der direkte Weg frei ist).
+4. ⬜ Fremdes Tor (nicht der eigene Besitzer) blockiert weiterhin wie
+   bisher, Ausweichen ändert daran nichts (Tor bleibt absichtlich zu).

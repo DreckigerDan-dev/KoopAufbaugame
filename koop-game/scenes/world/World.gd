@@ -20,6 +20,7 @@ const VEHICLE_SCENE := preload("res://scenes/entities/vehicle/Vehicle.tscn")
 const ZOMBIE_NEST_SCENE := preload("res://scenes/entities/zombie/ZombieNest.tscn")
 const ZOMBIE_SCENE := preload("res://scenes/entities/zombie/Zombie.tscn")
 const ZOMBIE_BRUTE_SCENE := preload("res://scenes/entities/zombie/ZombieBrute.tscn")
+const ZOMBIE_RUNNER_SCENE := preload("res://scenes/entities/zombie/ZombieRunner.tscn")
 const GUARD_POST_SCENE := preload("res://scenes/entities/base/GuardPost.tscn")
 const WALL_SCENE := preload("res://scenes/entities/wall/Wall.tscn")
 const GATE_SCENE := preload("res://scenes/entities/wall/Gate.tscn")
@@ -153,9 +154,11 @@ const BASE_CHOICE_SURVIVOR_OFFSET := 2.0
 # einem Ring um deren Zentrum (siehe ZOMBIE_SPAWN_RING_OFFSET,
 # _generate_city_zone()), nicht mehr einmalig um den Weltursprung.
 # Feste Boden-Y pro Zombie-Typ (gleiches Prinzip wie TREE_GROUND_Y & Co.,
-# siehe docs/survivor.md) — halbe Kapselhöhe (Standard 1.7m, Brute 2.1m).
+# siehe docs/survivor.md) — halbe Kapselhöhe (Standard 1.7m, Brute 2.1m,
+# Runner 1.5m).
 const ZOMBIE_GROUND_Y := 0.85
 const ZOMBIE_BRUTE_GROUND_Y := 1.05
+const ZOMBIE_RUNNER_GROUND_Y := 0.75
 # Feste Boden-Y für Fahrzeuge/Zombie-Nest (siehe _generate_city_zone()) —
 # 1:1 aus den früheren festen Vehicle1/Vehicle2/ZombieNest1-Nodes
 # übernommen (Vehicle-Mesh-Mitte 0.6, Nest-Mesh-Mitte 1.35).
@@ -256,6 +259,11 @@ const DEBUG_ZOMBIE_SPAWN_SCATTER := 30.0
 # vom Gleichen.
 const HORDE_SIZE := 10
 const HORDE_BRUTE_COUNT := 2
+# Runner-Beimischung (2026-08-04, siehe docs/zombies.md, "Zombie-Typen") —
+# gleiches Prinzip wie HORDE_BRUTE_COUNT, eigener Anteil statt die
+# Brute-Zahl zu verdrängen (brute_count + runner_count bleibt klar unter
+# horde_size).
+const HORDE_RUNNER_COUNT := 2
 const HORDE_SPAWN_SCATTER := 6.0
 # Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") spawnt eine
 # Horde nicht mehr an einem festen, ggf. weit entfernten Punkt, sondern
@@ -277,6 +285,7 @@ const HORDE_APPROACH_DISTANCE := 40.0
 const BLOOD_MOON_INTERVAL_DAYS := 5
 const BLOOD_MOON_HORDE_SIZE := 30
 const BLOOD_MOON_BRUTE_COUNT := 10
+const BLOOD_MOON_RUNNER_COUNT := 6
 # _day_count zählt volle Spieltage (siehe _handle_day_night(), inkrementiert
 # bei jedem Zyklus-Wrap) — läuft wie _day_time lokal auf JEDEM Peer (nicht
 # host-gated), damit is_blood_moon_night() auf allen Peers identisch
@@ -364,7 +373,14 @@ const BRUTE_LOOT_AMOUNT := {"ammo": 10, "medicine": 8, "weapon": 1, "armor": 1, 
 # unabhängiger, deutlich selteneren Zusatz-Wurf bei jedem Zombie-Tod, egal
 # ob der Haupt-Loot-Wurf (ZOMBIE_LOOT_DROP_CHANCE) überhaupt trifft.
 const BOOK_DROP_CHANCE := 0.08
-const BOOK_TABLE := ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]
+# Universal-Buch statt fünf getrennter book_*-Ressourcen (2026-08-04,
+# Migration siehe Infos/07 Backlog-Umsetzungspläne.md/08 Weg zur 1.0.md,
+# "Forschungszentrum + echter Tech-Baum") — EIN Loot-Typ schaltet jede
+# Freischaltung (Crafting-Rezept ODER Gebäude-Ausbaustufe) gleichermaßen
+# frei, statt dass jedes Rezept sein eigenes Buch braucht. Einfacheres
+# Ressourcenmodell, ersetzt die vorherigen BOOK_TABLE/BOOK_LOOT_TYPES-
+# Arrays (kein Zufalls-Pick mehr nötig, es gibt nur noch einen Typ).
+const RESEARCH_BOOK_RESOURCE := "book_research"
 
 # Start-Trupps pro Peer (2026-08-03 von 2 auf 5 angehoben, Nutzerwunsch
 # "5 truppen start") — bewusster Kompromiss von vor der In-Game-
@@ -429,7 +445,6 @@ const BRICK_PILE_GROUND_Y := 0.35
 # UNABHÄNGIGE Eigenschaft (siehe _generate_city_zone()): pro Zone bekommt
 # GENAU einer der dort platzierten Plätze `has_survivor = true`, egal
 # welcher Typ dort gezogen wurde.
-const BOOK_LOOT_TYPES := ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]
 const BUILDING_TYPES: Array[Dictionary] = [
 	{
 		"name": "Wohnhaus",
@@ -440,7 +455,20 @@ const BUILDING_TYPES: Array[Dictionary] = [
 		# höher raus (First bis 9m statt 7m geplant), Collision folgt der
 		# echten Größe statt der Planung.
 		"size": Vector3(9.1, 9.0, 8.2),
+		# Für eine zweite/dritte Wohnhaus-Variante (mehr Abwechslung, siehe
+		# _pick_model_path()): "model_path" hier entfernen, stattdessen
+		# "model_paths": [WOHNHAUS_MODEL_PATH, WOHNHAUS_VARIANT_2_PATH, ...]
+		# eintragen — braucht sonst KEINE weitere Code-Änderung.
 		"model_path": WOHNHAUS_MODEL_PATH,
+		# "Masse"-Häuser prozedural statt per Hand (2026-08-04, Nutzerwunsch:
+		# "für die masse die häuser generieren, spezial POI base
+		# krankenhaus etc mach ich") — 50 % jeder Wohnhaus-Instanz wird
+		# stattdessen generiert (Box + Satteldach, siehe
+		# _random_house_proc_params()/_build_procedural_house()), 50 %
+		# bleibt das echte wohnhaustest.glb-Asset. Wert tunen, sobald sich
+		# das Verhältnis im Spiel angeschaut wurde — 0.0 = nie prozedural,
+		# 1.0 = immer.
+		"procedural_chance": 0.5,
 		"default_color": Color(0.45, 0.38, 0.3),
 		"main_loot": {"resource": "food", "amount": Vector2i(1, 2)},
 		"secondary_loot": [
@@ -633,10 +661,10 @@ func _roll_building_loot(template: Dictionary) -> Dictionary:
 func _apply_loot_roll(loot: Dictionary, spec: Dictionary) -> void:
 	var resource: String = spec["resource"]
 	if resource == "book":
-		# "Buch" steht stellvertretend für einen zufälligen der vier
-		# book_*-Typen (siehe docs/building.md, "Forschungsbücher") — Vision
-		# nennt Bücher nur allgemein als Nebenloot, ohne Typ-Bezug.
-		resource = BOOK_LOOT_TYPES[randi() % BOOK_LOOT_TYPES.size()]
+		# "Buch" steht stellvertretend für das eine Universal-Forschungsbuch
+		# (siehe RESEARCH_BOOK_RESOURCE/docs/building.md, "Forschungsbücher")
+		# — Vision nennt Bücher nur allgemein als Nebenloot, ohne Typ-Bezug.
+		resource = RESEARCH_BOOK_RESOURCE
 	var amount_range: Vector2i = spec["amount"]
 	var amount: int = amount_range.x if amount_range.x == amount_range.y else randi_range(amount_range.x, amount_range.y)
 	loot[resource] = loot.get(resource, 0) + amount
@@ -867,6 +895,26 @@ const REFUGEE_MAX_ACTIVE := 3
 const REFUGEE_RECRUIT_CAP_PER_PEER := 2
 var _refugee_spawn_timer: float = 0.0
 var _refugee_recruits_granted: Dictionary = {}  # peer_id -> Anzahl
+# Aktiv auslösbare Rekrutierungs-Aktion ("Ruf aussenden", 2026-08-04,
+# siehe Infos/07 Backlog-Umsetzungspläne.md) — Button-Ergänzung zum
+# passiven Schutzsuchenden-Timer oben. Erzwingt einen Spawn-Versuch ohne
+# REFUGEE_SPAWN_CHANCE-Würfel (Spieler-Absicht statt Zufall), respektiert
+# aber weiterhin REFUGEE_MAX_ACTIVE (kein Freibrief für unbegrenzt viele
+# gleichzeitige Schutzsuchende). Eigener, kürzerer Cooldown PRO SPIELER
+# (nicht global) — jeder Spieler kann unabhängig von den anderen rufen.
+const ACTIVE_RECRUIT_CALL_COOLDOWN := 90.0
+var _active_recruit_call_cooldowns: Dictionary = {}  # peer_id -> restliche Sekunden
+# Zivilisten-Konzept (siehe Infos/01 Architektur.md, "Ideen-Backlog") — jeder
+# neue Rekrut ist erstmal UNASSIGNED (siehe Survivor.TroopType-Doku), außer
+# der Spieler hat ein Auto-Zuweisungs-Profil gewählt (UnitsUI-Dropdown,
+# request_set_recruit_policy()). "manual" (Standard) heißt: bleibt
+# unzugewiesen, Spieler weist selbst zu. Rein host-seitige Buchführung, kein
+# Catch-up/keine Speicherstand-Persistenz nötig (nur beim NÄCHSTEN Rekruten
+# relevant, kein Effekt auf schon existierende Trupps).
+var _recruit_policy: Dictionary = {}  # peer_id -> "manual"/"field"/"build"/"guard_post"
+# Reihenfolge MUSS zur RecruitPolicyOption-Item-Reihenfolge in World.tscn
+# passen (siehe _ready(), _on_recruit_policy_selected()).
+const RECRUIT_POLICIES := ["manual", "field", "build", "guard_post"]
 # Vier Baurohstoffe statt eines generischen "materials" (siehe
 # docs/base.md, "Vier Baurohstoffe") — jeder Bautyp braucht genau eine
 # thematisch passende Art: Wachposten (Holzturm), Mauer (Steinwall), Tor
@@ -1010,11 +1058,7 @@ const RESOURCE_DISPLAY_NAMES := {
 	"helmet": "Helm",
 	"melee_weapon": "Nahkampfwaffen",
 	"leg_armor": "Beinschutz",
-	"book_weapon": "Buch: Waffenbau",
-	"book_armor": "Buch: Rüstungsbau",
-	"book_helmet": "Buch: Helmbau",
-	"book_ammo": "Buch: Munitionsherstellung",
-	"book_medical_upgrade": "Buch: Medizinische Praxis",
+	"book_research": "Forschungsbuch",
 }
 # Ressourcen-Panel in Kategorien unterteilt (2026-08-01, Nutzerwunsch nach
 # dem UI-Overhaul: "rechts die Ressourcen sind ein bisschen zu viele") —
@@ -1029,7 +1073,7 @@ const RESOURCE_CATEGORIES: Array[Dictionary] = [
 	{"name": "Baurohstoffe", "keys": ["wood", "metal", "stone", "brick"]},
 	{"name": "Überleben", "keys": ["food", "medicine", "ammo"]},
 	{"name": "Ausrüstung", "keys": ["weapon", "armor", "helmet", "melee_weapon", "leg_armor"]},
-	{"name": "Forschungsbücher", "keys": ["book_weapon", "book_armor", "book_helmet", "book_ammo", "book_medical_upgrade"]},
+	{"name": "Forschungsbücher", "keys": ["book_research"]},
 ]
 # Farben fürs Platzierungs-Preview (BuildGhost) — grün bei gültigem
 # Bauplatz (Radius + Ressourcen reichen), sonst rot. Alpha < 1, damit
@@ -1041,6 +1085,12 @@ const BUILD_GHOST_INVALID_COLOR := Color(0.9, 0.2, 0.2, 0.45)
 # World.tscn hinterlegte BoxMesh (1.5³, siehe $BuildGhost), wird in
 # _ready() übernommen statt hier dupliziert.
 const WALL_GHOST_SIZE := Vector3(2, 2, 0.4)
+# Feld-Ghost (2026-08-04, Nutzerwunsch: "die vorschau vom feld ist zu
+# klein") — vorher fiel Feld generisch auf die kleine 1,5³-Wachposten-Box
+# zurück, obwohl das echte Feld deutlich größer ist (2,5×0,2×2,5m, siehe
+# Field.tscn). Eigene, passend große Ghost-Mesh statt der Wachposten-Box,
+# gleiches Muster wie WATCHTOWER_MESH_SIZE.
+const FIELD_GHOST_SIZE := Vector3(2.5, 0.2, 2.5)
 # Deckt sich mit WALL_GHOST_SIZE.x — Abstand zwischen gezogenen
 # Mauer-/Tor-Segmenten, damit sie lückenlos aneinander anschließen (siehe
 # docs/walls.md, "Ziehen").
@@ -1090,6 +1140,12 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 	$ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher/BooksResourcesLabel,
 ]
 @onready var clock_label: Label = $ResourcesUI/Panel/VBoxContainer/ClockLabel
+# Zeitraffer (siehe _time_scale-Kommentar oben) — nur für den Host sichtbar,
+# gleiches Muster wie PauseMenu.pause_game_button.
+@onready var speed_row: HBoxContainer = $ResourcesUI/Panel/VBoxContainer/SpeedRow
+@onready var speed_1x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed1xButton
+@onready var speed_2x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed2xButton
+@onready var speed_3x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed3xButton
 @onready var zombie_count_label: Label = $ResourcesUI/Panel/VBoxContainer/ZombieCountLabel
 @onready var survivor_spawner: MultiplayerSpawner = $SurvivorSpawner
 @onready var survivors_container: Node3D = $Survivors
@@ -1182,6 +1238,12 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var advanced_medical_separator: HSeparator = $MainTabsUI/Panel/TabContainer/Bauen/AdvancedMedicalSeparator
 @onready var advanced_medical_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/AdvancedMedicalButton
 @onready var units_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Einheiten/UnitsList
+# Zivilisten-Konzept, Auto-Zuweisungs-Dropdown (siehe RECRUIT_POLICIES/
+# _on_recruit_policy_selected()).
+@onready var recruit_policy_option: OptionButton = $MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow/RecruitPolicyOption
+# Aktive Rekrutierungs-Aktion ("Ruf aussenden", siehe
+# request_active_recruit_call()/ACTIVE_RECRUIT_CALL_COOLDOWN).
+@onready var active_recruit_call_button: Button = $MainTabsUI/Panel/TabContainer/Einheiten/ActiveRecruitCallButton
 # Herstellen (siehe docs/building.md, "Herstellen" — Punkt 12 der
 # Gesamtliste) — jetzt der "Herstellen"-Tab statt eines eigenen Panels.
 # Sichtbar/unsichtbar heißt hier: der TAB wird bei fehlender Werkstatt
@@ -1351,6 +1413,19 @@ var _worker_ui_timer: float = 0.0
 # _process() ab, statt eines zentralen process_mode-Umbaus über den ganzen
 # Szenenbaum (deutlich kleinerer, vorhersehbarerer Eingriff).
 var _game_paused: bool = false
+# Zeitraffer (2026-08-04, Nutzerwunsch nach Infection-Free-Zone-Vergleich,
+# siehe Infos/06 Infection Free Zone Recherche.md, "Kritikpunkte ernst
+# nehmen": "spürbar zu langsames Tempo ohne Zeitraffer" als IFZ-Schwäche) —
+# nutzt bewusst Godots eingebautes `Engine.time_scale` statt eines eigenen,
+# manuell durchgereichten Multiplikators wie beim Pause-Flag oben: skaliert
+# automatisch JEDEN `delta`-Wert im ganzen Spiel (Tag/Nacht, Zombie-KI,
+# Bautrupp-Timer, Ressourcen-Nachwachsen, ...), keine einzelne Stelle muss
+# dafür angefasst werden. Nur der Host darf die Geschwindigkeit ändern
+# (gleiches Muster wie _game_paused), aber ALLE Peers wenden denselben Wert
+# lokal auf ihre eigene Engine.time_scale an — sonst würde z. B. der
+# Tag/Nacht-Zyklus (läuft lokal auf jedem Peer, siehe _handle_day_night())
+# bei Host und Client unterschiedlich schnell laufen und auseinanderdriften.
+var _time_scale: float = 1.0
 # Tag/Nacht-Zyklus (siehe NIGHT_START_HOUR/NIGHT_END_HOUR oben) — läuft lokal auf
 # jedem Peer, siehe _handle_day_night(). Startet bei 62.5s = 05:00 Uhr
 # (5/24*CYCLE_LENGTH, Nutzerwunsch) statt 00:00 — gilt nur für den
@@ -1367,6 +1442,7 @@ var _status_message_timer: float = 0.0
 var _guard_post_ghost_mesh: BoxMesh
 var _wall_ghost_mesh: BoxMesh
 var _watchtower_ghost_mesh: BoxMesh
+var _field_ghost_mesh: BoxMesh
 # Ziehen mehrerer Mauer-/Tor-Segmente in einem Zug statt Einzelklicks (siehe
 # docs/walls.md, "Ziehen") — _wall_drag_start ist der Weltpunkt vom
 # Maus-Runterdrücken, _ghost_line_meshes ein wiederverwendeter Pool von
@@ -1426,6 +1502,13 @@ func _ready() -> void:
 	_populate_resource_option(trade_gift_resource_option)
 	_populate_resource_option(trade_offer_resource_option)
 	_populate_resource_option(trade_want_resource_option)
+	# Zivilisten-Konzept — Reihenfolge muss zu RECRUIT_POLICIES passen.
+	recruit_policy_option.add_item("Manuell (unzugewiesen)")
+	recruit_policy_option.add_item("Automatisch: Feldtrupp")
+	recruit_policy_option.add_item("Automatisch: Baueinheit")
+	recruit_policy_option.add_item("Automatisch: Wachposten besetzen")
+	recruit_policy_option.item_selected.connect(_on_recruit_policy_selected)
+	active_recruit_call_button.pressed.connect(_on_active_recruit_call_pressed)
 	# Wachposten-Ghost übernimmt die schon in World.tscn hinterlegte BoxMesh
 	# (1.5³) von $BuildGhost, Mauer/Tor-Ghost wird dynamisch erzeugt (siehe
 	# WALL_GHOST_SIZE) — beide werden in _update_build_ghost() je nach
@@ -1435,8 +1518,16 @@ func _ready() -> void:
 	_wall_ghost_mesh.size = WALL_GHOST_SIZE
 	_watchtower_ghost_mesh = BoxMesh.new()
 	_watchtower_ghost_mesh.size = WATCHTOWER_MESH_SIZE
+	_field_ghost_mesh = BoxMesh.new()
+	_field_ghost_mesh.size = FIELD_GHOST_SIZE
 	for i in select_group_buttons.size():
 		select_group_buttons[i].pressed.connect(_handle_control_group_key.bind(i + 1, false))
+	# Zeitraffer (siehe _time_scale-Kommentar oben) — nur der Host sieht/
+	# bedient die Buttons, gleiches Muster wie PauseMenu.pause_game_button.
+	speed_row.visible = multiplayer.is_server()
+	speed_1x_button.pressed.connect(_on_speed_button_pressed.bind(1.0))
+	speed_2x_button.pressed.connect(_on_speed_button_pressed.bind(2.0))
+	speed_3x_button.pressed.connect(_on_speed_button_pressed.bind(3.0))
 	# Kein eigener Lobby-Flow hier — Host/Join/Spielerliste/Start laufen
 	# schon vorher über die echte scenes/lobby/Lobby.tscn (docs/networking.md).
 	# Diese Szene wird erst betreten, NACHDEM der Host dort "Spiel starten"
@@ -1819,6 +1910,7 @@ func _trigger_horde_night() -> void:
 	var player_count: int = max(NetworkManager.players.size(), 1)
 	var horde_size: int = (BLOOD_MOON_HORDE_SIZE if blood_moon else HORDE_SIZE) * player_count
 	var brute_count: int = (BLOOD_MOON_BRUTE_COUNT if blood_moon else HORDE_BRUTE_COUNT) * player_count
+	var runner_count: int = (BLOOD_MOON_RUNNER_COUNT if blood_moon else HORDE_RUNNER_COUNT) * player_count
 	var warning: String = "BLUTMOND! Eine gewaltige Horde formiert sich!" if blood_moon else "Die Nacht bricht an — eine Horde nähert sich!"
 	for peer_id in NetworkManager.players.keys():
 		report_status(peer_id, warning)
@@ -1835,11 +1927,24 @@ func _trigger_horde_night() -> void:
 	else:
 		base_point = Vector3.ZERO
 	for i in horde_size:
-		var is_brute: bool = i < brute_count
-		var ground_y: float = ZOMBIE_BRUTE_GROUND_Y if is_brute else ZOMBIE_GROUND_Y
+		# Erste brute_count Indizes = Brute, nächste runner_count = Runner,
+		# Rest Standard (siehe Zombie.ZombieType — 0=NORMAL/1=BRUTE/2=RUNNER,
+		# hier als rohe Int-Werte, da World.gd Zombie.gd bewusst nicht als
+		# Typ kennt, siehe docs/zombies.md, "Zombie-Typen").
+		var zombie_type: int
+		var ground_y: float
+		if i < brute_count:
+			zombie_type = 1
+			ground_y = ZOMBIE_BRUTE_GROUND_Y
+		elif i < brute_count + runner_count:
+			zombie_type = 2
+			ground_y = ZOMBIE_RUNNER_GROUND_Y
+		else:
+			zombie_type = 0
+			ground_y = ZOMBIE_GROUND_Y
 		var offset := Vector3(randf_range(-HORDE_SPAWN_SCATTER, HORDE_SPAWN_SCATTER), 0, randf_range(-HORDE_SPAWN_SCATTER, HORDE_SPAWN_SCATTER))
 		var spawn_position := Vector3(base_point.x + offset.x, ground_y, base_point.z + offset.z)
-		var zombie := zombie_spawner.spawn({"index": _next_nest_zombie_id, "position": spawn_position, "is_brute": is_brute})
+		var zombie := zombie_spawner.spawn({"index": _next_nest_zombie_id, "position": spawn_position, "zombie_type": zombie_type})
 		_next_nest_zombie_id += 1
 		if target != null and is_instance_valid(zombie):
 			zombie.alert(target)
@@ -1918,7 +2023,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 	for existing in home_bases_container.get_children():
 		_catch_up_home_base.rpc_id(peer_id, existing.owner_peer_id, existing.position, existing.hp)
 	for existing in zombies_container.get_children():
-		_catch_up_zombie.rpc_id(peer_id, existing.zombie_id, existing.position, existing.is_brute)
+		_catch_up_zombie.rpc_id(peer_id, existing.zombie_id, existing.position, existing.zombie_type)
 	for existing in guard_posts_container.get_children():
 		# `built` seit jeher mit dabei (Korrektheits-Fix 2026-08-04, vorher in
 		# docs/building.md als bekannte Lücke vermerkt) — sonst zeigte ein
@@ -1985,6 +2090,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 			"zone_center": existing.zone_center,
 			"size": (existing.get_node("Mesh").mesh as BoxMesh).size,
 			"model_path": existing.model_path,
+			"proc_params": existing.proc_params,
 			"loot": existing.loot,
 			"default_color": existing.default_color,
 			"has_survivor": existing.has_survivor,
@@ -2012,15 +2118,65 @@ func _spawn_for_peer(peer_id: int) -> void:
 	_catch_up_day_time.rpc_id(peer_id, _day_time, _day_count)
 
 
-func _spawn_survivor(peer_id: int, spawn_position: Vector3) -> void:
-	survivor_spawner.spawn({"id": _next_survivor_id, "peer_id": peer_id, "position": spawn_position})
+func _spawn_survivor(peer_id: int, spawn_position: Vector3, is_recruit: bool = false) -> void:
+	# is_recruit=false (Start-Trupps, request_choose_start_base()) bleibt
+	# unverändert FIELD. is_recruit=true (spawn_recruit()) läuft über
+	# _apply_recruit_troop_type() — Zivilisten-Konzept, siehe dort.
+	var survivor: Node3D = survivor_spawner.spawn({"id": _next_survivor_id, "peer_id": peer_id, "position": spawn_position})
 	_next_survivor_id += 1
+	if is_recruit:
+		_apply_recruit_troop_type(survivor, peer_id)
 
 
 func spawn_recruit(peer_id: int, spawn_position: Vector3) -> void:
 	# Aufgerufen von Survivor._finish_search(), wenn ein durchsuchtes
 	# Gebäude has_survivor = true hatte. Siehe docs/recruitment.md.
-	_spawn_survivor(peer_id, spawn_position)
+	_spawn_survivor(peer_id, spawn_position, true)
+
+
+func _apply_recruit_troop_type(survivor: Node3D, peer_id: int) -> void:
+	# Zivilisten-Konzept (siehe Infos/01 Architektur.md, "Ideen-Backlog",
+	# Survivor.TroopType-Doku) — Standard ist UNASSIGNED, ein gewähltes
+	# Auto-Zuweisungs-Profil (_recruit_policy, siehe
+	# request_set_recruit_policy()) übernimmt sofort, sonst bleibt der
+	# Trupp unzugewiesen, bis der Spieler ihn manuell einteilt.
+	survivor.troop_type = survivor.TroopType.UNASSIGNED
+	var policy: String = _recruit_policy.get(peer_id, "manual")
+	match policy:
+		"field":
+			survivor.troop_type = survivor.TroopType.FIELD
+		"build":
+			survivor.troop_type = survivor.TroopType.BUILD
+		"guard_post":
+			var post := _find_own_guard_post_for_worker(peer_id)
+			if post == null:
+				# Kein eigener Wachposten vorhanden — bleibt lieber
+				# unzugewiesen als stillschweigend als Feldtrupp zu enden,
+				# damit der Spieler es bemerkt und selbst entscheidet.
+				return
+			survivor.troop_type = survivor.TroopType.FIELD
+			survivor.order_station(post)
+		_:
+			pass  # "manual" (Standard) — bleibt UNASSIGNED
+
+
+func _find_own_guard_post_for_worker(peer_id: int) -> Node3D:
+	# Erster eigener Wachposten, unabhängig von schon stationierten
+	# Arbeitern (GuardPost begrenzt die Arbeiterzahl nicht, siehe
+	# GuardPost.gd) — für die "Wachposten besetzen"-Auto-Zuweisung.
+	for post in guard_posts_container.get_children():
+		if post.owner_peer_id == peer_id:
+			return post
+	return null
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_set_recruit_policy(policy: String, requesting_peer_id: int) -> void:
+	# Vom UnitsUI-Dropdown ausgelöst (siehe _on_recruit_policy_selected()) —
+	# rein host-seitige Buchführung, wirkt erst beim NÄCHSTEN Rekruten.
+	if not multiplayer.is_server():
+		return
+	_recruit_policy[requesting_peer_id] = policy
 
 
 func spawn_nest_zombie(spawn_position: Vector3) -> void:
@@ -2044,7 +2200,7 @@ func spawn_nest_zombie(spawn_position: Vector3) -> void:
 	_next_nest_zombie_id += 1
 
 
-func grant_zombie_loot(peer_id: int, is_brute: bool) -> void:
+func grant_zombie_loot(peer_id: int, zombie_type: int) -> void:
 	# Aufgerufen von Zombie.take_damage() (host-seitig) beim Tod, siehe
 	# docs/zombies.md, "Zombie-Loot-Drop" — Nutzerwunsch: nur Munition,
 	# Heilzeug, oder eine Waffe droppen, sonst nichts. Kein physischer
@@ -2059,16 +2215,18 @@ func grant_zombie_loot(peer_id: int, is_brute: bool) -> void:
 		return
 	if randf() <= ZOMBIE_LOOT_DROP_CHANCE:
 		var loot_type: String = ZOMBIE_LOOT_TABLE[randi() % ZOMBIE_LOOT_TABLE.size()]
-		var amounts: Dictionary = BRUTE_LOOT_AMOUNT if is_brute else ZOMBIE_LOOT_AMOUNT
+		# Nur Brute bekommt den Bonus-Loot-Tisch — Runner ist zwar ein
+		# eigener Typ (schnell/schwach), aber kein besonderer Loot-Bringer,
+		# fällt bewusst auf denselben Tisch wie der Standard-Zombie.
+		var amounts: Dictionary = BRUTE_LOOT_AMOUNT if zombie_type == 1 else ZOMBIE_LOOT_AMOUNT
 		home_base.add_resources.rpc({loot_type: amounts[loot_type]})
 		report_status(peer_id, "Zombie-Beute: +%d %s" % [amounts[loot_type], RESOURCE_DISPLAY_NAMES.get(loot_type, loot_type)])
 	# Unabhängiger, selterer Buch-Wurf (siehe BOOK_DROP_CHANCE oben) — läuft
 	# separat vom Haupt-Loot-Wurf, kann also auch zusätzlich zu normalem
 	# Loot (oder ganz ohne) auftreten.
 	if randf() <= BOOK_DROP_CHANCE:
-		var book_type: String = BOOK_TABLE[randi() % BOOK_TABLE.size()]
-		home_base.add_resources.rpc({book_type: 1})
-		report_status(peer_id, "Zombie-Beute: %s gefunden!" % RESOURCE_DISPLAY_NAMES.get(book_type, book_type))
+		home_base.add_resources.rpc({RESEARCH_BOOK_RESOURCE: 1})
+		report_status(peer_id, "Zombie-Beute: %s gefunden!" % RESOURCE_DISPLAY_NAMES.get(RESEARCH_BOOK_RESOURCE, RESEARCH_BOOK_RESOURCE))
 
 
 @rpc("authority", "reliable")
@@ -2090,11 +2248,11 @@ func _catch_up_home_base(peer_id: int, spawn_position: Vector3, hp: int) -> void
 
 
 @rpc("authority", "reliable")
-func _catch_up_zombie(index: int, spawn_position: Vector3, is_brute: bool) -> void:
+func _catch_up_zombie(index: int, spawn_position: Vector3, zombie_type: int) -> void:
 	var zombie_name := "zombie_%d" % index
 	if zombies_container.has_node(zombie_name):
 		return
-	var zombie := _create_zombie({"index": index, "position": spawn_position, "is_brute": is_brute})
+	var zombie := _create_zombie({"index": index, "position": spawn_position, "zombie_type": zombie_type})
 	zombies_container.add_child(zombie)
 
 
@@ -2330,13 +2488,20 @@ func _create_home_base(data: Dictionary) -> Node:
 
 
 func _create_zombie(data: Dictionary) -> Node:
-	var is_brute: bool = data.get("is_brute", false)
-	var scene: PackedScene = ZOMBIE_BRUTE_SCENE if is_brute else ZOMBIE_SCENE
+	# zombie_type als rohe Int 0/1/2 (siehe Zombie.ZombieType), World.gd
+	# kennt Zombie.gd bewusst nicht als Typ (siehe docs/zombies.md,
+	# "Zombie-Typen").
+	var zombie_type: int = data.get("zombie_type", 0)
+	var scene: PackedScene = ZOMBIE_SCENE
+	if zombie_type == 1:
+		scene = ZOMBIE_BRUTE_SCENE
+	elif zombie_type == 2:
+		scene = ZOMBIE_RUNNER_SCENE
 	var zombie := scene.instantiate()
 	zombie.name = "zombie_%d" % data["index"]
 	zombie.zombie_id = data["index"]
 	zombie.position = data["position"]
-	zombie.is_brute = is_brute
+	zombie.zombie_type = zombie_type
 	# Kein hp-Override hier (anders als bei Survivor) — Zombie._ready()
 	# berechnet hp = _max_hp erst NACHDEM dieser Node dem Baum hinzugefügt
 	# wurde (siehe dortige @export-Timing-Erklärung) und würde einen hier
@@ -2468,7 +2633,16 @@ func _create_building(data: Dictionary) -> Node:
 	collision.shape = box_shape
 	building.default_color = data["default_color"]
 	building.model_path = data.get("model_path", "")
-	if building.model_path != "":
+	building.proc_params = data.get("proc_params", {})
+	if building.model_path == "" and not building.proc_params.is_empty():
+		# Prozedurales "Masse"-Haus (siehe _build_procedural_house()) —
+		# gleiches Vorrang-/Y-Ausgleich-Prinzip wie der echte-Asset-Zweig
+		# unten, nur mit einem generierten statt geladenen Model-Node.
+		mesh_instance.visible = false
+		var proc_model := _build_procedural_house(building.proc_params)
+		proc_model.position.y = -size.y / 2.0
+		building.add_child(proc_model)
+	elif building.model_path != "":
 		# Echtes Asset (siehe docs/building.md, "Wohnhaus") — Vorrang vor der
 		# Platzhalter-Box, gleiches Fallback-Prinzip wie HomeBase.tscn/Wall.gd
 		# ("Bewusst dupliziert statt geteilt", siehe Building._update_visual()).
@@ -2564,7 +2738,7 @@ func _create_zombie_nest(data: Dictionary) -> Node:
 func _create_tree(data: Dictionary) -> Node:
 	# hp/is_marked optional fürs Laden eines Spielstands (siehe
 	# docs/save_load.md) — Tree._ready() liest hp/is_marked nur für die
-	# Farbe, überschreibt sie nicht (anders als Zombie.is_brute), deshalb
+	# Farbe, überschreibt sie nicht (anders als Zombie.zombie_type), deshalb
 	# hier direkt vor dem Hinzufügen zum Baum setzbar.
 	var tree := TREE_SCENE.instantiate()
 	tree.name = "tree_%d" % data["id"]
@@ -2743,6 +2917,95 @@ func _is_far_from_zone_centers(candidate: Vector3) -> bool:
 	return true
 
 
+# Prozedurale "Masse"-Häuser (2026-08-04, Nutzerwunsch: "für die masse
+# die häuser generieren, spezial POI base krankenhaus etc mach ich") —
+# einfacher Box-Körper + Satteldach statt echtem Blender-Asset, für
+# Gebäudetypen mit vielen Instanzen ohne narrative Bedeutung. Farbtöne
+# angelehnt an den ursprünglichen Wohnhaus-Modellier-Prompt ("verwittertes
+# Beige/Grau-Braun" Fassade, "dunkleres Rot-Braun oder Grau" Dach), siehe
+# Infos/05 Assets im Spiel.
+const PROCEDURAL_HOUSE_WALL_COLORS := [
+	Color(0.62, 0.55, 0.45),
+	Color(0.5, 0.45, 0.4),
+	Color(0.55, 0.48, 0.42),
+	Color(0.45, 0.42, 0.4),
+]
+const PROCEDURAL_HOUSE_ROOF_COLORS := [
+	Color(0.35, 0.18, 0.15),
+	Color(0.3, 0.3, 0.32),
+	Color(0.28, 0.22, 0.18),
+]
+
+
+func _random_house_proc_params() -> Dictionary:
+	# Bereiche grob am echten wohnhaustest.glb orientiert (9,1×8,2×9,0m),
+	# mit Streuung für Abwechslung zwischen Instanzen.
+	return {
+		"width": randf_range(7.0, 11.0),
+		"depth": randf_range(6.0, 9.0),
+		"wall_height": randf_range(4.5, 6.5),
+		"roof_height": randf_range(2.0, 3.5),
+		"wall_color": PROCEDURAL_HOUSE_WALL_COLORS[randi() % PROCEDURAL_HOUSE_WALL_COLORS.size()],
+		"roof_color": PROCEDURAL_HOUSE_ROOF_COLORS[randi() % PROCEDURAL_HOUSE_ROOF_COLORS.size()],
+	}
+
+
+func _build_procedural_house(params: Dictionary) -> Node3D:
+	# Baut Box-Körper + Satteldach (PrismMesh) aus params (siehe
+	# _random_house_proc_params()) — Ursprung wie ein Blender-Export an der
+	# BASIS (nicht mittig), gleiche Konvention wie das echte Wohnhaus-Asset
+	# (siehe _create_building(), "Bugfix 2026-08-04 (Haus nicht am
+	# Boden)"), damit derselbe `-size.y/2`-Y-Ausgleich für beide Zweige
+	# funktioniert.
+	var wall_height: float = params["wall_height"]
+	var roof_height: float = params["roof_height"]
+	var model := Node3D.new()
+	model.name = "Model"
+
+	var body := MeshInstance3D.new()
+	var body_mesh := BoxMesh.new()
+	body_mesh.size = Vector3(params["width"], wall_height, params["depth"])
+	body.mesh = body_mesh
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = params["wall_color"]
+	body.set_surface_override_material(0, body_mat)
+	body.position = Vector3(0, wall_height / 2.0, 0)
+	model.add_child(body)
+
+	var roof := MeshInstance3D.new()
+	var roof_mesh := PrismMesh.new()
+	# left_to_right = 0.5 zentriert die First-Kante mittig (echtes
+	# Satteldach statt eines schiefen Pultdachs).
+	roof_mesh.size = Vector3(params["width"], roof_height, params["depth"])
+	roof_mesh.left_to_right = 0.5
+	roof.mesh = roof_mesh
+	var roof_mat := StandardMaterial3D.new()
+	roof_mat.albedo_color = params["roof_color"]
+	roof.set_surface_override_material(0, roof_mat)
+	roof.position = Vector3(0, wall_height + roof_height / 2.0, 0)
+	model.add_child(roof)
+
+	return model
+
+
+func _pick_model_path(template: Dictionary) -> String:
+	# Gebäude-Varianten (Nutzerwunsch 2026-08-04: "brauchen die wohnhäuser
+	# variationen von den gebäuden für mehr abwechslung wie bei IFZ") — ein
+	# BUILDING_TYPES-Eintrag kann optional "model_paths" (Array[String])
+	# statt nur "model_path" (String) haben; ist das Array gesetzt, wird
+	# PRO INSTANZ zufällig eine Variante gewählt, statt immer dasselbe
+	# Modell zu wiederholen. Rein additiv — bestehende Einträge mit nur
+	# "model_path" (aktuell alle) sind unverändert gültig, das gewählte
+	# Ergebnis wird wie bisher als fester "model_path"-Wert pro Instanz
+	# gespeichert/übertragen (siehe _create_building_local()/
+	# _collect_save_data()), kein Zusatzaufwand bei Catch-up/Speicherstand.
+	if template.has("model_paths"):
+		var paths: Array = template["model_paths"]
+		if not paths.is_empty():
+			return paths[randi() % paths.size()]
+	return template.get("model_path", "")
+
+
 func _generate_city_zone(center: Vector3, zone_index: int, radius: float, building_count: int) -> void:
 	# Straßen-Raster statt Zufallsstreuen (2026-08-01, Kartenplanungs-
 	# Session) — _generate_street_slots() liefert mehr mögliche
@@ -2761,13 +3024,27 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 	for i in count:
 		var template: Dictionary = BUILDING_TYPES[randi() % BUILDING_TYPES.size()]
 		var size: Vector3 = template["size"]
+		var model_path := ""
+		var proc_params := {}
+		# "Masse"-Häuser prozedural statt per Hand modelliert (siehe
+		# _random_house_proc_params()/_build_procedural_house(),
+		# PROCEDURAL_CHANCE-Feld pro BUILDING_TYPES-Eintrag, aktuell nur
+		# Wohnhaus) — Größe kommt dann aus den gewürfelten Maßen statt aus
+		# der festen Vorlagen-Size, sonst würde Collision/Bauplatz nicht
+		# zum generierten Modell passen.
+		if randf() < template.get("procedural_chance", 0.0):
+			proc_params = _random_house_proc_params()
+			size = Vector3(proc_params["width"], proc_params["wall_height"] + proc_params["roof_height"], proc_params["depth"])
+		else:
+			model_path = _pick_model_path(template)
 		var slot: Vector3 = slots[i]
 		var pos := Vector3(slot.x, size.y / 2.0, slot.z)
 		_create_building_local({
 			"id": _next_building_id,
 			"position": pos,
 			"size": size,
-			"model_path": template.get("model_path", ""),
+			"model_path": model_path,
+			"proc_params": proc_params,
 			"loot": _roll_building_loot(template),
 			"default_color": template["default_color"],
 			"has_survivor": i == recruit_slot,
@@ -3440,19 +3717,24 @@ func _spawn_bandit_restock() -> void:
 	building.grant_bandit_loot.rpc({resource: amount})
 
 
-func _maybe_spawn_refugee() -> void:
+func _maybe_spawn_refugee(force: bool = false) -> bool:
 	# Siehe REFUGEE_SPAWN_INTERVAL oben — anders als _spawn_bandit_restock()
 	# (verändert ein bestehendes Gebäude) spawnt das hier eine BRANDNEUE,
 	# eigenständige Building-Instanz in der Wildnis (gleiches Spawn-Muster
 	# wie Tree/CarWreck/etc., siehe _random_wilderness_position()).
+	# force=true (siehe request_active_recruit_call()) überspringt nur den
+	# Zufalls-Würfel (REFUGEE_SPAWN_CHANCE) — der Aktiv-Deckel
+	# (REFUGEE_MAX_ACTIVE) gilt weiterhin, sonst könnte ein Spieler beliebig
+	# viele gleichzeitige Schutzsuchende erzwingen. Rückgabewert (neu, fürs
+	# Feedback beim erzwungenen Aufruf) sagt, ob wirklich gespawnt wurde.
 	var active_count := 0
 	for building in buildings_container.get_children():
 		if building.is_refugee and not building.is_looted:
 			active_count += 1
 	if active_count >= REFUGEE_MAX_ACTIVE:
-		return
-	if randf() > REFUGEE_SPAWN_CHANCE:
-		return
+		return false
+	if not force and randf() > REFUGEE_SPAWN_CHANCE:
+		return false
 	var pos := _random_wilderness_position(1.0)
 	building_spawner.spawn({
 		"id": _next_building_id,
@@ -3466,6 +3748,27 @@ func _maybe_spawn_refugee() -> void:
 		"is_refugee": true,
 	})
 	_next_building_id += 1
+	return true
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_active_recruit_call(requesting_peer_id: int) -> void:
+	# "Ruf aussenden"-Button (siehe World.tscn, Einheiten-Tab) — erzwingt
+	# einen Schutzsuchenden-Spawn-Versuch statt auf den passiven
+	# REFUGEE_SPAWN_INTERVAL-Timer zu warten. Eigener Cooldown PRO SPIELER
+	# (nicht global), damit ein Spieler nicht mehrfach hintereinander
+	# klicken kann.
+	if not multiplayer.is_server():
+		return
+	var remaining: float = _active_recruit_call_cooldowns.get(requesting_peer_id, 0.0)
+	if remaining > 0.0:
+		report_status(requesting_peer_id, "Noch %d s bis zum nächsten Ruf." % ceili(remaining))
+		return
+	if not _maybe_spawn_refugee(true):
+		report_status(requesting_peer_id, "Schon genug Schutzsuchende unterwegs — später erneut versuchen.")
+		return
+	_active_recruit_call_cooldowns[requesting_peer_id] = ACTIVE_RECRUIT_CALL_COOLDOWN
+	report_status(requesting_peer_id, "Ruf ausgesendet — irgendwo in der Wildnis sollte bald ein Schutzsuchender auftauchen.")
 
 
 func spawn_refugee_recruit(peer_id: int, spawn_position: Vector3) -> void:
@@ -3624,7 +3927,7 @@ func _collect_save_data() -> Dictionary:
 			"index": zombie.zombie_id,
 			"position": zombie.position,
 			"hp": zombie.hp,
-			"is_brute": zombie.is_brute,
+			"zombie_type": zombie.zombie_type,
 		})
 	data["zombies"] = zombies
 
@@ -3719,6 +4022,7 @@ func _collect_save_data() -> Dictionary:
 			"zone_center": building.zone_center,
 			"size": (building.get_node("Mesh").mesh as BoxMesh).size,
 			"model_path": building.model_path,
+			"proc_params": building.proc_params.duplicate(),
 			"loot": building.loot.duplicate(),
 			"default_color": building.default_color,
 			"has_survivor": building.has_survivor,
@@ -3816,9 +4120,11 @@ func _load_game_state(data: Dictionary) -> void:
 
 	for entry in data.get("zombies", []):
 		# hp wird erst NACH dem Spawnen gesetzt (siehe _create_zombie()) —
-		# Zombie._ready() berechnet hp = _max_hp abhängig von is_brute, ein
-		# vorher gesetzter Wert würde sofort überschrieben.
-		var zombie := zombie_spawner.spawn({"index": entry["index"], "position": entry["position"], "is_brute": entry["is_brute"]})
+		# Zombie._ready() berechnet hp = _max_hp abhängig von zombie_type,
+		# ein vorher gesetzter Wert würde sofort überschrieben. .get() mit
+		# Fallback (nicht entry["zombie_type"]) für Spielstände von vor der
+		# Zombie-Typen-Erweiterung (2026-08-04, vorher "is_brute": bool).
+		var zombie := zombie_spawner.spawn({"index": entry["index"], "position": entry["position"], "zombie_type": entry.get("zombie_type", 0)})
 		if is_instance_valid(zombie):
 			zombie.hp = entry["hp"]
 
@@ -3883,6 +4189,21 @@ func _load_game_state(data: Dictionary) -> void:
 
 	for entry in data.get("zombie_nests", []):
 		zombie_nest_spawner.spawn(entry)
+
+
+func _on_speed_button_pressed(scale: float) -> void:
+	request_set_time_scale.rpc_id(1, multiplayer.get_unique_id(), scale)
+
+
+func _update_speed_buttons() -> void:
+	# Zeigt die aktuell aktive Geschwindigkeit als gedrückten Button —
+	# gilt für ALLE Peers (auch die, die die Reihe nicht bedienen dürfen,
+	# siehe speed_row.visible), damit z. B. ein später beitretender Host-
+	# Wechsel (falls je relevant) den richtigen Stand zeigen würde. Rein
+	# kosmetisch, kein eigener Netzwerk-Zustand nötig.
+	speed_1x_button.button_pressed = is_equal_approx(_time_scale, 1.0)
+	speed_2x_button.button_pressed = is_equal_approx(_time_scale, 2.0)
+	speed_3x_button.button_pressed = is_equal_approx(_time_scale, 3.0)
 
 
 func _on_toggle_build_mode_pressed(type: BuildType) -> void:
@@ -3970,8 +4291,8 @@ func _refresh_advanced_medical_ui(peer_id: int) -> void:
 		advanced_medical_button.text = "Krankenstation erweitern (%s)" % ", ".join(cost_parts)
 		advanced_medical_button.disabled = false
 	else:
-		var has_book: bool = base != null and base.resources.get("book_medical_upgrade", 0) > 0
-		advanced_medical_button.text = "Erweiterte Krankenstation erforschen (%s)" % RESOURCE_DISPLAY_NAMES.get("book_medical_upgrade", "book_medical_upgrade")
+		var has_book: bool = base != null and base.resources.get(RESEARCH_BOOK_RESOURCE, 0) > 0
+		advanced_medical_button.text = "Erweiterte Krankenstation erforschen (%s)" % RESOURCE_DISPLAY_NAMES.get(RESEARCH_BOOK_RESOURCE, RESEARCH_BOOK_RESOURCE)
 		advanced_medical_button.disabled = not has_book
 
 
@@ -4360,9 +4681,8 @@ func _refresh_crafting_ui() -> void:
 			button.text = _craft_button_label(recipe)
 			button.pressed.connect(_on_craft_pressed.bind(recipe_id))
 		else:
-			var book_type := "book_%s" % recipe_id
-			var has_book: bool = base != null and base.resources.get(book_type, 0) > 0
-			button.text = "%s erforschen (%s)" % [recipe["name"], RESOURCE_DISPLAY_NAMES.get(book_type, book_type)]
+			var has_book: bool = base != null and base.resources.get(RESEARCH_BOOK_RESOURCE, 0) > 0
+			button.text = "%s erforschen (%s)" % [recipe["name"], RESOURCE_DISPLAY_NAMES.get(RESEARCH_BOOK_RESOURCE, RESEARCH_BOOK_RESOURCE)]
 			button.disabled = not has_book
 			button.pressed.connect(_on_research_pressed.bind(recipe_id))
 		crafting_recipe_list.add_child(button)
@@ -4434,8 +4754,10 @@ func request_craft(recipe_id: String, requesting_peer_id: int) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func request_research(recipe_id: String, requesting_peer_id: int) -> void:
 	# Forschungsbücher (siehe docs/building.md, "Forschungsbücher") —
-	# verbraucht 1× "book_<recipe_id>" aus der eigenen Home-Base, schaltet
-	# das passende Rezept/die passende Gebäude-Ausbaustufe DAUERHAFT frei
+	# verbraucht 1× RESEARCH_BOOK_RESOURCE (Universal-Buch seit 2026-08-04,
+	# vorher ein eigenes "book_<recipe_id>" pro Rezept) aus der eigenen
+	# Home-Base, schaltet das passende Rezept/die passende Gebäude-
+	# Ausbaustufe DAUERHAFT frei
 	# (HomeBase.unlock_recipe(), kein Vergessen — derselbe Speicher dient
 	# seit Punkt 24 der Gesamtliste für BEIDES, siehe BUILDING_RESEARCH
 	# oben). Braucht bewusst KEINE eigene Werkstatt (Lesen geht überall,
@@ -4451,11 +4773,10 @@ func request_research(recipe_id: String, requesting_peer_id: int) -> void:
 		return
 	if base.unlocked_recipes.get(recipe_id, false):
 		return
-	var book_type := "book_%s" % recipe_id
-	if base.resources.get(book_type, 0) <= 0:
-		report_status(requesting_peer_id, "Kein passendes Buch vorhanden.")
+	if base.resources.get(RESEARCH_BOOK_RESOURCE, 0) <= 0:
+		report_status(requesting_peer_id, "Kein Forschungsbuch vorhanden.")
 		return
-	base.add_resources.rpc({book_type: -1})
+	base.add_resources.rpc({RESEARCH_BOOK_RESOURCE: -1})
 	base.unlock_recipe.rpc(recipe_id)
 
 
@@ -4746,7 +5067,7 @@ func _refresh_units_ui() -> void:
 		var entry := VBoxContainer.new()
 		entry.add_theme_constant_override("separation", 0)
 		var label := Label.new()
-		var type_label := "Feld" if survivor.troop_type == survivor.TroopType.FIELD else "Bau"
+		var type_label := _troop_type_label(survivor)
 		label.text = "T%d %s HP%d H%d Mü%d Mo%d" % [survivor.trupp_id, type_label, survivor.hp, int(survivor.hunger), int(survivor.fatigue), int(survivor.morale)]
 		if survivor.is_armed:
 			label.text += " [W]"
@@ -4770,13 +5091,28 @@ func _refresh_units_ui() -> void:
 		select_button.add_theme_font_size_override("font_size", 12)
 		select_button.pressed.connect(_on_select_unit_pressed.bind(survivor))
 		button_row.add_child(select_button)
-		var type_button := Button.new()
-		# Zeigt das Umschalt-ZIEL, nicht den aktuellen Typ (Nutzer klickt auf
-		# das, was er haben will) — siehe docs/survivor.md, "Trupp-Arten".
-		type_button.text = "→Bau" if survivor.troop_type == survivor.TroopType.FIELD else "→Feld"
-		type_button.add_theme_font_size_override("font_size", 12)
-		type_button.pressed.connect(_on_toggle_troop_type_pressed.bind(survivor))
-		button_row.add_child(type_button)
+		if survivor.troop_type == survivor.TroopType.UNASSIGNED:
+			# Unzugewiesen kann in beide Richtungen gehen, kein sinnvolles
+			# Umschalt-ZIEL wie beim FIELD<->BUILD-Toggle unten — zwei
+			# getrennte Zuweisen-Buttons statt eines Togglers.
+			var assign_field_button := Button.new()
+			assign_field_button.text = "→Feld"
+			assign_field_button.add_theme_font_size_override("font_size", 12)
+			assign_field_button.pressed.connect(_on_assign_troop_type_pressed.bind(survivor, survivor.TroopType.FIELD))
+			button_row.add_child(assign_field_button)
+			var assign_build_button := Button.new()
+			assign_build_button.text = "→Bau"
+			assign_build_button.add_theme_font_size_override("font_size", 12)
+			assign_build_button.pressed.connect(_on_assign_troop_type_pressed.bind(survivor, survivor.TroopType.BUILD))
+			button_row.add_child(assign_build_button)
+		else:
+			var type_button := Button.new()
+			# Zeigt das Umschalt-ZIEL, nicht den aktuellen Typ (Nutzer klickt auf
+			# das, was er haben will) — siehe docs/survivor.md, "Trupp-Arten".
+			type_button.text = "→Bau" if survivor.troop_type == survivor.TroopType.FIELD else "→Feld"
+			type_button.add_theme_font_size_override("font_size", 12)
+			type_button.pressed.connect(_on_toggle_troop_type_pressed.bind(survivor))
+			button_row.add_child(type_button)
 		# Ausrüsten-Buttons (Waffe/Rüstung) sind ins Trupp-Detailfenster
 		# gewandert (siehe _update_unit_detail_panel(), docs/survivor.md,
 		# "Rüstungssystem") — Nutzer-Feedback: die kompakte Liste sollte
@@ -4790,6 +5126,18 @@ func _refresh_units_ui() -> void:
 			button_row.add_child(group_button)
 		entry.add_child(button_row)
 		units_list.add_child(entry)
+
+
+func _troop_type_label(survivor: Node3D) -> String:
+	# Gemeinsame Beschriftung für Einheiten-Liste + Trupp-Detailfenster,
+	# siehe Survivor.TroopType-Doku. Nimmt die Node (nicht nur den
+	# troop_type-Wert), weil das TroopType-Enum ohne class_name nur über
+	# eine Instanz ansprechbar ist.
+	if survivor.troop_type == survivor.TroopType.FIELD:
+		return "Feld"
+	if survivor.troop_type == survivor.TroopType.BUILD:
+		return "Bau"
+	return "Zivil"
 
 
 func _update_unit_detail_panel() -> void:
@@ -4809,7 +5157,7 @@ func _update_unit_detail_panel() -> void:
 	var survivor: Node3D = selected[0]
 	_unit_detail_survivor = survivor
 	main_tabs.set_tab_hidden(tab_idx, false)
-	var type_label := "Feld" if survivor.troop_type == survivor.TroopType.FIELD else "Bau"
+	var type_label := _troop_type_label(survivor)
 	var carried: int = _carried_total(survivor.carried_loot)
 	unit_detail_stats_label.text = "Trupp %d (%s)\nHP: %d/%d\nHunger: %d\nMüdigkeit: %d\nMoral: %d\nLoot: %d/%d" % [
 		survivor.trupp_id, type_label, survivor.hp, survivor.MAX_HP, int(survivor.hunger), int(survivor.fatigue), int(survivor.morale), carried, survivor.CARRY_CAPACITY,
@@ -4864,6 +5212,27 @@ func _on_toggle_troop_type_pressed(survivor: Node3D) -> void:
 	survivor.set_troop_type.rpc_id(1, new_type, multiplayer.get_unique_id())
 
 
+func _on_assign_troop_type_pressed(survivor: Node3D, new_type: int) -> void:
+	# Zivilisten-Konzept (siehe Survivor.TroopType-Doku) — erste Zuweisung
+	# eines UNASSIGNED-Trupps zu FIELD oder BUILD, getrennte Buttons statt
+	# des FIELD<->BUILD-Togglers oben (siehe _refresh_units_ui()).
+	if not is_instance_valid(survivor):
+		return
+	survivor.set_troop_type.rpc_id(1, new_type, multiplayer.get_unique_id())
+
+
+func _on_recruit_policy_selected(index: int) -> void:
+	# UnitsUI-Dropdown (siehe World.tscn, "RecruitPolicyOption") —
+	# Auto-Zuweisungs-Profil für ZUKÜNFTIGE Rekruten, siehe
+	# _apply_recruit_troop_type()/request_set_recruit_policy(). Reihenfolge
+	# der Items muss zu RECRUIT_POLICIES passen (siehe _ready()).
+	request_set_recruit_policy.rpc_id(1, RECRUIT_POLICIES[index], multiplayer.get_unique_id())
+
+
+func _on_active_recruit_call_pressed() -> void:
+	request_active_recruit_call.rpc_id(1, multiplayer.get_unique_id())
+
+
 func _on_detail_equip_weapon_pressed() -> void:
 	# Trupp-Detailfenster (siehe docs/survivor.md, "Rüstungssystem") — die
 	# Buttons dort sind fest verdrahtet (kein Neu-Erzeugen pro Refresh wie
@@ -4904,6 +5273,16 @@ func _on_toggle_group_pressed(survivor: Node3D, group_number: int) -> void:
 	_control_groups[group_number] = group
 
 
+func _exit_tree() -> void:
+	# Engine.time_scale ist eine GLOBALE Engine-Eigenschaft, kein
+	# Szenen-lokaler Zustand (siehe _time_scale-Kommentar oben) — ohne
+	# Reset bliebe ein Zeitraffer-Wert über das Verlassen von World.tscn
+	# hinaus aktiv (Game Over, Zurück zum Hauptmenü, Trennung) und würde
+	# z. B. das Hauptmenü/eine neue Partie unbeabsichtigt beschleunigt
+	# darstellen.
+	Engine.time_scale = 1.0
+
+
 func _process(delta: float) -> void:
 	if multiplayer.is_server() and not _game_paused:
 		# Muss VOR den Zombie-/Wachposten-_process()-Aufrufen desselben Frames
@@ -4931,6 +5310,10 @@ func _process(delta: float) -> void:
 		if _refugee_spawn_timer >= REFUGEE_SPAWN_INTERVAL:
 			_refugee_spawn_timer = 0.0
 			_maybe_spawn_refugee()
+		# Aktive Rekrutierungs-Aktion — Cooldowns pro Spieler runterzählen
+		# (siehe ACTIVE_RECRUIT_CALL_COOLDOWN oben).
+		for peer_id in _active_recruit_call_cooldowns.keys():
+			_active_recruit_call_cooldowns[peer_id] = max(_active_recruit_call_cooldowns[peer_id] - delta, 0.0)
 	_handle_pan(delta)
 	_handle_gamepad_input(delta)
 	_update_hud()
@@ -5013,6 +5396,8 @@ func _update_build_ghost() -> void:
 	# gleiches Muster wie der Mauer-Ghost).
 	if _build_type == BuildType.WATCHTOWER:
 		build_ghost.mesh = _watchtower_ghost_mesh
+	elif _build_type == BuildType.FIELD:
+		build_ghost.mesh = _field_ghost_mesh
 	elif _build_type in [BuildType.WALL, BuildType.GATE]:
 		build_ghost.mesh = _wall_ghost_mesh
 	else:
@@ -5438,6 +5823,22 @@ func request_toggle_pause(requesting_peer_id: int) -> void:
 func _sync_game_paused(paused: bool) -> void:
 	_game_paused = paused
 	pause_label.visible = paused
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_set_time_scale(requesting_peer_id: int, new_scale: float) -> void:
+	# Nur der Host darf die Geschwindigkeit ändern, gleiches Muster wie
+	# request_toggle_pause() oben.
+	if not multiplayer.is_server() or requesting_peer_id != 1:
+		return
+	_sync_time_scale.rpc(new_scale)
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_time_scale(new_scale: float) -> void:
+	_time_scale = new_scale
+	Engine.time_scale = new_scale
+	_update_speed_buttons()
 
 
 @rpc("any_peer", "call_local", "reliable")

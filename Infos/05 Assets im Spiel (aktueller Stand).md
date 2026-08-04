@@ -103,7 +103,7 @@ siehe `docs/mechanics-review.md`). Alle bisher reine Platzhalter-Boxen,
 | **Werkstatt** | ⬜ Noch kein Asset | 5m × 4m | Checkliste |
 | **Lager** | ⬜ Noch kein Asset | 4m × 4m | Checkliste |
 | **Schlafraum/Bett** | ⬜ Noch kein Asset | 3m × 2m | Checkliste |
-| **Feld** | ⬜ Noch kein Asset | 6m × 4m | Checkliste ("Farm/Garten-Anlage", gleiche Funktion: Nahrung-Produktion) |
+| **Feld** | ✅ Asset vorhanden (`feld.glb`, 2026-08-04) | — (Platzhalter war 2,5×2,5m) | fertig |
 | **Außenposten** | ⬜ Noch kein Asset | 3m × 3m | Checkliste |
 | **Wachturm** (eigene Struktur, NICHT derselbe wie "Wachposten" oben!) | ⬜ Noch kein Asset | ~1,5m × 1,5m Grundfläche, ~6m hoch (schmaler Turm) | **Achtung:** Checkliste listet "4m×4m×6m", das wirkt aber vertauscht (ein Turm sollte schmal+hoch sein, nicht 4×4 breit) — der aktuelle Platzhalter im Code ist bereits schmal+hoch (1,2×1,2m Grundfläche, 5m hoch), daran orientieren statt an der Checklisten-Zahl |
 
@@ -137,6 +137,29 @@ aktuellen Platzhalter-Maßen — nur bei den GEBÄUDEN klafft die Lücke
 2026-08-04.
 
 ---
+
+## 5. Umgebungs-Props (Ressourcenknoten)
+
+Bisher in keiner Checkliste erfasst (2026-08-04 ergänzt, siehe
+`Infos/08 Weg zur 1.0.md`, Abschnitt 6) — Zielmaße direkt aus den
+aktuellen Platzhalter-`.tscn`-Dateien abgelesen (`BoxShape3D`/
+`SphereShape3D`/`CylinderShape3D`-Größe), da es keine Vision-Vorgabe
+dazu gibt. Empfehlung: möglichst nah an diesen Maßen bleiben, sonst
+müssen Collision/Boden-Y-Konstanten (`World.TREE_GROUND_Y`/
+`CAR_WRECK_GROUND_Y`/`STONE_PILE_GROUND_Y`/`BRICK_PILE_GROUND_Y`) beim
+Einbauen angepasst werden (gleiches Vorgehen wie beim Wohnhaus, wenn die
+tatsächlichen Maße abweichen).
+
+| Prop | Ziel-Maße (B=Blender X × T=Blender Y × H=Blender Z) | Status |
+|---|---|---|
+| Ziegelhaufen | 1,4m × 1,4m × 0,5m | ✅ **Echtes Asset im Spiel** (`ziegelhaufen.glb`, 2026-08-04, Maße passten fast exakt) |
+| Steinhaufen | ~1,2m Durchmesser × 0,6-0,8m hoch | ✅ **Echtes Asset im Spiel** (`steinehaufen.glb`, 2026-08-04, Größe nicht extra bestätigt) |
+| Autowrack | 1,6m × 3,0m × 0,7m | ⬜ Platzhalter (Box) |
+| Baum | ~1,8m Durchmesser (Krone) × 2,6m hoch | ✅ **Echtes Asset im Spiel** (`tannenbaum.glb`, 2026-08-04, Größe nicht extra bestätigt) |
+
+Ziegel-/Steinhaufen sind bewusst klein/kniehoch (Ressourcen-Prop zum
+Abbauen, kein Blickfang), Autowrack liegt quer (lang in der Tiefe, wie
+ein geparktes/verunfalltes Fahrzeug).
 
 ## Nicht in dieser Liste (Vision, aber noch nicht im Code)
 

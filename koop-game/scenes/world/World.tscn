@@ -240,6 +240,25 @@ theme_override_constants/separation = 4
 theme_override_font_sizes/font_size = 16
 text = "00:00"
 
+[node name="SpeedRow" type="HBoxContainer" parent="ResourcesUI/Panel/VBoxContainer"]
+theme_override_constants/separation = 4
+
+[node name="Speed1xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
+custom_minimum_size = Vector2(36, 0)
+toggle_mode = true
+button_pressed = true
+text = "1x"
+
+[node name="Speed2xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
+custom_minimum_size = Vector2(36, 0)
+toggle_mode = true
+text = "2x"
+
+[node name="Speed3xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
+custom_minimum_size = Vector2(36, 0)
+toggle_mode = true
+text = "3x"
+
 [node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
 autowrap_mode = 3
 theme_override_font_sizes/font_size = 15
@@ -386,6 +405,17 @@ text = "Gruppe 2"
 
 [node name="SelectGroup3Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
 text = "Gruppe 3"
+
+[node name="RecruitPolicyRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+
+[node name="RecruitPolicyLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow"]
+text = "Neue Rekruten:"
+theme_override_font_sizes/font_size = 12
+
+[node name="RecruitPolicyOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow"]
+
+[node name="ActiveRecruitCallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+text = "Ruf aussenden"
 
 [node name="UnitsList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
 

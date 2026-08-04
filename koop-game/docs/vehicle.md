@@ -43,7 +43,7 @@ periodisch an, "lauter als ein Trupp" war explizit Teil der Konzept-Idee.
   Mesh-Höhe) — sonst würde z. B. der LKW sichtbar im Boden versinken
   (gleiche Falle wie `ZOMBIE_BRUTE_GROUND_Y`).
 - **`hp`/`_max_hp` erst in `_ready()` berechnet**, NICHT beim Instanziieren
-  gesetzt (gleiche `@export`-Timing-Falle wie `Zombie.gd`/`is_brute`) — ein
+  gesetzt (gleiche `@export`-Timing-Falle wie `Zombie.gd`/`zombie_type`) — ein
   vor `add_child()` gesetzter `hp`-Wert würde sofort überschrieben.
   Catch-up (`_catch_up_vehicle()`) und Spielstand-Laden (`_load_game_state()`)
   setzen `hp` deshalb jetzt beide erst NACH dem Spawnen, nicht mehr über

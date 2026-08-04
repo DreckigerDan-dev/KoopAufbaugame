@@ -51,24 +51,38 @@ func _die() -> void:
 
 
 func _update_color() -> void:
-	# Zwei getrennte Meshes (Stamm + Krone, siehe Tree.tscn) statt einem
-	# einzelnen Zylinder — deutlich als Baum erkennbar statt als dünner
-	# Pfosten (Nutzer-Feedback: kaum unterscheidbar). Nur die Krone
-	# reagiert auf HP (Grün -> welkes Braun beim Fällen, gleiches Prinzip
-	# wie Zombie/Wall/ZombieNest), der Stamm bleibt konstant braun.
+	# Echtes Asset (2026-08-04, siehe docs/survivor.md, "Ressourcen
+	# abbauen") — ein zusammenhängendes Tannenbaum-Modell statt der
+	# getrennten Stamm-/Kronen-Platzhalter, deshalb keine sinnvolle
+	# Trunk/Foliage-Trennung mehr möglich. Der ganze Baum reagiert jetzt
+	# auf HP/Markierung (gleiche Grün->welkes-Braun- bzw. Gold-Logik wie
+	# vorher nur bei der Krone) — fällt ohne Model auf die alte
+	# Trunk/Foliage-Zweiteilung zurück.
+	var ratio: float = float(hp) / float(MAX_HP)
+	var base_color := Color(0.9, 0.75, 0.1) if is_marked else Color(0.15, 0.4, 0.1)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = base_color.lerp(Color(0.4, 0.32, 0.15), 1.0 - ratio)
+	var meshes := _find_mesh_instances(get_node_or_null("Model"))
+	if not meshes.is_empty():
+		for mesh in meshes:
+			mesh.set_surface_override_material(0, mat)
+		return
 	var trunk: MeshInstance3D = get_node_or_null("Trunk")
 	if trunk != null:
 		var trunk_mat := StandardMaterial3D.new()
 		trunk_mat.albedo_color = Color(0.35, 0.24, 0.14)
 		trunk.set_surface_override_material(0, trunk_mat)
 	var foliage: MeshInstance3D = get_node_or_null("Foliage")
-	if foliage == null:
-		return
-	var ratio: float = float(hp) / float(MAX_HP)
-	# Markiert (noch unberührt) -> Gold statt Grün, klar sichtbares "steht
-	# auf der Liste"-Signal. Läuft trotzdem weiter über denselben
-	# HP-Verlauf Richtung welkem Braun, sobald tatsächlich gefällt wird.
-	var foliage_base := Color(0.9, 0.75, 0.1) if is_marked else Color(0.15, 0.4, 0.1)
-	var foliage_mat := StandardMaterial3D.new()
-	foliage_mat.albedo_color = foliage_base.lerp(Color(0.4, 0.32, 0.15), 1.0 - ratio)
-	foliage.set_surface_override_material(0, foliage_mat)
+	if foliage != null:
+		foliage.set_surface_override_material(0, mat)
+
+
+func _find_mesh_instances(node: Node) -> Array:
+	var result: Array = []
+	if node == null:
+		return result
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_mesh_instances(child))
+	return result

@@ -140,7 +140,10 @@ Rekrutierung existiert.
   nachhaltige Session arbeitet.
 - **Keine Horde-Skalierung mit Spieleranzahl** — Koop wird dadurch pro Kopf
   spürbar leichter statt gleich schwer.
-- **Kein Sieg-Zustand** — falls gewünscht, wäre ein definiertes Ziel (z. B.
-  "X Tage überleben", Evakuierung, Endgegner) der fehlende Baustein, damit
-  "spielbar" auch "hat ein Ende" bedeutet, nicht nur "läuft technisch
-  stabil".
+- **Kein Sieg-Zustand — bewusst so gewollt, kein offener Punkt.** Nutzer
+  hat das nach der Infection-Free-Zone-Recherche (siehe
+  `Infos/06 Infection Free Zone Recherche.md`) explizit bestätigt: "das
+  Spiel soll eher Sandbox sein, Endziel soll es nicht geben, vielleicht
+  wenn das Spiel mal spielbar ist eine Kampagne oder so, aber erstmal
+  unwichtig" (2026-08-04). Keine Victory-Condition bauen/vorschlagen — nur
+  die Verlust-Seite (Home-Base-Zerstörung → Game Over, siehe oben) gilt.

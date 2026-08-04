@@ -1,3 +1,159 @@
+## Feld-Ghost-Fix + Skalierung Baum/Stein/Ziegel (2026-08-04)
+
+Zwei kleine Nutzer-Nachbesserungen direkt nach dem Asset-Einbau:
+
+- **"Vorschau vom Feld ist zu klein"** — Feld nutzte beim Platzieren
+  bisher generisch die kleine 1,5³-Wachposten-Ghost-Box. Neue, passend
+  große `World._field_ghost_mesh` (`FIELD_GHOST_SIZE := Vector3(2.5, 0.2,
+  2.5)`), gleiches Muster wie beim Wachturm. Details in
+  [`building.md`](building.md), "Felder".
+- **"Steine, Bäume, Ziegel bisschen größer machen aber nicht viel"** —
+  `scale = Vector3(1.2, 1.2, 1.2)` (+20 %) auf dem jeweiligen `Model`-
+  Node, Kollisionsformen proportional mitskaliert. Funktioniert ohne
+  Y-Ausgleich, weil die Modelle an ihrer Basis verankert sind (Skalieren
+  um den eigenen Ursprung lässt den Bodenkontakt unverändert). Feld
+  bewusst nicht mitskaliert. Details in [`survivor.md`](survivor.md),
+  "Ressourcen abbauen".
+
+Beides noch nicht vom Nutzer im Spiel gesichtet.
+
+## Steinhaufen, Baum, Feld: echte Assets (2026-08-04)
+
+Drei weitere vom Nutzer gelieferte Assets, gleiches Muster wie beim
+Ziegelhaufen (Model-Kind-Node + Y-Ausgleich, Platzhalter unsichtbar für
+Kollision):
+
+- **Steinhaufen** (`assets/steinehaufen.glb`) — mehrere Einzelstein-
+  Meshes, `StonePile._update_color()` färbt jetzt alle statt nur
+  `RockBig`/`RockSmall`.
+- **Baum** (`assets/tannenbaum.glb`) — ein zusammenhängendes Modell statt
+  der vorherigen Stamm-/Kronen-Trennung, deshalb reagiert jetzt der GANZE
+  Baum auf HP/Markierung (vorher nur die Krone). `Tree._update_color()`
+  entsprechend umgebaut, mit Fallback auf die alte Trunk/Foliage-Logik
+  ohne Model.
+- **Feld** (`assets/feld.glb`) — ersetzt die Platzhalter-Box, keine
+  Skript-Änderung nötig (Field hat keine Farb-/HP-Logik). Datei lag
+  zunächst wieder im falschen Ordner (Workspace-Root), verschoben.
+
+Größen bei allen drei NICHT extra vom Nutzer bestätigt (anders als beim
+Ziegelhaufen, wo ein Referenzwürfel verglichen wurde) — am jeweiligen
+Platzhalter orientiert, bei Bedarf im Spiel nachjustieren. Details in
+[`survivor.md`](survivor.md), "Ressourcen abbauen", und
+[`building.md`](building.md), "Felder". Noch nicht im Editor gesichtet.
+
+## Ziegelhaufen: echtes Asset (2026-08-04)
+
+Erstes vom Nutzer geliefertes Umgebungs-Prop-Asset (`assets/
+ziegelhaufen.glb`, mehrere Einzelziegel-Meshes, 1,4×0,5×1,4m — passt fast
+exakt zur bisherigen Platzhalter-Box, keine Code-Anpassung an Maßen
+nötig). `BrickPile.tscn` bekommt das Modell (gleiches Vorrang-/Y-
+Ausgleich-Muster wie beim Wohnhaus), `BrickPile.gd._update_color()` färbt
+jetzt alle Mesh-Kinder statt nur der Platzhalter-Box (Markierung/HP-
+Abdunkeln bleiben sichtbar). Datei lag zunächst im falschen Ordner
+(Workspace-Root statt `koop-game/assets/`), verschoben. Details in
+[`survivor.md`](survivor.md), "Ressourcen abbauen". Noch nicht im Editor
+gesichtet/bestätigt.
+
+## Aktive Rekrutierungs-Aktion: "Ruf aussenden" (2026-08-04)
+
+Ergänzung zum passiven Schutzsuchenden-Timer — neuer Button im
+Einheiten-Tab, `World.request_active_recruit_call()` erzwingt einen
+Schutzsuchenden-Spawn-Versuch (überspringt nur den Zufalls-Würfel,
+`REFUGEE_MAX_ACTIVE`-Deckel gilt weiterhin), eigener 90s-Cooldown PRO
+SPIELER (`_active_recruit_call_cooldowns`, rein host-seitig, kein
+UI-Countdown — Klick während Cooldown gibt Statusmeldung statt stiller
+Ablehnung). `_maybe_spawn_refugee()` hat dafür einen neuen `force`-
+Parameter bekommen. Details in [`recruitment.md`](recruitment.md),
+"Aktive Rekrutierungs-Aktion". Noch nicht vom Nutzer getestet.
+
+## Dritter Zombie-Typ: Runner (2026-08-04)
+
+Nutzerwunsch ("mach weiter" nach dem Wachposten-Label, Vorschlag "mehr
+Zombie-Typen" angenommen) — schneller, zerbrechlicher dritter Typ neben
+Standard/Brute: `RUNNER_MAX_HP := 20`, `RUNNER_CHASE_SPEED := 7.5`
+(deutlich über `Survivor.MOVE_SPEED := 4.0`, gefährlich trotz wenig HP),
+`RUNNER_ATTACK_DAMAGE := 6`. Neue Szene `ZombieRunner.tscn` (Kapsel 1,5m
+× 0,25m), blasses Gelbgrün. Beim Umsetzen `Zombie.is_brute: bool` auf ein
+echtes `ZombieType`-Enum umgestellt (NORMAL/BRUTE/RUNNER) — ab dem
+dritten Typ sauberer als ein zweiter Bool-Flag, betrifft `Zombie.gd`
+sowie alle Spawn-/Catch-up-/Speicherstand-Stellen in `World.gd`. Runner
+mischt sich wie Brute nur in Horde-Nächte (`HORDE_RUNNER_COUNT := 2`,
+`BLOOD_MOON_RUNNER_COUNT := 6`), nicht ins normale Wandern/Nest-
+Nachspawnen. Details in [`zombies.md`](zombies.md), "Zombie-Typen".
+Speicherstand-Fallback für alte `is_brute`-Spielstände eingebaut
+(`.get("zombie_type", 0)`). Noch nicht vom Nutzer getestet.
+
+## "Kein Arbeiter zugewiesen"-Label am Wachposten (2026-08-04)
+
+Sichtbares Feedback statt nur des unauffälligen Nicht-Feuerns — neuer
+`Label3D`-Kind-Node in `GuardPost.tscn`, sichtbar über
+`GuardPost._update_no_worker_label()` (`built and worker_count <= 0`),
+aufgerufen aus `_sync_worker_count()` (erreicht alle Peers) und
+`_set_built_visual()`. Erbt die bestehende, akzeptierte
+`worker_count`-Catch-up-Lücke (spät beitretender Peer sieht es u. U. kurz
+falsch). Details in [`building.md`](building.md), "Kein Arbeiter
+zugewiesen'-Label". Label-Position über dem Wachturm-Modell ist eine
+Schätzung, noch nicht visuell bestätigt.
+
+## Universal-Buch-Migration (2026-08-04)
+
+Nutzer-Entscheidung aus der IFZ-Gap-Analyse umgesetzt: fünf getrennte
+`book_<id>`-Ressourcen (eine pro Crafting-Rezept/Gebäude-Ausbaustufe)
+ersetzt durch eine einzige `World.RESEARCH_BOOK_RESOURCE :=
+"book_research"` — schaltet jede Freischaltung gleichermaßen frei.
+Betroffen: `RESOURCE_DISPLAY_NAMES`/`RESOURCE_CATEGORIES` (13 statt 17
+Ressourcenarten insgesamt), Zombie-Buch-Drop, Gebäude-Nebenloot,
+Crafting-/Erweiterte-Krankenstation-UI, `request_research()`. Details in
+[`building.md`](building.md), "Universal-Buch-Migration". Keine
+Rückwärtskompatibilität für alte Spielstände mit den fünf alten Buch-
+Ressourcen eingebaut (Prototyp-Stand). Noch nicht vom Nutzer getestet.
+
+## Prozedurale Wohnhäuser für die "Masse" (2026-08-04)
+
+Nutzer-Entscheidung nach der IFZ-Icons-Recherche: Blender-Arbeit
+aufteilen — Nutzer modelliert die speziellen POI-Gebäude von Hand, die
+zahlreiche "Masse" (Wohnhäuser) wird stattdessen prozedural generiert
+(Box-Körper + `PrismMesh`-Satteldach, zufällige Maße/Farbtöne). Neues
+`"procedural_chance"`-Feld in `BUILDING_TYPES` (Wohnhaus: 0.5 — halb
+echtes `wohnhaustest.glb`, halb generiert), `World._random_house_proc_
+params()`/`_build_procedural_house()`, neues `Building.proc_params`-Feld
+(voll Speicherstand-/Catch-up-fähig, gleiches Muster wie `model_path`).
+Details in [`building.md`](building.md), "Prozedurale 'Masse'-Häuser".
+Noch nicht vom Nutzer getestet.
+
+## Gebäude-Varianten-Infrastruktur (2026-08-04)
+
+Nutzerwunsch ("brauchen die wohnhäuser variationen von den gebäuden für
+mehr abwechslung wie bei IFZ") — `World._pick_model_path()` neu:
+`BUILDING_TYPES`-Einträge können jetzt optional `"model_paths"` (Array)
+statt nur `"model_path"` (String) haben, pro Instanz wird dann zufällig
+eine Variante gewählt. Rein additive Infrastruktur, aktuell nutzt noch
+kein Eintrag es (Wohnhaus hat weiterhin nur ein Modell) — für den Nutzer
+beim nächsten Blender-Export bereit, ohne weitere Code-Änderung. Details
+in [`building.md`](building.md), "Gebäude-Varianten pro Typ". Empfehlung:
+erst alle 14 Gebäudetypen einmal abdecken, dann Varianten ergänzen.
+
+## Zivilisten-Konzept: neue Rekruten starten unzugewiesen (2026-08-04)
+
+Nutzerwunsch nach der IFZ-Gap-Analyse (siehe `Infos/06 Infection Free Zone
+Recherche.md`, `Infos/01 Architektur.md` "Ideen-Backlog") — leichte Variante
+des dort diskutierten Zivilisten-Konzepts, ohne eigene Housing-Kapazität.
+Neue `Survivor.TroopType.UNASSIGNED`: jeder neue Rekrut (alle drei
+Rekrutierungs-Kanäle, NICHT die Start-Trupps) startet damit — kann sich
+nicht bewegen/einsteigen/kämpfen/bauen (`order_move()`/
+`order_enter_vehicle()` lehnen explizit ab, die übrigen Befehle schon über
+ihre bestehenden FIELD-/BUILD-exklusiven Prüfungen), steht deutlich blasser
+eingefärbt in der Einheiten-Liste, bis der Spieler ihn per "→Feld"/"→Bau"
+manuell zuweist. Zusätzlich ein neues Auto-Zuweisungs-Profil-Dropdown im
+Einheiten-Tab (`World.RECRUIT_POLICIES`) pro Spieler: Manuell (Standard),
+automatisch Feldtrupp, automatisch Baueinheit, oder automatisch zum ersten
+eigenen Wachposten schicken (`Survivor.order_station()`, kein Wachposten
+vorhanden → bleibt lieber unzugewiesen statt still zum Feldtrupp zu
+werden). `GuardPost._find_idle_trupp()` (manueller "Trupp anfordern"-
+Button) überspringt UNASSIGNED-Trupps jetzt ebenfalls. Details in
+[`recruitment.md`](recruitment.md), "Zivilisten-Konzept". Noch nicht vom
+Nutzer getestet.
+
 ## Sechs Balance-Fixes aus dem Mechaniken-Bericht umgesetzt (2026-08-04)
 
 Direkte Reaktion auf die Kernbefunde aus `docs/mechanics-review.md`

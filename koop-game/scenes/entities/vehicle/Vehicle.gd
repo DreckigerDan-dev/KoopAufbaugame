@@ -55,7 +55,7 @@ const VEHICLE_STATS := {
 
 var vehicle_id: int = 0
 var owner_peer_id: int = 0  # 0 = unbesetzt, gehört noch niemandem (= auch keine Passagiere)
-# Wie bei Zombie.gd/is_brute NICHT hier auf einen Höchstwert vorbelegt —
+# Wie bei Zombie.gd/zombie_type NICHT hier auf einen Höchstwert vorbelegt —
 # _ready() berechnet hp/_max_hp erst NACHDEM der Node dem Baum hinzugefügt
 # wurde (@export-Timing, siehe dort), ein hier gesetzter Wert würde sofort
 # überschrieben (siehe World._create_vehicle()/_load_game_state()).

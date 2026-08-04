@@ -603,6 +603,120 @@ Original übernehmen):**
 
 ---
 
+## Nachtrag: Kamera-/Maßstabs-Detailrecherche (2026-08-04)
+
+> [!info] Anlass
+> Gezielte Nachrecherche zu zwei in Abschnitt 2 offen gelassenen Lücken
+> ("keine konkrete Zahl gefunden"): Kamera/Zoom-Werte und typische
+> Gebäude-/Objekt-Maße. Für den Vergleich relevant: KoopGames eigene
+> Kamera-Distanzwerte laut `koop-game/docs/world.md`
+> (Abschnitt "Kamera-Zoom-Bereich") sind aktuell **`ZOOM_MIN = 26.0`,
+> `ZOOM_MAX = 80.0`, Standard-Zoom `_zoom_distance = 40.0`** — reine
+> Godot-Kamera-Distanz/Pivot-Offset-Werte, keine Meter-Einheit im
+> eigentlichen Sinn, aber in der gleichen Größenordnung wie
+> Godot-Welt-Meter gehalten. Referenz-Gebäude ist laut
+> [[05 Assets im Spiel (aktueller Stand).md]] das Wohnhaus mit **9×8×9m**
+> (Breite×Tiefe×Höhe).
+
+### Kamera/Zoom
+
+**Ein konkreter Zahlenwert gefunden, aber mit Einschränkung:** Mehrere
+unabhängige Suchanfragen (u. a. zu Patch-Notes-Zusammenfassungen von
+Steam-News/Community-Threads) nennen übereinstimmend denselben Wert: Ein
+per Einstellungen umschaltbarer Kameramodus **"Free Tilt"** (Gegenstück:
+"Fixed Tilt", entspricht dem bisherigen/alten Kameraverhalten) erlaubt es,
+**weiter herauszuzoomen und den Kamerawinkel bis zu 45° zu verändern**
+("change the angle of the camera as far as 45°"). Laut denselben Quellen
+wurde vorher bereits mit **Bugfix Update #36** ("Free Camera, Building
+Split Fix, Memory Leak Fix") ein "Free Camera"-Konsolenbefehl eingeführt,
+der offizielle Fixed-Tilt/Free-Tilt-Einstellungsoption kam laut einer
+Quelle mit einem späteren, nicht eindeutig benannten Major Update
+("Major Update #6" wird in einer Suchzusammenfassung genannt, aber nicht
+gegengeprüft). Die Entwickler weisen dabei selbst darauf hin, dass der
+Free-Tilt-Modus **spürbar mehr Performance kosten kann**.
+
+> [!warning] Einschränkung der Quellenlage bei diesem Punkt
+> Die eigentlichen Steam-News-/Patch-Notes-Seiten sind clientseitig
+> gerendert (JavaScript) und ließen sich mit dem verfügbaren Web-Fetch-
+> Werkzeug nicht direkt als Volltext abrufen (nur Navigations-/Header-
+> Reste kamen zurück) — der 45°-Wert stammt aus wiederholten,
+> übereinstimmenden Suchmaschinen-Zusammenfassungen derselben
+> Patch-Notes-Inhalte (Steam Community/Steam News, siehe Quellen unten),
+> nicht aus einer selbst verifizierten Primärquelle im Volltext. Die
+> Kernaussage (45°-Kamerawinkel-Obergrenze im "Free Tilt"-Modus) taucht
+> aber konsistent genug auf mehreren unabhängigen Suchanfragen auf, um sie
+> hier mit dieser Einschränkung festzuhalten statt sie zu verwerfen.
+>
+> **Was NICHT gefunden wurde, trotz mehrerer gezielter Suchanfragen:**
+> keine Zoom-Distanz in Metern/Unity-Einheiten, keine Kamerahöhe, kein
+> FOV-Wert, kein Zahlenwert für den Standard-/Basis-Kamerawinkel im
+> "Fixed Tilt"-Modus (nur dass "Free Tilt" ihn bis 45° erweitert). Das ist
+> für ein Early-Access-Indie-Spiel ohne offizielle technische
+> Dokumentation plausibel — solche Werte werden typischerweise nicht
+> veröffentlicht, außer im Rahmen von grob beschriebenen
+> Feature-Ankündigungen wie hier.
+
+**Vergleich zu KoopGame:** Ein direkter Zahlenvergleich ist wegen der
+unterschiedlichen Einheiten (Godot-Kamera-Distanz vs. Grad-Kamerawinkel)
+nur bedingt möglich. Qualitativ passt KoopGames aktuelle Konfiguration
+(`ZOOM_MIN 26.0` bis `ZOOM_MAX 80.0`, Standard `40.0`, siehe oben) aber
+zum gleichen Trend, den IFZ mit dem Free-Tilt-Update verfolgt hat:
+**mehr Zoom-Spielraum nach außen freigeben, dabei bewusst nicht zu nah
+heranzoomen lassen** (KoopGames `ZOOM_MIN` wurde laut `world.md` mehrfach
+aus genau diesem Grund angehoben, 4.0 → 10.0 → 20.0 → 26.0). Ein
+Kamerawinkel-Freiheitsgrad (wie IFZs "Free Tilt" bis 45°) existiert in
+KoopGame aktuell nicht als recherchierte Vorlage, sondern nur als eigene,
+unabhängig getroffene Design-Entscheidung.
+
+### Gebäude-/Objekt-Maße
+
+**Ein konkreter Zahlenwert gefunden, aber mit begrenzter Aussagekraft:**
+Eine Steam-Community-Diskussion zur Shelter-Umwandlung ("How can i extend
+capacity of a shelter?") nennt übereinstimmend (Threadersteller + eine
+Antwort mit Beispiel) einen Grenzwert für das **Start-HQ-Gebäude**
+(das beim Kartenstart wählbare erste Gebäude): Die **100%-Adaptierbarkeits-
+Grenze liegt bei ca. 300–350 Quadratmetern Grundfläche** — ein Spieler
+nennt konkret sein eigenes Start-Gebäude mit **312 m², vollständig (100%)
+adaptierbar**. Größere Gebäude lassen sich laut Thread nicht mehr zu 100%
+umfunktionieren. Das ist eine echte, konkrete Flächenangabe, aber sie
+bezieht sich spezifisch auf die HQ-Adaptions-Obergrenze, **nicht** auf
+eine "typische Hausgröße" allgemein — sie bestätigt eher indirekt, dass es
+keine feste Standardgröße gibt (Gebäude bis ~300–350 m² gelten schon als
+groß genug für eine Sonderregel).
+
+**Explizit unzuverlässiger Datenpunkt (nur als Negativbeispiel
+vermerkt):** In einer anderen Diskussion zu einem Höhen-Anzeige-Bug wird
+ein Wolkenkratzer als "7 yards tall" und ein kleineres Gebäude als "37
+yards tall" beschrieben — das ist ausdrücklich als **fehlerhafte
+Höhenberechnung (Bug-Report)** gemeint, keine verlässliche Design-Zahl,
+und wird hier bewusst NICHT als Referenzwert übernommen.
+
+**Charaktergröße/Fahrzeuglänge: nichts Konkretes gefunden.** Trotz
+gezielter Suchen (Unity-Skalierung, Modding-/Datamining-Communities,
+Reddit) wurde keine bezifferte Angabe zur Spielfigur-Höhe oder
+Fahrzeuglänge in Metern/Unity-Einheiten gefunden. Plausibler Grund: IFZ
+bindet Gebäude/Terrain direkt an reale OSM-Koordinaten (siehe Abschnitt 2
+der bestehenden Notiz), Charaktere/Fahrzeuge sind dagegen austauschbare
+Asset-Instanzen ohne erkennbaren Anlass, ihre Maße öffentlich zu
+dokumentieren oder zu diskutieren — anders als bei Gebäuden gibt es dafür
+auch keine spielrelevante Debatte (z. B. um Adaptions-Grenzen), die
+Community-Threads mit Zahlen erzeugen würde.
+
+> [!note] Kernaussage bleibt bestehen, jetzt mit einem Beleg mehr
+> Die bestehende Einschätzung in der Notiz — IFZ nutzt echte
+> OSM-Gebäude-Footprints statt fester Templates, es gibt also **keine
+> feste "Standard-Hausgröße"** — wird durch diese Nachrecherche bestätigt
+> statt widerlegt. Der einzige gefundene konkrete Flächenwert (300–350 m²)
+> ist eine **Obergrenze für eine Sonderregel** (HQ-Adaption), kein
+> Standard-Template-Maß, und lässt sich daher nur eingeschränkt mit
+> KoopGames Wohnhaus (9×8m Grundfläche = 72 m²) vergleichen — die
+> Größenordnungen liegen aber grob im gleichen Feld (KoopGames Wohnhaus
+> ist klar kleiner als die IFZ-HQ-Adaptionsgrenze, was angesichts der
+> IFZ-Grenze als Obergrenze für ganze Häuserblocks/größere Gebäude auch
+> zu erwarten ist).
+
+---
+
 ## Quellen (Auswahl, nach Abschnitt referenziert)
 
 - [Infection Free Zone auf Steam](https://store.steampowered.com/app/1465460/Infection_Free_Zone/)
@@ -629,6 +743,10 @@ Original übernehmen):**
 - [The Guide Hall – Major Update 4 Adds Merchant, Car Workshop, and More!](https://theguidehall.com/infection-free-zone-major-update-4-adds-merchant-car-workshop-and-more/)
 - [Steam Community – Guide: Surviving combat, growing food, scavenging and building a base](https://steamcommunity.com/sharedfiles/filedetails/?id=3222175807)
 - [Steam Community – diverse Diskussions-Threads zu Multiplayer, Difficulty, Fog of War, Endgame (siehe Fußnoten in den jeweiligen Abschnitten)](https://steamcommunity.com/app/1465460)
+- [Steam Community – How can i extend capacty of a shelter? (Quelle für 300–350 m² HQ-Adaptionsgrenze)](https://steamcommunity.com/app/1465460/discussions/0/601901034049139675/)
+- [Steam Community – Building height (Quelle für den verworfenen "7/37 yards"-Bug-Datenpunkt)](https://steamcommunity.com/app/1465460/discussions/0/595138951841335014/)
+- [Steam News – Infection Free Zone: Bugfix Update #36 (Free Camera, Building Split Fix, Memory Leak Fix)](https://store.steampowered.com/news/app/1465460/view/490466921629615375)
+- [Hard Drive – Infection Free Zone Update Patch Notes June 19 (Major Update #1: Zoom-in erhöht, Kamerawinkel beim Zoomen readjustiert)](https://hard-drive.net/infection-free-zone-update-patch-notes-june-19/)
 
 ---
 

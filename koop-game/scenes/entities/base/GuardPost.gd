@@ -126,7 +126,11 @@ func request_recall_worker(requesting_peer_id: int) -> void:
 
 func _find_idle_trupp(peer_id: int) -> Node3D:
 	for trupp in get_tree().get_nodes_in_group("living"):
-		if trupp.owner_peer_id == peer_id and trupp.is_idle():
+		# troop_type != UNASSIGNED: unzugewiesene Zivilisten (siehe
+		# Survivor.TroopType-Doku) sollen nicht automatisch über den
+		# "Trupp anfordern"-Button eingezogen werden, sondern erst bewusst
+		# zugewiesen sein.
+		if trupp.owner_peer_id == peer_id and trupp.is_idle() and trupp.troop_type != trupp.TroopType.UNASSIGNED:
 			return trupp
 	return null
 
@@ -145,7 +149,23 @@ func unregister_worker(trupp: Node3D) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _sync_worker_count(count: int) -> void:
+	# call_local + "authority" erreicht ALLE Peers (nicht nur den Host, wo
+	# register_worker()/unregister_worker() selbst laufen) — Grundlage
+	# fürs "kein Arbeiter"-Label unten, weil _stationed_workers selbst
+	# host-seitig-privat ist und auf Clients nie befüllt wird.
 	worker_count = count
+	_update_no_worker_label()
+
+
+func _update_no_worker_label() -> void:
+	# Sichtbares Feedback (2026-08-04, siehe docs/building.md, "Worker-
+	# Feedback") — ein fertig gebauter, aber unbemannter Wachposten feuert
+	# nicht (siehe _try_fire()), was ohne diese Anzeige leicht übersehen
+	# wird. worker_count statt _stationed_workers.size(), damit es auch auf
+	# Nicht-Host-Peers korrekt aktualisiert (siehe _sync_worker_count()).
+	var label := get_node_or_null("NoWorkerLabel") as Label3D
+	if label != null:
+		label.visible = built and worker_count <= 0
 
 
 @rpc("authority", "call_local", "reliable")
@@ -154,6 +174,7 @@ func _set_built_visual() -> void:
 	# Wachposten nie grau werden.
 	built = true
 	_update_color()
+	_update_no_worker_label()
 
 
 func _update_color() -> void:

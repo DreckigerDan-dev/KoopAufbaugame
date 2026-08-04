@@ -51,14 +51,32 @@ func _die() -> void:
 
 
 func _update_color() -> void:
-	# Zwei Felsbrocken-Meshes (siehe StonePile.tscn) statt einem einzelnen
-	# — beide bekommen dieselbe Farbe (anders als Tree.gd, wo nur die
-	# Krone reagiert, hier sind beide Teile gleichwertig "Stein").
+	# Echtes Asset (2026-08-04, siehe docs/survivor.md, "Ressourcen
+	# abbauen") hat mehrere Einzelstein-Meshes statt der zwei Platzhalter-
+	# Kugeln — alle bekommen dieselbe Farbe (gleiches "alle Meshes
+	# einfärben"-Muster wie GuardPost.gd/Wall.gd/BrickPile.gd, hier bewusst
+	# dupliziert statt geteilt). Fällt ohne Model auf die alten
+	# RockBig/RockSmall-Namen zurück.
 	var ratio: float = float(hp) / float(MAX_HP)
 	var base_color := Color(0.9, 0.75, 0.1) if is_marked else Color(0.5, 0.5, 0.5)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = base_color.lerp(Color(0.15, 0.15, 0.15), 1.0 - ratio)
-	for mesh_name in ["RockBig", "RockSmall"]:
-		var mesh: MeshInstance3D = get_node_or_null(mesh_name)
-		if mesh != null:
-			mesh.set_surface_override_material(0, mat)
+	var meshes := _find_mesh_instances(get_node_or_null("Model"))
+	if meshes.is_empty():
+		for mesh_name in ["RockBig", "RockSmall"]:
+			var mesh: MeshInstance3D = get_node_or_null(mesh_name)
+			if mesh != null:
+				meshes.append(mesh)
+	for mesh in meshes:
+		mesh.set_surface_override_material(0, mat)
+
+
+func _find_mesh_instances(node: Node) -> Array:
+	var result: Array = []
+	if node == null:
+		return result
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_mesh_instances(child))
+	return result

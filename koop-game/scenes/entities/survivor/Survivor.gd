@@ -11,15 +11,25 @@ extends StaticBody3D
 signal died(unit: Node3D)
 
 ## Trupp-Arten (siehe docs/survivor.md, "Trupp-Arten") — jeder Survivor ist
-## flexibel zwischen beiden umschaltbar (World.gd, UnitsUI-Zeile), keine
+## flexibel zwischen FIELD/BUILD umschaltbar (World.gd, UnitsUI-Zeile), keine
 ## feste Klasse pro Rekrut. **Exklusiv, nicht additiv** (Nutzerwunsch nach
 ## Test: "die sollen nur abbauen können"): FIELD darf suchen/claimen/
 ## angreifen (order_search()/order_claim_building()/order_attack()), aber
 ## NICHT abbauen; BUILD darf ausschließlich abbauen (order_harvest()) und
 ## verliert dabei alle drei Feldtrupp-Fähigkeiten. Jeweils server-seitig
 ## geprüft, mit `report_status()`-Feedback statt stiller Ablehnung. Basis-
-## Bewegung (order_move()/order_stop()) bleibt für beide Typen uneingeschränkt.
-enum TroopType { FIELD, BUILD }
+## Bewegung (order_move()/order_stop()) bleibt für FIELD/BUILD uneingeschränkt.
+##
+## UNASSIGNED (Zivilisten-Konzept, siehe Infos/01 Architektur.md,
+## "Ideen-Backlog"): Standardzustand eines frisch rekrutierten Trupps
+## (World.spawn_recruit(), außer ein Auto-Zuweisungs-Profil greift sofort,
+## siehe World.request_set_recruit_policy()). Weder FIELD noch BUILD —
+## order_move()/order_enter_vehicle() lehnen explizit ab (siehe dort), die
+## übrigen order_*-Funktionen lehnen UNASSIGNED schon implizit über ihre
+## bestehenden "!= FIELD"/"!= BUILD"-Prüfungen ab. Muss manuell (UnitsUI)
+## oder automatisch einem der beiden echten Typen zugewiesen werden, bevor
+## der Trupp irgendetwas tun kann.
+enum TroopType { FIELD, BUILD, UNASSIGNED }
 
 const MAX_HP := 100
 const MOVE_SPEED := 4.0
@@ -197,6 +207,19 @@ var has_leg_armor: bool = false
 ## Bewegungsbefehl ersetzt die Schlange, Shift+Klick hängt stattdessen
 ## hinten an (siehe World.gd, _select_at()).
 var _waypoints: Array = []  # Array[Vector3]
+# Ausweich-Heuristik statt echtem Pathfinding (2026-08-04, Nutzerwunsch nach
+# Infection-Free-Zone-Vergleich, siehe Infos/06 Infection Free Zone
+# Recherche.md, "Kritikpunkte ernst nehmen") — KoopGame hat kein Navmesh
+# (Bewegung ist reines position.move_toward() ohne Hindernis-Umgehung, siehe
+# _handle_movement()). Bisher blieb ein Trupp vor einer eigenen Mauer/einem
+# fremden Tor einfach stehen (siehe _is_path_blocked()), auch wenn ein
+# Vorbeikommen seitlich möglich gewesen wäre. Bewusst KEIN echtes
+# Pathfinding (großer Umbau, siehe Diskussion) — nur ein einfaches
+# Ausweich-Verhalten: bei blockiertem direktem Weg seitwärts quer zur
+# Zielrichtung ausweichen, bis der Weg wieder frei ist. Konsistent
+# gehaltene Seite (nicht jedes Mal neu gewürfelt), sonst würde der Trupp
+# zwischen links/rechts zittern.
+var _sidestep_direction: float = 1.0
 var _time_since_damage: float = HEAL_DELAY_AFTER_DAMAGE
 var _heal_accumulator: float = 0.0
 var _eat_timer: float = 0.0
@@ -338,13 +361,14 @@ func _handle_movement(delta: float) -> void:
 	var target: Vector3 = _waypoints[0]
 	var next_position := position.move_toward(target, _current_move_speed() * delta)
 	if _is_path_blocked(next_position):
-		# Mauer (oder fremdes Tor) direkt im Weg für DIESEN Schritt — der
-		# Trupp bleibt einfach stehen, kein Ausweichen/Pathfinding (siehe
-		# docs/walls.md). Kurzes Segment (aktuelle Position → nächster
-		# Schritt, nicht bis zum Wegpunkt), damit der Trupp erst beim
-		# tatsächlichen Anstoßen an die Mauer stehen bleibt, nicht schon von
-		# weitem.
-		return
+		# Mauer (oder fremdes Tor) direkt im Weg für DIESEN Schritt — Ausweich-
+		# Heuristik statt stehenzubleiben (siehe _sidestep_direction-Kommentar
+		# oben). Kurzes Segment (aktuelle Position → nächster Schritt, nicht
+		# bis zum Wegpunkt), damit das erst beim tatsächlichen Anstoßen an die
+		# Mauer greift, nicht schon von weitem.
+		next_position = _sidestep_position(target, delta)
+		if next_position == position:
+			return  # Auch beide Ausweich-Seiten blockiert — wirklich stehen bleiben.
 	position = next_position
 	if position.distance_to(target) < ARRIVE_THRESHOLD:
 		_waypoints.pop_front()
@@ -393,6 +417,32 @@ func _is_path_blocked(next_position: Vector3) -> bool:
 	if obstacle.has_method("blocks") and not obstacle.blocks(owner_peer_id):
 		return false
 	return true
+
+
+func _sidestep_position(target: Vector3, delta: float) -> Vector3:
+	# Einfache Ausweich-Heuristik statt echtem Pathfinding, siehe
+	# _sidestep_direction-Kommentar oben. Versucht eine Bewegung SENKRECHT
+	# zur Zielrichtung (quer zur blockierten Mauer entlang) statt direkt
+	# aufs Ziel zu — mit genug solcher Schritte umrundet der Trupp so ein
+	# Mauer-Ende, ohne dass echtes Pathfinding nötig ist.
+	var to_target := target - position
+	to_target.y = 0.0
+	if to_target.length() < 0.01:
+		return position
+	var forward := to_target.normalized()
+	var side := Vector3(-forward.z, 0.0, forward.x)
+	var step: float = _current_move_speed() * delta
+	var sidestep_target := position + side * _sidestep_direction * step
+	if not _is_path_blocked(sidestep_target):
+		return sidestep_target
+	# Diese Seite ist auch blockiert — Richtung für zukünftige Versuche
+	# umdrehen (z. B. eine Mauer-Ecke, an der die bisherige Seite ins Leere
+	# lief) und die andere Seite probieren, bevor endgültig aufgegeben wird.
+	_sidestep_direction *= -1.0
+	sidestep_target = position + side * _sidestep_direction * step
+	if not _is_path_blocked(sidestep_target):
+		return sidestep_target
+	return position
 
 
 func _process_attack(delta: float) -> void:
@@ -908,6 +958,12 @@ func order_move(target: Vector3, requesting_peer_id: int, queue: bool, start_del
 	# anhalten.
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
 		return
+	if troop_type == TroopType.UNASSIGNED:
+		# Zivilisten-Konzept (siehe TroopType-Doku oben) — sitzt untätig, bis
+		# der Spieler ihn manuell (UnitsUI) oder automatisch (Auto-Zuweisung)
+		# einem echten Typ zuweist.
+		get_tree().current_scene.report_status(requesting_peer_id, "Trupp ist noch unzugewiesen — erst als Feld- oder Bautrupp einteilen.")
+		return
 	if not queue:
 		_unstation()
 		_cancel_search()
@@ -944,6 +1000,10 @@ func order_enter_vehicle(target: Vector3, vehicle_path: NodePath, requesting_pee
 	# docs/vehicle.md), derselbe NodePath-Grund wie bei
 	# _pending_building_path funktioniert deshalb genauso zuverlässig.
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
+		return
+	if troop_type == TroopType.UNASSIGNED:
+		# Gleiche Zivilisten-Sperre wie order_move(), siehe dort.
+		get_tree().current_scene.report_status(requesting_peer_id, "Trupp ist noch unzugewiesen — erst als Feld- oder Bautrupp einteilen.")
 		return
 	_unstation()
 	_cancel_search()
@@ -1292,7 +1352,13 @@ func _unit_base_color() -> Color:
 	# selbst zur Einheiten-Unterscheidung.
 	var saturation := 0.55 if troop_type == TroopType.BUILD else 0.75
 	var value := 0.75 if troop_type == TroopType.BUILD else 0.9
-	if troop_type == TroopType.FIELD and is_armed:
+	if troop_type == TroopType.UNASSIGNED:
+		# Deutlich blasser/grauer als FIELD/BUILD — soll auf den ersten Blick
+		# als "noch nicht eingeteilt" erkennbar sein, auch ohne die
+		# Einheiten-Liste zu öffnen.
+		saturation = 0.1
+		value = 0.6
+	elif troop_type == TroopType.FIELD and is_armed:
 		saturation = 0.85
 		value = 1.0
 	return Color.from_hsv(hue, saturation, value)

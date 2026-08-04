@@ -99,6 +99,23 @@ const YIELD_AMOUNT := 2
 `Survivor._find_home_base()`). Kein Bauzeit-Timer wie beim Wachposten
 (sofort einsatzbereit), keine eigene HP/Zerstörbarkeit.
 
+**Echtes Asset seit 2026-08-04** (`assets/feld.glb`) — ersetzt die
+Platzhalter-Box (2,5×0,2×2,5m), gleiches Vorrang-/Y-Ausgleich-Prinzip wie
+beim Wohnhaus. Keine Farb-/HP-Logik nötig (Field hat kein
+`_update_color()`, keine Zerstörbarkeit), deshalb reine `.tscn`-Änderung
+ohne Skript-Anpassung. Größe nicht extra vom Nutzer bestätigt, am
+Platzhalter orientiert.
+
+**Ghost-Preview-Fix (2026-08-04):** Nutzer-Feedback "die vorschau vom
+feld ist zu klein" — Feld fiel beim Platzieren vorher generisch auf die
+kleine 1,5³-Wachposten-Ghost-Box zurück (`_update_build_ghost()`,
+`World.gd`). Neue, passend große `_field_ghost_mesh`
+(`FIELD_GHOST_SIZE := Vector3(2.5, 0.2, 2.5)`), gleiches Muster wie
+`_watchtower_ghost_mesh`. Zeigt weiterhin eine (jetzt richtig große)
+grün/rote Box, NICHT das echte Modell selbst — das würde eine größere
+Umstellung des Ghost-Systems brauchen (aktuell ein einzelnes
+austauschbares `MeshInstance3D.mesh`, kein generischer Szenen-Container).
+
 ## Außenposten (`Outpost.gd`, 2026-08-01, Punkt 8 der Gesamtliste)
 
 Aus der Vision übernommen (`Infos/01 Architektur.md`, "Außenposten": "Kleine,
@@ -349,13 +366,15 @@ dort schon angelegte Lücke ("Kein Forschungsbücher-Gate, das ist Punkt
 Buch-Kopieren, keine physischen Lese-Aktionen am Survivor, nur ein
 Ressourcen-Verbrauch analog zu allen anderen Systemen hier.
 
-- **Vier neue Ressourcenarten** `book_weapon`/`book_armor`/`book_helmet`/
-  `book_ammo` (1:1 zu den `CRAFTING_RECIPES`-IDs) — siehe
-  [`docs/base.md`](base.md).
+- **Eine Ressourcenart, `book_research`** (`World.RESEARCH_BOOK_RESOURCE`)
+  schaltet JEDE Freischaltung frei — Crafting-Rezept ODER Gebäude-
+  Ausbaustufe, egal welche (siehe "Universal-Buch-Migration" unten). Vor
+  2026-08-04 gab es hier fünf getrennte `book_<id>`-Ressourcen, eine pro
+  Rezept/Ausbaustufe.
 - **Eigener, SELTENERER Drop-Mechanismus statt Teil von
   `ZOMBIE_LOOT_TABLE`:** die Vision beschreibt Bücher explizit als
-  "selten"/"sehr selten" — ein gleichgewichteter Fünf-Typen-Pool
-  (wie bei `ZOMBIE_LOOT_TABLE`) wäre viel zu häufig. Stattdessen
+  "selten"/"sehr selten" — ein gleichgewichteter Pool (wie bei
+  `ZOMBIE_LOOT_TABLE`) wäre viel zu häufig. Stattdessen
   `BOOK_DROP_CHANCE := 0.08`, unabhängig vom normalen Loot-Wurf ausgewürfelt
   (`World.grant_zombie_loot()`) — kann zusätzlich zu normalem Loot ODER
   ganz ohne ihn auftreten.
@@ -365,8 +384,8 @@ Ressourcen-Verbrauch analog zu allen anderen Systemen hier.
   bestehende Vereinfachung wie bei `resources`/`storage_capacity` (siehe
   [`docs/base.md`](base.md), "Bekannte Grenzen").
 - **`World.request_research(recipe_id, requesting_peer_id)`**
-  (`@rpc("any_peer", "call_local", "reliable")`): verbraucht 1× das
-  passende `book_<id>`, ruft `HomeBase.unlock_recipe.rpc(recipe_id)` auf.
+  (`@rpc("any_peer", "call_local", "reliable")`): verbraucht 1×
+  `book_research`, ruft `HomeBase.unlock_recipe.rpc(recipe_id)` auf.
   Bewusst OHNE Werkstatt-Pflicht (Lesen geht überall, nur das eigentliche
   Herstellen bleibt an die Werkstatt gebunden, siehe oben).
 - **`request_craft()`** prüft jetzt zusätzlich `base.unlocked_recipes.get(
@@ -377,6 +396,36 @@ Ressourcen-Verbrauch analog zu allen anderen Systemen hier.
   "X erforschen (Buch: ...)"-Button. Nicht erforscht, kein Buch → derselbe
   Button, aber `disabled = true` (sichtbar, damit Spieler wissen, was es
   gibt, aber nicht klickbar).
+
+**Noch nicht vom Nutzer getestet.**
+
+## Universal-Buch-Migration (2026-08-04)
+
+Nutzer-Entscheidung aus der IFZ-Gap-Analyse (siehe `Infos/07 Backlog-
+Umsetzungspläne.md`, "Forschungszentrum + echter Tech-Baum"): statt fünf
+getrennter `book_<id>`-Ressourcen (eine pro Crafting-Rezept/Gebäude-
+Ausbaustufe) gibt es jetzt genau EINE, `World.RESEARCH_BOOK_RESOURCE :=
+"book_research"` — schaltet jede Freischaltung gleichermaßen frei.
+Einfacheres Ressourcenmodell (ein Loot-Typ statt vieler), Vorbereitung für
+einen möglichen künftigen echten Tech-Baum (siehe `Infos/08 Weg zur
+1.0.md`).
+
+- **Betroffen:** `RESOURCE_DISPLAY_NAMES`/`RESOURCE_CATEGORIES` (ein
+  Eintrag "Forschungsbuch" statt fünf), Zombie-Buch-Drop
+  (`grant_zombie_loot()`, kein Zufalls-Pick mehr nötig), Gebäude-
+  Nebenloot (`_apply_loot_roll()`, `"book"` steht jetzt direkt für
+  `book_research`), `_refresh_crafting_ui()`/`_refresh_advanced_medical_
+  ui()`/`request_research()` (alle prüfen jetzt `book_research` statt
+  `"book_%s" % recipe_id`).
+- **`unlocked_recipes` selbst unverändert** — welches Rezept/welche
+  Ausbaustufe erforscht ist, bleibt weiterhin pro `recipe_id` getrennt
+  gespeichert, nur die dafür VERBRAUCHTE Ressource ist jetzt einheitlich.
+- **Keine Rückwärtskompatibilität für alte Spielstände** mit den
+  ehemaligen `book_weapon`/`book_armor`/`book_helmet`/`book_ammo`/
+  `book_medical_upgrade`-Einträgen eingebaut (Prototyp-Stand, keine
+  Notwendigkeit) — ein alter Spielstand würde diese Ressourcen einfach als
+  unbekannte, nie mehr verbrauchbare Einträge im `resources`-Dictionary
+  mitschleppen, keine harten Fehler.
 
 **Noch nicht vom Nutzer getestet.**
 
@@ -564,6 +613,82 @@ Nutzerfrage "Supermarkt 18×12, Tiles nur 12×12"): `BUILDING_MIN_SPACING`
 gilt einheitlich für alle Typen, macht die Straßen insgesamt etwas
 lichter besetzt, bis auch die übrigen Typen echte Assets bekommen.
 
+## Gebäude-Varianten pro Typ (2026-08-04)
+
+Nutzerwunsch: "brauchen die wohnhäuser variationen von den gebäuden für
+mehr abwechslung wie bei IFZ" — IFZ hat automatisch Variation, weil es
+echte OSM-Gebäude-Footprints nutzt (siehe `Infos/06 Infection Free Zone
+Recherche.md`); KoopGames prozedurale Gebäude wiederholen sonst exakt
+dasselbe Modell für jede Instanz eines Typs.
+
+- **`World._pick_model_path(template)`** — neue, rein additive
+  Infrastruktur: ein `BUILDING_TYPES`-Eintrag kann optional
+  `"model_paths": Array[String]` statt nur `"model_path": String` haben.
+  Ist das Array gesetzt, wählt `_generate_city_zone()` PRO INSTANZ
+  zufällig eine Variante daraus, statt immer dasselbe Modell zu
+  wiederholen. Bestehende Einträge mit nur `"model_path"` (aktuell alle,
+  inkl. Wohnhaus) bleiben unverändert gültig.
+- **Kein Zusatzaufwand bei Speicherstand/Catch-up** — die zufällige Wahl
+  passiert nur einmal bei der Generierung, das Ergebnis wird danach wie
+  bisher als fester `model_path`-Wert pro Building-Instanz
+  gespeichert/repliziert (`Building.model_path`).
+- **Für dich beim Modellieren:** eine zweite Wohnhaus-Variante (oder
+  Variante für jeden anderen Typ) einzubauen braucht KEINE weitere
+  Code-Änderung — einfach zweites `.glb` exportieren, in
+  `BUILDING_TYPES` bei `"model_paths"` mit eintragen.
+- **Empfehlung (siehe `Infos/08 Weg zur 1.0.md`):** erst alle 14 Typen
+  einmal mit je einem Modell abdecken (Breite), dann erst Varianten
+  einzelner Typen ergänzen (Tiefe) — bringt fürs Auge mehr, weil 14
+  unterschiedliche Gebäude schon deutlich mehr Abwechslung liefern als
+  mehrere Varianten desselben Typs.
+
+**Noch nicht vom Nutzer getestet** (keine zweite Variante existiert
+bisher, um es zu prüfen).
+
+## Prozedurale "Masse"-Häuser (2026-08-04)
+
+Direkte Folge der IFZ-Recherche-Nachfrage (siehe `Infos/06 Infection Free
+Zone Recherche.md`) — IFZ hat automatische Gebäude-Varianz, weil es echte
+OSM-Grundriss-Polygone extrudiert, kein Vorbild, das man mit Handarbeit
+1:1 nachbauen kann. Nutzer-Entscheidung stattdessen: **er modelliert die
+"speziellen" POI-Gebäude von Hand** (Home-Base, Krankenstation-Typen,
+Militärbasis, Bibliothek etc.), **die "Masse" (Wohnhäuser) wird
+prozedural generiert** — kein Blender-Aufwand für die zahlreichste,
+narrativ unwichtigste Gebäudeart.
+
+- **`World._random_house_proc_params()`** würfelt Breite/Tiefe/Wandhöhe/
+  Dachhöhe (Bereiche grob am echten `wohnhaustest.glb` orientiert) plus
+  einen Fassaden-/Dachfarbton aus je vier bzw. drei fest hinterlegten
+  Paletten (angelehnt an den ursprünglichen Wohnhaus-Modellier-Prompt:
+  "verwittertes Beige/Grau-Braun" Fassade, "dunkleres Rot-Braun oder
+  Grau" Dach).
+- **`World._build_procedural_house(params)`** baut daraus einen
+  einfachen Box-Körper (`BoxMesh`) + Satteldach (`PrismMesh`,
+  `left_to_right = 0.5` für eine mittige First-Kante statt eines
+  schiefen Pultdachs) als generisches Model-Node — gleiche Y-Ausgleich-
+  Konvention wie ein echtes Blender-Asset (Ursprung an der Basis, nicht
+  mittig), läuft dadurch durch exakt denselben Code-Pfad in
+  `_create_building()` wie ein geladenes `.glb`.
+- **`BUILDING_TYPES`-Eintrag bekommt ein optionales `"procedural_chance"`-
+  Feld** (0.0–1.0) — `_generate_city_zone()` würfelt PRO INSTANZ, ob ein
+  echtes Modell (`model_path`/`model_paths`) oder ein prozedural
+  generiertes Haus entsteht. Aktuell nur Wohnhaus, `procedural_chance :=
+  0.5` (halb echtes Asset, halb generiert) — Wert bei Bedarf anpassen,
+  0.0 = nie, 1.0 = immer prozedural.
+- **`Building.proc_params: Dictionary`** — neues Feld, gleiches
+  optionales-Zusatzfeld-Muster wie `model_path`, vollständig Speicherstand-
+  UND Catch-up-fähig (`_collect_save_data()`/`_catch_up_buildings_bulk()`-
+  Entry-Dictionary).
+- **Größe (Collision/Bauplatz) wird aus den gewürfelten Maßen
+  hergeleitet**, nicht aus der festen Vorlagen-`size` — sonst würde die
+  Kollisionsbox nicht zum tatsächlich generierten Modell passen.
+- **Auf andere Typen übertragbar:** einfach `"procedural_chance"` bei
+  einem weiteren `BUILDING_TYPES`-Eintrag setzen — funktioniert nur
+  sinnvoll für "haus-artige" Silhouetten (Box + Satteldach), nicht für
+  sehr unterschiedlich geformte Spezialgebäude.
+
+**Noch nicht vom Nutzer getestet.**
+
 **Bewusst NICHT gelöst:** Gebäude bekommen bei der Generierung KEINE
 Rotation (`_generate_city_zone()`/`_create_building()` setzen nie
 `rotation`) — bei Platzhalter-Boxen unsichtbar, beim Wohnhaus mit seiner
@@ -615,6 +740,32 @@ Baubares Verteidigungsgebäude, host-autoritativ wie Survivor/Zombie.
   `_stationed_workers` und synchronisieren `worker_count` per
   `_sync_worker_count.rpc()` — die reine Zahl reicht fürs HUD, welche
   konkreten Trupps stationiert sind, ist nur host-seitig relevant.
+
+### "Kein Arbeiter zugewiesen"-Label (2026-08-04)
+
+Sichtbares Feedback statt nur des unauffälligen Nicht-Feuerns — ein
+fertig gebauter, aber unbemannter Wachposten feuert nicht (siehe
+`_try_fire()`), was sonst leicht übersehen wird.
+
+- **`GuardPost.tscn`**, neuer `Label3D`-Kind-Node `NoWorkerLabel`
+  ("Kein Arbeiter zugewiesen", `billboard`, `no_depth_test = true` — bleibt
+  auch hinter dem Modell lesbar), Position grob über dem Wachturm-Modell
+  (noch nicht feinjustiert, siehe unten).
+- **`GuardPost._update_no_worker_label()`** setzt die Sichtbarkeit
+  (`built and worker_count <= 0`), aufgerufen aus `_sync_worker_count()`
+  (NICHT aus `register_worker()`/`unregister_worker()` selbst — die laufen
+  nur host-seitig, `_sync_worker_count()` ist dagegen das
+  `@rpc("authority", "call_local", ...)`, das tatsächlich JEDEN Peer
+  erreicht) und aus `_set_built_visual()` (Bau-Fertigstellung).
+- **Erbt dieselbe Catch-up-Lücke wie `worker_count`** (siehe "Bekannte
+  Grenzen" unten) — ein spät beitretender Peer sieht das Label u. U.
+  falsch (zeigt "kein Arbeiter" auch bei einem tatsächlich schon besetzten
+  Wachposten), bis der nächste Registrierungs-/Abzieh-Event dort
+  natürlich synct. Gleiche akzeptierte Priorität wie die bestehende
+  Lücke.
+
+**Noch nicht vom Nutzer getestet** (Label-Position über dem
+Wachturm-Modell ist eine Schätzung, ggf. Y-Wert nachjustieren).
 
 ## Lager
 
@@ -725,7 +876,11 @@ Lärm-Alarm-Schleife (`_alert_nearby_zombies()` in `GuardPost.gd` und
 - **`worker_count`-Catch-up weiterhin fehlend** — betrifft nur die eigene
   Wachposten-Liste im Bauen-Tab (`_refresh_worker_ui()` zeigt ohnehin nur
   eigene Posten), kein rein visuelles Problem wie bei `built` oben, daher
-  niedrigere Priorität.
+  niedrigere Priorität. **Seit 2026-08-04 betrifft dieselbe Lücke
+  zusätzlich das neue "Kein Arbeiter zugewiesen"-Label** (siehe "Arbeiter
+  zuweisen" oben) — ein spät beitretender Peer kann es bei einem
+  tatsächlich schon besetzten Wachposten fälschlich sehen, bis der
+  nächste Registrierungs-/Abzieh-Event dort natürlich synct.
 - **Nur ein Wachposten-Typ**, keine Ausbaustufen.
 - **Keine Reichweiten-/Zonen-Vorschau** außer dem punktuellen Ghost am
   Mauszeiger.
