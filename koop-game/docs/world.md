@@ -90,10 +90,12 @@ Straßen-Raster:
   zählen (hält die Zone insgesamt kreisförmig statt eckig). Pro Block
   entstehen entlang aller vier Kanten Reihenplätze im Abstand
   `BUILDING_MIN_SPACING` (2026-08-04 von 6m auf 10m erhöht, ans erste
-  echte Gebäude-Asset angepasst, siehe `docs/building.md`, "Wohnhaus"),
-  leicht nach innen versetzt (`BUILDING_ROW_INSET`, gleicher Anlass 2m→5m)
-  von der Straßenkante — liefert absichtlich DEUTLICH mehr Plätze als
-  gebraucht (für eine große Zone mehrere tausend, auch nach der Erhöhung).
+  echte Gebäude-Asset angepasst, siehe `docs/building.md`, "Wohnhaus";
+  noch am selben Tag wieder auf 5m halbiert, siehe "Straßenabstand
+  tiefenabhängig" unten), leicht nach innen versetzt von der Straßenkante
+  (`BUILDING_STREET_MARGIN`, seit derselben zweiten Runde tiefenabhängig
+  statt eines festen Werts) — liefert absichtlich DEUTLICH mehr Plätze als
+  gebraucht (für eine große Zone mehrere tausend).
 - **`_generate_city_zone()`** mischt diese Plätze zufällig
   (`Array.shuffle()`) und bebaut nur `BUILDINGS_PER_*_ZONE` davon — der
   Rest bleibt als unbebaute Lücke stehen. Das hält sowohl die
@@ -162,6 +164,162 @@ mehr als feste `.tscn`-Kind-Nodes. Das schließt nebenbei eine frühere
 bekannte Grenze: späte Peers bekommen jetzt echtes Catch-up für alle drei
 Typen (`_catch_up_building()`/`_catch_up_vehicle()`/
 `_catch_up_zombie_nest()`).
+
+### Mehrfach-Reihenplätze (2026-08-04)
+
+Behebt die bis dahin bekannte, bewusst offen gelassene Lücke bei
+`BUILDING_MIN_SPACING` oben ("Größere Typen wie Supermarkt (18m) brauchen
+... eine eigene Slot-Breite pro Typ — hier bewusst noch nicht vorgebaut") —
+Anlass war die Nutzerfrage, ob der Supermarkt beim Blender-Modellieren
+wirklich in den vollen Vision-Maßen (18×12m) gebaut werden soll, obwohl ein
+Reihenplatz nur 10m Abstand zum nächsten hat.
+
+- **`_generate_street_slots()` liefert jetzt strukturierte Slots**
+  (`Array[Dictionary]` statt `Array[Vector3]`) — jeder Eintrag zusätzlich zu
+  `"position"` mit `"row_id"` (identifiziert eine der vier Reihen pro Block:
+  Süd/Nord entlang X, West/Ost entlang Z), `"row_index"` (Position
+  innerhalb dieser Reihe, 0/1/2/...) und `"along_x"` (verläuft die Reihe
+  entlang X oder Z). Damit lässt sich der direkte Nachbar-Slot in
+  DERSELBEN Reihe gezielt finden (`row_id` gleich, `row_index` ± 1) statt
+  nur einen isolierten Punkt zu haben.
+- **`_generate_city_zone()` reserviert bei breiten Typen mehrere Slots**:
+  `span := clampi(ceili(along_row_size / BUILDING_MIN_SPACING), 1,
+  MAX_BUILDING_SLOT_SPAN)`, wobei `along_row_size` die Größe ENTLANG der
+  jeweiligen Reihenrichtung ist (`size.x` auf einer X-Reihe, `size.z` auf
+  einer Z-Reihe — beim Supermarkt (18×12) überschreitet in BEIDEN
+  Ausrichtungen die jeweils maßgebliche Seite die 10m-Lücke, `span = 2` in
+  jedem Fall, keine Rotation des Gebäudes nötig). Findet der aktuelle Slot
+  genug freie, direkt benachbarte Slots (`row_index + 1`, `+ 2`, ...), wird
+  die Bauposition der MITTELPUNKT aller reservierten Slots, alle werden als
+  verbraucht markiert. Reicht der Platz nicht (Reihenrand erreicht oder
+  Nachbar schon vergeben), bleibt der Slot leer — kein Retry mit einem
+  schmaleren Typ, passt zur bestehenden "unbebaute Lücke wirkt organischer"-
+  Philosophie.
+- **Zweiphasig statt direkt erzeugend** — `_generate_city_zone()` sammelt
+  erst alle Platzierungen in einem Array, bevor es sie erzeugt, weil die
+  tatsächliche Anzahl PLATZIERTER Gebäude (wegen gescheiterter breiter
+  Rollen) kleiner als `building_count` ausfallen kann — der zufällige
+  `has_survivor`-Index braucht deshalb die tatsächliche, erst hinterher
+  bekannte Platzierungs-Anzahl.
+- **`MAX_BUILDING_SLOT_SPAN := 3`** — Sicherheitsnetz gegen einen
+  versehentlich riesigen Wert in einem künftigen Gebäudetyp, der sonst
+  unbegrenzt viele Slots am Stück verlangen könnte.
+- **Supermarkt-Platzhalter vorab auf echte Maße gesetzt** (`Vector3(18.0,
+  4.5, 12.0)`, siehe `Infos/03 Asset-Checkliste.md`) — VOR der eigentlichen
+  Asset-Lieferung, damit der Mechanismus schon an der aktuellen
+  Platzhalter-Box im Spiel überprüfbar ist, nicht erst nach dem
+  Modell-Einbau. Reine Vorbereitung — bleibt Supermarkt der einzige Typ,
+  der aktuell `span > 1` braucht.
+- **Keine Gebäude-Rotation** — zunächst bewusst nicht gebaut, siehe
+  Nachtrag "Gebäude-Rotation" weiter unten: hat sich beim Supermarkt-Test
+  als echter Bug herausgestellt (Front zeigte nicht zur Straße) und wurde
+  noch am selben Tag nachgerüstet.
+
+**Noch nicht vom Nutzer getestet** (Platzhalter-Box, echtes Modell fehlt
+noch).
+
+### Straßenabstand tiefenabhängig + kompaktere Stadt (2026-08-04)
+
+Direkte Fortsetzung von "Mehrfach-Reihenplätze" oben, ausgelöst durch den
+Nutzer-Screenshot `bilder/supermarkt in game.PNG`: die Supermarkt-Front
+stand fast auf der Fahrbahnmarkierung, UND generelles Feedback, dass die
+Stadt gegenüber Infection Free Zone "3x größer" wirkt (ein Haus bei uns
+fühlt sich an wie drei IFZ-Häuser).
+
+**Ursache geklärt, kein Bug:** `World.BUILDING_TYPES`/Straßen-Kacheln
+verwenden ECHTE Maße (18×12m Supermarkt, 12m-Straßenbreite = eine
+vierspurige Straße), IFZ (wie die meisten Städtebau-/Survival-Spiele)
+staucht Gebäude/Straßen dagegen bewusst auf Spiel-Maßstab. Nutzer-
+Entscheidung: Gebäude bleiben bei ihren echten Maßen (keine Asset-
+Neuskalierung), Stadt wird stattdessen INSGESAMT kompakter gepackt.
+
+- **`BUILDING_STREET_MARGIN := 1.5`** ersetzt den festen
+  `BUILDING_ROW_INSET` (5.0) — der war auf die Wohnhaus-Tiefe (8,2m)
+  kalibriert und ließ den tieferen Supermarkt (12,2m) über die Blockkante
+  hinaus auf die Straße ragen. Jetzt wird die Position auf der
+  REIHEN-SENKRECHTEN Achse (Z bei Süd/Nord-Reihen, X bei West/Ost-Reihen)
+  erst in `_generate_city_zone()` berechnet, NACHDEM die tatsächliche
+  Gebäudetiefe in dieser Richtung bekannt ist: `perp_coord = perp_base +
+  perp_sign × (halbe_Tiefe + BUILDING_STREET_MARGIN)`. `_generate_street_
+  slots()` liefert dafür `perp_base` (rohe Blockkante) und `perp_sign`
+  (+1/−1, Richtung "nach innen") pro Slot mit — jede Gebäudetiefe bekommt
+  dadurch denselben knappen, aber sicheren 1,5m-Abstand zur Straße, egal
+  ob Wohnhaus oder Supermarkt.
+- **`BUILDING_MIN_SPACING` 10m → 5m halbiert** — verkleinert den Abstand
+  ZWISCHEN Gebäuden INNERHALB einer Reihe, ohne die Straßenbreite
+  anzufassen (die ist an echte, unveränderbare Straßen-Kachel-Assets
+  gebunden, `STREET_TILE_SIZE`, siehe unten — eine Verkleinerung dort
+  hätte Asset-Neuarbeit gebraucht). Der Mehrfach-Reihenplätze-Mechanismus
+  (siehe oben) skaliert automatisch mit: `span = ceili(along_row_size /
+  BUILDING_MIN_SPACING)` wächst bei kleinerem Nenner, `MAX_BUILDING_SLOT_
+  SPAN` deshalb von 3 auf 5 angehoben (der Supermarkt braucht bei 5m
+  Abstand jetzt 4 Slots statt 2 — mathematisch weiterhin überlappungsfrei,
+  siehe Herleitung im Code-Kommentar dort).
+- **Bewusst NICHT angefasst: `BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE`**
+  (aktuell 100/50) — die wurden nach einem echten Multiplayer-
+  Verbindungsabsturz bei 1750 Gebäuden absichtlich zurückgenommen (siehe
+  Kommentar dort). Eine engere Reihen-Packung bedeutet mehr VERFÜGBARE
+  Slots pro Zone, aber dieselbe Anzahl TATSÄCHLICH gebauter Gebäude — der
+  Füllgrad (gebaute/verfügbare Slots) sinkt dadurch eher, was der
+  gewünschten Verdichtung entgegenwirken könnte. Eine Erhöhung der
+  Gebäudezahl wäre eine separate, riskantere Entscheidung (braucht eigenen
+  Multiplayer-Stresstest), bewusst nicht Teil dieser Änderung.
+
+**Noch nicht vom Nutzer getestet.**
+
+### Gebäude-Rotation (2026-08-04)
+
+Nutzer-Screenshot `bilder/falsche ausrichtung.PNG`: der Supermarkt stand
+mit erkennbar falscher Ausrichtung — Fenster/Tür zeigten nicht zur
+Straße. Ursache: Gebäude bekamen bisher NIE eine `rotation.y`, dieselbe
+Modell-Ausrichtung landete auf jeder der vier Blockkanten gleich, egal
+wohin die Fassade eigentlich zeigen sollte. Beim Wohnhaus (eher
+symmetrisch wirkende Form) war das kaum sichtbar, beim Supermarkt mit
+klaren Fenstern fällt es sofort auf.
+
+- **Rotation aus der Blender-Achsen-Konvention abgeleitet** (siehe
+  `Infos/05 Assets im Spiel.md`, "Blender-Achsen-Konvention": Front zeigt
+  unrotiert nach Godot -Z). `_generate_street_slots()` gibt jetzt pro Slot
+  ein `"rotation_y"` mit: 0° (Süd-Kante, Straße liegt schon bei -Z) / 180°
+  (Nord-Kante, Straße bei +Z) / +90° (West-Kante, Straße bei -X) / −90°
+  (Ost-Kante, Straße bei +X).
+- **`World._create_building()` setzt `building.rotation.y` auf dem
+  BUILDING-NODE selbst**, nicht nur auf dem `Model`-Kind — dreht dadurch
+  Mesh, Collision-Box UND das echte Modell gemeinsam. Wichtig: die
+  Kollisionsbox dreht sich MIT, dadurch passt die Klickfläche/Kollision
+  nach der Rotation weiterhin exakt zum sichtbaren Gebäude.
+- **Vereinfachung als Nebeneffekt:** weil die Rotation die Fassade IMMER
+  korrekt zur Straße ausrichtet, ist `size.x` ab jetzt IMMER die
+  Entlang-der-Reihe-Achse und `size.z` IMMER die Senkrecht-zur-Reihe-Achse
+  — unabhängig davon, ob die Reihe entlang X oder Z verläuft (`along_x`).
+  Die Mehrfach-Reihenplätze-Berechnung (`along_row_size`) und der
+  tiefenabhängige Straßenabstand (`perp_extent`) mussten dadurch NICHT
+  mehr zwischen beiden Fällen unterscheiden — beide nutzen jetzt einfach
+  `size.x`/`size.z` direkt, kein `if along_x else`-Zweig mehr nötig.
+- **Gilt einheitlich für alle drei Erzeugungswege** (echtes Modell,
+  prozedurales Haus, reine Platzhalter-Box) — bei der prozeduralen
+  Box+Satteldach-Form gibt es keine gerichtete Fassade, die Rotation
+  ändert dort nur, in welche Richtung der Dachfirst zeigt (eher
+  Verbesserung als Risiko: First jetzt öfter parallel zur Straße statt
+  immer gleich ausgerichtet). Bei der Platzhalter-Box ohne Modell ist
+  Rotation optisch wirkungslos (einfarbige Box), aber harmlos.
+- **Nicht betroffen:** Jagdstand (Wald-Zonen), Schutzsuchende, Ruinen —
+  alle drei erzeugen ihre `_create_building()`-Aufrufe ohne
+  `"rotation_y"`-Feld, `.get()`-Fallback bleibt `0.0` (kein Reihen-Konzept
+  für diese drei, keine Rotation nötig).
+- **Speicherstand-/Catch-up-fähig** wie Position — `_collect_save_data()`/
+  `_load_game_state()`/`_catch_up_buildings_bulk()` führen `rotation.y`
+  jetzt mit.
+- **Voraussetzung für künftige Assets:** jedes neu gelieferte
+  Gebäude-Modell muss mit der Front Richtung Blender -Y (= Godot -Z)
+  modelliert sein, damit diese automatische Rotation korrekt greift —
+  ist bereits die dokumentierte Standard-Konvention, keine neue Vorgabe.
+
+**Noch nicht vom Nutzer getestet** — insbesondere die genaue
+Rotationsrichtung (West/Ost könnten vertauscht sein, falls sich beim
+Testen zeigt, dass die Fassade dort in die falsche Richtung zeigt; Fix
+wäre dann nur, die beiden Vorzeichen in `_generate_street_slots()` zu
+tauschen).
 
 ### Straßen-Geometrie (2026-08-01, Kartenplanungs-Session, direkte Fortsetzung von "Straßen-Raster")
 
@@ -409,6 +567,34 @@ Neuaufbauen der Listen bei jedem Refresh statt Einzelupdate (gleiches
 einfache Muster wie `Lobby._refresh_player_list()`, siehe
 [`docs/networking.md`](networking.md)), ein häufigerer Takt wäre für UI-
 Text unnötig.
+
+## Bildlook: Farbanpassung für den Apokalypse-Stil (2026-08-04)
+
+Nutzerfrage: "können wir sowas wie Shader machen, das es bisschen mehr
+diesen Apokalypsen-Style hat" — Godots eingebaute `Environment`-
+`Adjustments` (kein eigener Shader-Code nötig, laufen intern selbst über
+einen Shader, aber komplett über Properties einstellbar) auf der
+bestehenden `Environment_day_night`-Resource in `World.tscn` aktiviert:
+`adjustment_saturation := 0.55` (deutlich entsättigt), `adjustment_
+contrast := 1.15`, `adjustment_brightness := 0.95` — wirkt global über
+die ganze Szene, unabhängig von Tag/Nacht (`_update_day_night_visuals()`
+ändert nur `background_color`/`ambient_light_color`/`-energy`, nie die
+Adjustments, keine Kollision). Reine Startwerte, nach Testen
+nachjustierbar.
+
+**Weitere Ausbaustufen, falls mehr gewünscht ist** (bewusst noch nicht
+umgesetzt, größerer Aufwand):
+- **Leichter Nebel/Dunst** (`Environment.fog_*`) — billig, viel
+  Atmosphäre, aber Vorsicht: zu dicht würde Zombie-Sichtbarkeit auf
+  Distanz beeinträchtigen (Gameplay-relevant), deshalb nicht ungefragt
+  aktiviert.
+- **Eigener Grime-/Rost-Shader pro Material** (Verschmutzung in Ecken/
+  Kanten, z. B. über Vertex-Colors oder eine Curvature-/AO-Maske) — mehr
+  Wirkung, aber echter Custom-Shader- + Blender-Vorbereitungsaufwand
+  (Vertex-Painting oder AO-Bake nötig).
+- **Bildschirm-Postprocessing** (Vignette, Filmkörnung, leichte
+  chromatische Aberration) — eigener Full-Screen-Shader auf einem
+  `CanvasLayer`, moderater Aufwand, rein kosmetisch ohne Gameplay-Risiko.
 
 ## Tag/Nacht-Zyklus
 
@@ -691,6 +877,88 @@ Bauen-Panel fast den ganzen Bildschirm ein und überlappte dadurch massiv
 mit dem neu positionierten Ressourcen-Panel UND der Status-Karte, beide
 ebenfalls oben links. Ergebnis im Screenshot: Ressourcen-Text und
 Bau-Buttons lagen sichtbar übereinander.
+
+### UI-Redesign Runde 3: obere Leiste + Wetter + Forschung + Event-Log (2026-08-04)
+
+Nutzer-Skizze (`bilder/ui skizze.jpg`), nach Rückfragen geklärt (Plan
+`floating-shimmying-stonebraker.md`): Kalender/Zeit-Steuerung + 9 Tabs
+wandern in eine neue obere Leiste, dazu drei komplett neue Tabs
+(Wettervorhersage, Forschung, Infos/Event) + eine kompakte Info-Box.
+
+- **`MainTabsUI/Panel` jetzt oben statt unten links verankert**
+  (`anchor_top=0`, volle Breite). Neuer `TimeBox`-`VBoxContainer` links
+  daneben (NICHT als eigener Node vor dem `TabContainer` verschachtelt,
+  sondern als GESCHWISTER-Control innerhalb desselben `Panel` — dadurch
+  bleiben ALLE bestehenden `$MainTabsUI/Panel/TabContainer/<Tab>/...`-
+  Pfade unverändert, kein Massen-Umschreiben der Dutzenden `@onready
+  var`s für Bauen/Herstellen/Einheiten/Trupp/Handel nötig).
+  `TimeBox` enthält `DayLabel` (neu, zeigt `_day_count`), `ClockLabel` +
+  `SpeedRow` (aus `ResourcesUI` hierher verschoben) + neuer
+  `PauseButton` (ruft dieselbe `request_toggle_pause`-RPC wie
+  `PauseMenu.pause_game_button`, gleiches host-only-Sichtbarkeitsmuster).
+- **648px-Basishöhen-Falle erneut zugeschlagen** (siehe oben, "Korrektur
+  nach erstem Screenshot-Test") — der erste Wurf hätte die alte 454px-
+  Panelhöhe einfach nach oben verschoben, das hätte sich mit dem
+  darunter jetzt ebenfalls neu positionierten `ResourcesUI`-Panel UND der
+  bodenverankerten Minimap (`-208` bis `-16` = absolut 440–632 bei 648px
+  Basishöhe) überlappt. Fix: `MainTabsUI/Panel`-Höhe auf 152px reduziert
+  (`offset_top` 8→160), `ResourcesUI/Panel` folgt direkt darunter
+  (168→420) — endet mit 20px Abstand klar vor der Minimap.
+  **Bekannter Nachteil dieser Lösung:** die Tab-Inhalte (v. a. "Bauen"
+  mit ~15 Buttons/Listen) passen bei 152px sichtbar NICHT mehr vollständig
+  hinein — bestehendes, schon vorher dokumentiertes Risiko (siehe "UI-
+  Überarbeitung Runde 2" oben, "ein `ScrollContainer` bleibt die
+  eigentlich saubere Lösung"), durch die geringere Höhe jetzt akuter.
+  Kein `ScrollContainer`-Umbau in dieser Runde (hätte dieselben vielen
+  `@onready var`-Pfade durch eine zusätzliche Verschachtelungsebene
+  gebrochen) — bewusst zurückgestellt, nächster sinnvoller Schritt.
+- **Neue Tabs** (Node-Namen bewusst kurz statt der längeren
+  Skizzen-Beschriftung, passend zum bestehenden Stil): `Wetter`,
+  `Forschung`, `Karte` (nur ein "Karte öffnen"-Button →
+  `toggle_map_view()`, kein zweiter echter Kartenweg), `Ereignisse`.
+  Reihenfolge über `main_tabs.move_child()` in `_ready()` hergestellt
+  (Wetter, Forschung, Herstellen, Bauen, Einheiten, Trupp, Karte,
+  Ereignisse, Handel) — ändert nur die Anzeige-Reihenfolge, keine Pfade.
+  `main_tabs.current_tab` danach explizit auf den Bauen-Tab gesetzt
+  (`move_child()` verschiebt Kinder, nicht automatisch den angezeigten
+  Index mit — ohne den Fix wäre "Wetter" der neue Default-Tab gewesen).
+- **Forschungs-Tab**: rein lesende Übersicht über `CRAFTING_RECIPES` +
+  `BUILDING_RESEARCH` (Erforscht-Status aus `HomeBase.unlocked_recipes`),
+  kein eigener Erforschen-Button — die bestehenden Buttons in Herstellen/
+  Bauen bleiben die einzigen Auslöser. `_refresh_research_ui()` läuft im
+  selben periodischen Block wie `_refresh_crafting_ui()`.
+- **Wettervorhersage-Tab + echtes neues Gameplay-System**:
+  `_weather`/`_next_weather` (State:
+  "clear"/"rain"), zufällig alle `WEATHER_MIN_DURATION`–
+  `WEATHER_MAX_DURATION` Sekunden neu gewürfelt (host-seitig, per
+  `_sync_weather.rpc()` gebroadcastet, gleiches Muster wie
+  `_sync_time_scale()`). **Effekt:** Regen multipliziert JEDEN Fog-of-War-
+  Aufdeckungsradius (Einheiten/Home-Base/Wachturm) mit
+  `WEATHER_VISION_MULTIPLIER := 0.6`, einziger Eingriffspunkt in
+  `_update_fog_of_war()`. Catch-up (`_catch_up_weather()`, nach dem
+  `_catch_up_day_time()`-Muster) + Speicherstand-Persistenz
+  (`data["weather"]`/`data["next_weather"]`/`data["weather_timer"]`).
+- **Infos/Event-Tab + Info-Box**: neues `_event_log: Array` (lokal je
+  Peer, nicht repliziert/gespeichert — kurzlebiger Sitzungs-Verlauf wie
+  `_trade_offers`), gefüllt über einen einzigen Hook in
+  `_show_status_message()` — erfasst dadurch AUTOMATISCH jede
+  bestehende Meldung (Horde/Blutmond, SOS, Home-Base verloren, Rettungs-
+  Anfrage, Handel, Baufehler etc.), ohne jeden `report_status()`-
+  Aufrufer einzeln anzufassen. Info-Box (`InfoBoxUI`, eigene
+  `CanvasLayer`, bodenverankert direkt über der Minimap) zeigt immer nur
+  die letzte Zeile.
+- **Neu: "Blutmond nähert sich"-Vorwarnung** (im Sketch explizit
+  genannt, gab es vorher nicht) — `_handle_day_night()` prüft jetzt
+  zusätzlich, ob `is_blood_moon_night()` UND noch Tag (nicht `is_night()`)
+  UND `current_game_hour() >= NIGHT_START_HOUR - 2.0`, warnt dann einmalig
+  pro Tag (`_blood_moon_warned_day`-Gate) alle Peers — läuft automatisch
+  ins Event-Log/die Info-Box mit, weil es denselben `report_status()`-Weg
+  nutzt wie alles andere.
+
+**Noch nicht vom Nutzer im Spiel gesichtet — bei der Größe dieser
+Änderung (fast jedes UI-Element betroffen) besonders wahrscheinlich,
+dass mindestens die Panelhöhen/Tab-Inhalt-Sichtbarkeit noch eine
+Nachjustierungsrunde braucht.**
 
 Behoben: Ressourcen-Panel bleibt (Fehler eingesehen) doch oben RECHTS wie
 ursprünglich — dort gibt es reichlich freien Platz, keine Konkurrenz mit

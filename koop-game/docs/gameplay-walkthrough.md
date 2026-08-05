@@ -118,9 +118,11 @@ Details: `docs/survivor.md` ("Trupp-Arten"), `docs/recruitment.md`
 Jeder Spieler hat eine **eigene** Home-Base mit eigenem Ressourcen-Pool —
 kein gemeinsamer Kolonie-Topf, auch nicht zwischen Koop-Mitspielern.
 
-- **16 Ressourcenarten:** Nahrung, Holz, Metall, Stein, Ziegel, Medizin,
-  Munition + fünf Ausrüstungs-Slots (Waffe/Rüstung/Helm/Nahkampfwaffe/
-  Beinschutz) + fünf Forschungsbücher.
+- **14 Ressourcenarten:** Nahrung, Holz, Metall, Stein, Ziegel, Medizin,
+  Munition, Treibstoff + fünf Ausrüstungs-Slots (Waffe/Rüstung/Helm/
+  Nahkampfwaffe/Beinschutz) + EIN Forschungsbuch (`book_research`, seit
+  der Universal-Buch-Migration — vorher fünf getrennte Typen, siehe
+  `docs/building.md`, "Forschungsbücher").
 - **Start-Ressourcen** reichen für eine Zonen-Erweiterung (15 Stein) PLUS
   einen Wachposten (30 Holz) direkt zu Beginn.
 - **Vier Baurohstoffe für vier unterschiedliche Bautypen** — Holz
@@ -227,10 +229,12 @@ Details: `docs/survivor.md` ("Bedürfnisse: Müdigkeit + Moral", "Hunger").
 - **Zwei Wege, an Ausrüstung zu kommen:** Zombie-Loot-Drop (Zufall, 50 %
   Chance pro Kill, 1 von 7 Typen) ODER Crafting in der eigenen Werkstatt
   (verlässlich, kostet Basis-Rohstoffe: z. B. Waffe = 15 Metall + 10 Holz).
-- **Vier Crafting-Rezepte sind Forschungsbuch-gated** — ohne das passende
-  Buch (seltener Zombie-Zusatzdrop, 8 % Chance) zeigt der Button nur
-  "X erforschen", ausgegraut ohne Buch. Einmal erforscht, dauerhaft
-  freigeschaltet für die ganze Kolonie.
+- **Vier Crafting-Rezepte sind Forschungsbuch-gated** — ohne ein Exemplar
+  des EINEN Buchtyps (seltener Zombie-Zusatzdrop, 8 % Chance) zeigt der
+  Button nur "X erforschen", ausgegraut ohne Buch. Kein rezeptspezifisches
+  Buch mehr nötig, jedes Exemplar erforscht ein beliebiges noch
+  unerforschtes Rezept. Einmal erforscht, dauerhaft freigeschaltet für die
+  ganze Kolonie.
 - **Ausrüsten/Anlegen** läuft über das Trupp-Detailfenster (fünfter Tab
   "Trupp", erscheint bei Auswahl genau eines eigenen Trupps).
 

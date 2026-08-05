@@ -1,4 +1,0 @@
-mbedded window only supports Windowed mode.
-[WorldSync] Client: Warte auf Welt-Synchronisation ...
-[WorldSync] Host: Anfrage von Peer 1357636422 -> sende Ziel-Zahlen: { "BuildingSpawner": 1755, "VehicleSpawner": 10, "TreeSpawner": 1558, "CarWreckSpawner": 327, "StonePileSpawner": 408, "BrickPileSpawner": 407, "ZombieNestSpawner": 5 }
-[WorldSync] TIMEOUT nach 30.0s — Ziel vs. erhalten:

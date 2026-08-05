@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scenes/entities/base/Workshop.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_workshop"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(5, 3, 4)
 
 [sub_resource type="StandardMaterial3D" id="Material_workshop"]
 albedo_color = Color(0.55, 0.35, 0.15, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_workshop"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(5, 3, 4)
 
 [node name="Workshop" type="StaticBody3D" groups=["workshop"]]
 script = ExtResource("1")

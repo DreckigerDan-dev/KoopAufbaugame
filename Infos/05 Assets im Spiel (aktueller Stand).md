@@ -24,10 +24,75 @@ steht ein eigener Vorschlag mit Begründung.
 **Erledigt (2026-08-04):** Straßenraster/Bauplatz-Abstände sind jetzt ans
 erste gelieferte Gebäude (Wohnhaus) angepasst — `BUILDING_MIN_SPACING`
 6→10m, `BUILDING_ROW_INSET` 2→5m (siehe `docs/building.md`, "Wohnhaus").
-Gilt vorerst EINHEITLICH für alle Typen, auch die noch kleinen
-Platzhalter — größere Typen wie Supermarkt (18m) brauchen bei ihrer
-eigenen Asset-Lieferung vermutlich eine eigene, breitere Slot-Reservierung
-statt der einheitlichen Reihen-Abstände, noch nicht umgesetzt.
+
+**Erledigt (2026-08-04, zweite Runde):** Mehrfach-Reihenplätze für breite
+Typen — ein Gebäude, dessen Breite die 10m-Slot-Lücke überschreitet (z. B.
+Supermarkt, 18m), reserviert jetzt automatisch mehrere benachbarte
+Reihenplätze statt zu überlappen (siehe `docs/world.md`,
+"Mehrfach-Reihenplätze"). Läuft automatisch für JEDEN Typ, sobald seine
+`size` in `World.BUILDING_TYPES` breit genug ist — betrifft also auch
+Militärbasis (~14m), Feuerwehrstation (12m) und Universität (12m), sobald
+die ihre echten Maße bekommen, nicht nur den Supermarkt. Supermarkt-Größe
+in `World.BUILDING_TYPES` schon jetzt auf die echten 18×4,5×12m vorgezogen
+(Platzhalter-Box testet den Mechanismus, bevor das Modell da ist) — **du
+kannst also normal auf 18×12m modellieren, keine Anpassung nötig.**
+
+**Erledigt (2026-08-04, dritte Runde):** Supermarkt-Asset geliefert
+(`supermarkttest.glb`, noch ohne Material/Farbe) und eingebaut. Dabei zwei
+neue, im Screenshot entdeckte Bugs (`bilder/falsche ausrichtung.PNG`,
+`bilder/startbasevfehler.PNG`) — beide Konsequenz von "jetzt gibt es
+echte, große Gebäude, andere Systeme gingen noch von kleinen Platzhaltern
+aus": (1) Gebäude werden nie rotiert, dieselbe Modell-Ausrichtung landet
+auf jeder Blockkante egal wohin Fenster/Tür zeigen sollten, (2) der
+Abstand zwischen geklickter Basis-Wahl-Gebäude und der neu entstehenden
+Home-Base (`BASE_CHOICE_HOME_OFFSET`, fest 4,5m) reicht bei großen
+Gebäuden nicht, Home-Base spawnt im Gebäude drin. **Beide noch offen,
+werden gerade im Code behoben** (siehe `docs/world.md`, "Bekannte
+Grenzen").
+
+**GRÖSSEN-FRAGE ENDGÜLTIG GEKLÄRT (2026-08-04):** Baue ALLE restlichen
+Gebäude in den echten Maßen aus `03 Asset-Checkliste.md` — keine weitere
+Rückfrage nötig, hier die Begründung zum Nachlesen, falls die Frage
+nochmal aufkommt:
+
+- **Straßenbreite bleibt fix (12m)** — an die schon fertigen
+  Straßen-Kachel-Assets gebunden, davon unabhängig zu modellieren.
+- **Die Karte ist groß genug.** Eine Stadt-Zone ist maximal 520m im
+  Durchmesser, die Karte 5000×5000 — eine Zone belegt nur ~10% der
+  Kartenbreite, fünf Zonen mit 800m Mindestabstand passen locker mit viel
+  Wildnis dazwischen (gewollt, keine zu füllende Lücke).
+- **Ein Gebäude ist NICHT an eine einzelne Straßen-Kachel gebunden.** Die
+  12m-Kachel ist NUR für die sichtbare Straße. Gebäude nutzen ein eigenes,
+  unabhängiges Reihenplatz-System (`BUILDING_MIN_SPACING := 5.0`, siehe
+  zweite Runde oben) — ein Gebäude belegt so viele Plätze, wie es
+  tatsächlich breit ist (Supermarkt 18m → 4 Plätze). Kleinere Gebäude
+  brauchen automatisch weniger Plätze, mehr passen nebeneinander — das
+  rechnet der Code aus der tatsächlichen Größe aus, DU musst dabei nichts
+  beachten.
+- **Skalieren geht jederzeit nachträglich, ohne Blender-Neuarbeit** — Godot
+  kann ein geladenes Modell mit einer einzigen Zahl im Code runterskalieren
+  (`model.scale`), betrifft nur Anzeige/Kollision, nicht die `.glb`-Datei.
+  Deshalb ist "jetzt in echten Maßen bauen" auch der SICHERERE Weg: von
+  echt → kleiner skalieren ist trivial, von falsch geraten → echte
+  Proportionen nachträglich richtigstellen wäre das eigentliche Problem.
+- **Ob die Stadt "insgesamt zu groß wirkt" (Vergleich zu Infection Free
+  Zone) bleibt zurückgestellt**, nicht für immer entschieden — mit
+  aktuell nur 2 von 14 echten Gebäuden lässt sich der Gesamteindruck noch
+  nicht beurteilen. Erste Kompaktheits-Runde (`BUILDING_MIN_SPACING`
+  10→5m, tiefenabhängiger Straßenabstand statt fixem Inset) schon
+  gemacht, siehe `docs/world.md`, "Straßenabstand tiefenabhängig +
+  kompaktere Stadt". Weitere Beurteilung erst, wenn mehr echte Assets da
+  sind.
+
+**Home-Base-Design-Frage geklärt (2026-08-04):** Nutzer erwog, statt des
+eigenen `startbasetest.glb`-Assets ein leicht umgebautes Wohnhaus als
+Home-Base zu nutzen (Anlass: der Start-Base-Bug sah aus wie "zwei
+unterschiedliche Gebäude ineinander"). Entschieden: **`startbasetest.glb`
+bleibt** — ist schon fertig gebaut (kein Mehraufwand), UND der Bug liegt
+gar nicht am Modell-Unterschied, sondern am oben genannten festen
+Abstand. Eigene, erkennbare Home-Base-Optik ist zudem genretypisch
+sinnvoll (Basis muss auf den ersten Blick von normalen Loot-Gebäuden
+unterscheidbar sein).
 
 ---
 

@@ -1,6 +1,6 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene format=3 uid="uid://cao6l2232i6th"]
 
-[ext_resource type="Script" path="res://scenes/world/World.gd" id="1"]
+[ext_resource type="Script" uid="uid://dwwwcqa8lsgbv" path="res://scenes/world/World.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/world/PauseMenu.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/world/Minimap.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/world/MapView.tscn" id="7"]
@@ -14,6 +14,19 @@ background_color = Color(0.55, 0.75, 0.95, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.55, 0.75, 0.95, 1)
 ambient_light_energy = 0.6
+ssao_enabled = true
+ssao_radius = 1.5
+ssao_intensity = 2.5
+ssao_power = 1.8
+fog_enabled = true
+fog_light_color = Color(0.62, 0.64, 0.62, 1)
+fog_sun_scatter = 0.05
+fog_density = 0.006
+fog_sky_affect = 0.3
+adjustment_enabled = true
+adjustment_brightness = 0.95
+adjustment_contrast = 1.15
+adjustment_saturation = 0.55
 
 [sub_resource type="BoxMesh" id="BoxMesh_ground"]
 size = Vector3(10, 0.2, 10)
@@ -27,166 +40,175 @@ size = Vector3(10, 0.2, 10)
 [sub_resource type="BoxMesh" id="BoxMesh_build_ghost"]
 size = Vector3(1.5, 1.5, 1.5)
 
-[node name="World" type="Node3D"]
+[node name="World" type="Node3D" unique_id=514046439]
 script = ExtResource("1")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=634111286]
 environment = SubResource("Environment_day_night")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-position = Vector3(0, 10, 0)
-rotation_degrees = Vector3(-50, -30, 0)
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=962404370]
+transform = Transform3D(0.8660254, 0.38302222, -0.32139382, 0, 0.64278764, 0.76604444, 0.5, -0.66341394, 0.5566704, 0, 10, 0)
 
-[node name="Ground" type="StaticBody3D" parent="."]
+[node name="Ground" type="StaticBody3D" parent="." unique_id=220605296]
 
-[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=1142858121]
 mesh = SubResource("BoxMesh_ground")
 surface_material_override/0 = SubResource("Material_ground")
 
-[node name="Collision" type="CollisionShape3D" parent="Ground"]
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=1360630952]
 shape = SubResource("BoxShape3D_ground")
 
-[node name="BuildingSpawner" type="MultiplayerSpawner" parent="."]
+[node name="BuildingSpawner" type="MultiplayerSpawner" parent="." unique_id=916986207]
 spawn_path = NodePath("../Buildings")
 
-[node name="Buildings" type="Node3D" parent="."]
+[node name="Buildings" type="Node3D" parent="." unique_id=789465283]
 
-[node name="StreetGridMap" type="GridMap" parent="."]
+[node name="StreetGridMap" type="GridMap" parent="." unique_id=693144130]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 mesh_library = ExtResource("8")
 cell_size = Vector3(12, 0.2, 12)
 cell_center_y = false
-position = Vector3(0, -0.1, 0)
 
-[node name="VehicleSpawner" type="MultiplayerSpawner" parent="."]
+[node name="VehicleSpawner" type="MultiplayerSpawner" parent="." unique_id=987554703]
 spawn_path = NodePath("../Vehicles")
 
-[node name="Vehicles" type="Node3D" parent="."]
+[node name="Vehicles" type="Node3D" parent="." unique_id=309000309]
 
-[node name="ZombieNestSpawner" type="MultiplayerSpawner" parent="."]
+[node name="ZombieNestSpawner" type="MultiplayerSpawner" parent="." unique_id=1582205903]
 spawn_path = NodePath("../ZombieNests")
 
-[node name="ZombieNests" type="Node3D" parent="."]
+[node name="ZombieNests" type="Node3D" parent="." unique_id=1396516970]
 
-[node name="SurvivorSpawner" type="MultiplayerSpawner" parent="."]
+[node name="SurvivorSpawner" type="MultiplayerSpawner" parent="." unique_id=176501785]
 spawn_path = NodePath("../Survivors")
 
-[node name="Survivors" type="Node3D" parent="."]
+[node name="Survivors" type="Node3D" parent="." unique_id=81927671]
 
-[node name="HomeBaseSpawner" type="MultiplayerSpawner" parent="."]
+[node name="HomeBaseSpawner" type="MultiplayerSpawner" parent="." unique_id=818428190]
 spawn_path = NodePath("../HomeBases")
 
-[node name="HomeBases" type="Node3D" parent="."]
+[node name="HomeBases" type="Node3D" parent="." unique_id=222042157]
 
-[node name="ZombieSpawner" type="MultiplayerSpawner" parent="."]
+[node name="ZombieSpawner" type="MultiplayerSpawner" parent="." unique_id=484937616]
 spawn_path = NodePath("../Zombies")
 
-[node name="Zombies" type="Node3D" parent="."]
+[node name="Zombies" type="Node3D" parent="." unique_id=1418465749]
 
-[node name="GuardPostSpawner" type="MultiplayerSpawner" parent="."]
+[node name="GuardPostSpawner" type="MultiplayerSpawner" parent="." unique_id=915666394]
 spawn_path = NodePath("../GuardPosts")
 
-[node name="GuardPosts" type="Node3D" parent="."]
+[node name="GuardPosts" type="Node3D" parent="." unique_id=1732031324]
 
-[node name="WallSpawner" type="MultiplayerSpawner" parent="."]
+[node name="WallSpawner" type="MultiplayerSpawner" parent="." unique_id=1826378787]
 spawn_path = NodePath("../Walls")
 
-[node name="Walls" type="Node3D" parent="."]
+[node name="Walls" type="Node3D" parent="." unique_id=1666519022]
 
-[node name="MedicalStationSpawner" type="MultiplayerSpawner" parent="."]
+[node name="MedicalStationSpawner" type="MultiplayerSpawner" parent="." unique_id=1523263752]
 spawn_path = NodePath("../MedicalStations")
 
-[node name="MedicalStations" type="Node3D" parent="."]
+[node name="MedicalStations" type="Node3D" parent="." unique_id=1215755815]
 
-[node name="BedSpawner" type="MultiplayerSpawner" parent="."]
+[node name="BedSpawner" type="MultiplayerSpawner" parent="." unique_id=1908184220]
 spawn_path = NodePath("../Beds")
 
-[node name="Beds" type="Node3D" parent="."]
+[node name="Beds" type="Node3D" parent="." unique_id=1550908236]
 
-[node name="WorkshopSpawner" type="MultiplayerSpawner" parent="."]
+[node name="WorkshopSpawner" type="MultiplayerSpawner" parent="." unique_id=1327466287]
 spawn_path = NodePath("../Workshops")
 
-[node name="Workshops" type="Node3D" parent="."]
+[node name="Workshops" type="Node3D" parent="." unique_id=315866993]
 
-[node name="StorageSpawner" type="MultiplayerSpawner" parent="."]
+[node name="StorageSpawner" type="MultiplayerSpawner" parent="." unique_id=1152021323]
 spawn_path = NodePath("../Storages")
 
-[node name="Storages" type="Node3D" parent="."]
+[node name="Storages" type="Node3D" parent="." unique_id=887044239]
 
-[node name="TreeSpawner" type="MultiplayerSpawner" parent="."]
+[node name="TreeSpawner" type="MultiplayerSpawner" parent="." unique_id=1668857564]
 spawn_path = NodePath("../Trees")
 
-[node name="Trees" type="Node3D" parent="."]
+[node name="Trees" type="Node3D" parent="." unique_id=463336285]
 
-[node name="CarWreckSpawner" type="MultiplayerSpawner" parent="."]
+[node name="CarWreckSpawner" type="MultiplayerSpawner" parent="." unique_id=1963852594]
 spawn_path = NodePath("../CarWrecks")
 
-[node name="CarWrecks" type="Node3D" parent="."]
+[node name="CarWrecks" type="Node3D" parent="." unique_id=1502812667]
 
-[node name="StonePileSpawner" type="MultiplayerSpawner" parent="."]
+[node name="StonePileSpawner" type="MultiplayerSpawner" parent="." unique_id=829333081]
 spawn_path = NodePath("../StonePiles")
 
-[node name="StonePiles" type="Node3D" parent="."]
+[node name="StonePiles" type="Node3D" parent="." unique_id=1518327227]
 
-[node name="BrickPileSpawner" type="MultiplayerSpawner" parent="."]
+[node name="BrickPileSpawner" type="MultiplayerSpawner" parent="." unique_id=1757352084]
 spawn_path = NodePath("../BrickPiles")
 
-[node name="BrickPiles" type="Node3D" parent="."]
+[node name="BrickPiles" type="Node3D" parent="." unique_id=2018968737]
 
-[node name="FieldSpawner" type="MultiplayerSpawner" parent="."]
+[node name="FieldSpawner" type="MultiplayerSpawner" parent="." unique_id=71299538]
 spawn_path = NodePath("../Fields")
 
-[node name="Fields" type="Node3D" parent="."]
+[node name="Fields" type="Node3D" parent="." unique_id=151782114]
 
-[node name="OutpostSpawner" type="MultiplayerSpawner" parent="."]
+[node name="OutpostSpawner" type="MultiplayerSpawner" parent="." unique_id=1729503342]
 spawn_path = NodePath("../Outposts")
 
-[node name="Outposts" type="Node3D" parent="."]
+[node name="Outposts" type="Node3D" parent="." unique_id=86126922]
 
-[node name="WatchtowerSpawner" type="MultiplayerSpawner" parent="."]
+[node name="WatchtowerSpawner" type="MultiplayerSpawner" parent="." unique_id=160782241]
 spawn_path = NodePath("../Watchtowers")
 
-[node name="Watchtowers" type="Node3D" parent="."]
+[node name="Watchtowers" type="Node3D" parent="." unique_id=1033744038]
 
-[node name="BuildGhost" type="MeshInstance3D" parent="."]
+[node name="BanditHideoutSpawner" type="MultiplayerSpawner" parent="." unique_id=1646884213]
+spawn_path = NodePath("../BanditHideouts")
+
+[node name="BanditHideouts" type="Node3D" parent="." unique_id=137739096]
+
+[node name="BanditSpawner" type="MultiplayerSpawner" parent="." unique_id=279205916]
+spawn_path = NodePath("../Bandits")
+
+[node name="Bandits" type="Node3D" parent="." unique_id=716011114]
+
+[node name="BuildGhost" type="MeshInstance3D" parent="." unique_id=1944215246]
 visible = false
 mesh = SubResource("BoxMesh_build_ghost")
 
-[node name="BuildGhostLine" type="Node3D" parent="."]
+[node name="BuildGhostLine" type="Node3D" parent="." unique_id=878799736]
 
-[node name="Pivot" type="Node3D" parent="."]
+[node name="Pivot" type="Node3D" parent="." unique_id=1737277253]
 
-[node name="Camera3D" type="Camera3D" parent="Pivot"]
-position = Vector3(0, 10, 10)
+[node name="Camera3D" type="Camera3D" parent="Pivot" unique_id=1638600261]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 10)
 current = true
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=183252088]
 
-[node name="PauseLabel" type="Label" parent="HUD"]
+[node name="PauseLabel" type="Label" parent="HUD" unique_id=902641990]
 visible = false
+anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -100.0
 offset_top = 70.0
 offset_right = 100.0
 offset_bottom = 110.0
-horizontal_alignment = 1
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 26
 text = "PAUSIERT"
+horizontal_alignment = 1
 
-[node name="InfoPanel" type="Panel" parent="HUD"]
-visible = false
-offset_left = 8.0
+[node name="InfoPanel" type="Panel" parent="HUD" unique_id=724043816]
+offset_left = 352.0
 offset_top = 8.0
-offset_right = 410.0
+offset_right = 754.0
 offset_bottom = 166.0
 
-[node name="Label" type="Label" parent="HUD"]
-offset_left = 16.0
+[node name="Label" type="Label" parent="HUD" unique_id=1937399410]
+offset_left = 360.0
 offset_top = 16.0
-offset_right = 400.0
+offset_right = 744.0
 offset_bottom = 120.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -194,375 +216,651 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 20
 text = "Keine Auswahl"
 
-[node name="BaseChoiceLabel" type="Label" parent="HUD"]
-anchor_left = 0.5
+[node name="BaseChoiceLabel" type="Label" parent="HUD" unique_id=2011452751]
+anchors_preset = -1
 anchor_right = 0.5
 offset_left = -260.0
-offset_top = 16.0
+offset_top = 168.0
 offset_right = 260.0
-offset_bottom = 60.0
-horizontal_alignment = 1
+offset_bottom = 212.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 22
 text = "Wähle deine Start-Basis — klicke auf eines der Gebäude"
+horizontal_alignment = 1
 
-[node name="StatusLabel" type="Label" parent="HUD"]
-visible = false
-offset_left = 16.0
+[node name="StatusLabel" type="Label" parent="HUD" unique_id=656175453]
+offset_left = 352.0
 offset_top = 128.0
-offset_right = 500.0
-offset_bottom = 156.0
+offset_right = 836.0
+offset_bottom = 318.0
 theme_override_colors/font_color = Color(1, 0.75, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 18
 
-[node name="ResourcesUI" type="CanvasLayer" parent="."]
+[node name="ResourcesUI" type="CanvasLayer" parent="." unique_id=752708850]
 
-[node name="Panel" type="Panel" parent="ResourcesUI"]
-anchor_left = 1.0
+[node name="Panel" type="Panel" parent="ResourcesUI" unique_id=1282528163]
+anchors_preset = 10
 anchor_right = 1.0
-offset_left = -420.0
-offset_top = 8.0
+offset_left = -320.0
+offset_top = 52.0
 offset_right = -16.0
-offset_bottom = 260.0
+offset_bottom = 300.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="ResourcesUI/Panel"]
-offset_left = 12.0
+[node name="VBoxContainer" type="VBoxContainer" parent="ResourcesUI/Panel" unique_id=621100468]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 4.0
+offset_right = 296.0
+offset_bottom = 240.0
+theme_override_constants/separation = 2
+
+[node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer" unique_id=1492200873]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 3
+
+[node name="TabContainer" type="TabContainer" parent="ResourcesUI/Panel/VBoxContainer" unique_id=929234514]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+current_tab = 0
+
+[node name="Überleben" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer" unique_id=419865]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="SurvivalResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Überleben" unique_id=1268894160]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 296.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 3
+
+[node name="Ausrüstung" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer" unique_id=1306910632]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="GearResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung" unique_id=941335547]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 296.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 3
+
+[node name="Bücher" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer" unique_id=1550712320]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="BooksResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher" unique_id=1074250190]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 296.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 12
+text = "—"
+autowrap_mode = 3
+
+[node name="ZombieCountLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer" unique_id=182704140]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Zombies: 0/200"
+
+[node name="TopBarUI" type="CanvasLayer" parent="." unique_id=900088579]
+
+[node name="Panel" type="Panel" parent="TopBarUI" unique_id=500000101]
+anchors_preset = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -170.0
 offset_top = 8.0
-offset_right = 388.0
-offset_bottom = 244.0
-theme_override_constants/separation = 4
+offset_right = 170.0
+offset_bottom = 48.0
 
-[node name="ClockLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
-theme_override_font_sizes/font_size = 16
+[node name="HBoxContainer" type="HBoxContainer" parent="TopBarUI/Panel" unique_id=500000102]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 4.0
+offset_right = -6.0
+offset_bottom = -4.0
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="DayLabel" type="Label" parent="TopBarUI/Panel/HBoxContainer" unique_id=500000103]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Tag 1"
+
+[node name="ClockLabel" type="Label" parent="TopBarUI/Panel/HBoxContainer" unique_id=500000104]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
 text = "00:00"
 
-[node name="SpeedRow" type="HBoxContainer" parent="ResourcesUI/Panel/VBoxContainer"]
-theme_override_constants/separation = 4
+[node name="SpeedRow" type="HBoxContainer" parent="TopBarUI/Panel/HBoxContainer" unique_id=500000105]
+layout_mode = 2
+theme_override_constants/separation = 2
 
-[node name="Speed1xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
-custom_minimum_size = Vector2(36, 0)
+[node name="Speed1xButton" type="Button" parent="TopBarUI/Panel/HBoxContainer/SpeedRow" unique_id=500000106]
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
 toggle_mode = true
-button_pressed = true
 text = "1x"
 
-[node name="Speed2xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
-custom_minimum_size = Vector2(36, 0)
+[node name="Speed2xButton" type="Button" parent="TopBarUI/Panel/HBoxContainer/SpeedRow" unique_id=500000107]
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
 toggle_mode = true
 text = "2x"
 
-[node name="Speed3xButton" type="Button" parent="ResourcesUI/Panel/VBoxContainer/SpeedRow"]
-custom_minimum_size = Vector2(36, 0)
+[node name="Speed3xButton" type="Button" parent="TopBarUI/Panel/HBoxContainer/SpeedRow" unique_id=500000108]
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
 toggle_mode = true
 text = "3x"
 
-[node name="BuildResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
-autowrap_mode = 3
-theme_override_font_sizes/font_size = 15
-text = "—"
+[node name="PauseButton" type="Button" parent="TopBarUI/Panel/HBoxContainer" unique_id=500000109]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Pause"
 
-[node name="TabContainer" type="TabContainer" parent="ResourcesUI/Panel/VBoxContainer"]
-custom_minimum_size = Vector2(0, 140)
+[node name="TabColumnUI" type="CanvasLayer" parent="." unique_id=2120840911]
 
-[node name="Überleben" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
-
-[node name="SurvivalResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Überleben"]
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 372.0
-offset_bottom = 108.0
-autowrap_mode = 3
-theme_override_font_sizes/font_size = 15
-text = "—"
-
-[node name="Ausrüstung" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
-
-[node name="GearResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung"]
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 372.0
-offset_bottom = 108.0
-autowrap_mode = 3
-theme_override_font_sizes/font_size = 15
-text = "—"
-
-[node name="Bücher" type="Control" parent="ResourcesUI/Panel/VBoxContainer/TabContainer"]
-
-[node name="BooksResourcesLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher"]
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 372.0
-offset_bottom = 108.0
-autowrap_mode = 3
-theme_override_font_sizes/font_size = 15
-text = "—"
-
-[node name="ZombieCountLabel" type="Label" parent="ResourcesUI/Panel/VBoxContainer"]
-theme_override_font_sizes/font_size = 14
-text = "Zombies: 0/200"
-
-[node name="MainTabsUI" type="CanvasLayer" parent="."]
-
-[node name="Panel" type="Panel" parent="MainTabsUI"]
-anchor_left = 0.0
-anchor_top = 1.0
-anchor_right = 0.0
+[node name="Panel" type="Panel" parent="TabColumnUI" unique_id=500000201]
+anchors_preset = 0
 anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -470.0
-offset_right = 420.0
-offset_bottom = -16.0
+offset_left = 8.0
+offset_top = 60.0
+offset_right = 60.0
+offset_bottom = -8.0
 
-[node name="TabContainer" type="TabContainer" parent="MainTabsUI/Panel"]
+[node name="TabButtonList" type="VBoxContainer" parent="TabColumnUI/Panel" unique_id=500000202]
 layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 4.0
 offset_top = 4.0
 offset_right = -4.0
 offset_bottom = -4.0
+theme_override_constants/separation = 4
 
-[node name="Bauen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+[node name="WeatherTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000203]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Wetter"
+
+[node name="ResearchTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000204]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Forsch."
+
+[node name="CraftingTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000205]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Herst."
+
+[node name="BuildTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000206]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Bauen"
+
+[node name="UnitsTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000207]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Einh."
+
+[node name="UnitDetailTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000208]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Trupp"
+
+[node name="MapTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000209]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Karte"
+
+[node name="EventTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000210]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Ereign."
+
+[node name="TradeTabButton" type="Button" parent="TabColumnUI/Panel/TabButtonList" unique_id=500000211]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+toggle_mode = true
+text = "Handel"
+
+[node name="MainTabsUI" type="CanvasLayer" parent="." unique_id=1629150345]
+
+[node name="Panel" type="Panel" parent="MainTabsUI" unique_id=501307658]
+clip_contents = true
+offset_left = 68.0
+offset_top = 60.0
+offset_right = 456.0
+offset_bottom = 520.0
+
+[node name="TabContainer" type="TabContainer" parent="MainTabsUI/Panel" unique_id=147235517]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+current_tab = 0
+
+[node name="Bauen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=884960832]
+layout_mode = 2
 theme_override_constants/separation = 6
+metadata/_tab_index = 0
 
-[node name="BuildButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="BuildButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1707344644]
+layout_mode = 2
 text = "Wachposten bauen (30 Holz)"
 
-[node name="WallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="WallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=333418983]
+layout_mode = 2
 text = "Mauer bauen (15 Stein)"
 
-[node name="GateButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="GateButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=348151773]
+layout_mode = 2
 text = "Tor bauen (20 Metall)"
 
-[node name="FieldButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="FieldButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1566615004]
+layout_mode = 2
 text = "Feld bauen (20 Holz)"
 
-[node name="OutpostButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="OutpostButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1187763186]
+layout_mode = 2
 text = "Außenposten bauen (15 Holz, 10 Stein)"
 
-[node name="WatchtowerButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="WatchtowerButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=120214570]
+layout_mode = 2
 text = "Wachturm bauen (30 Holz, 20 Metall)"
 
-[node name="BuildSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="BuildSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1381534980]
+layout_mode = 2
 
-[node name="WorkersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="WorkersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=5452454]
+layout_mode = 2
 
-[node name="UpgradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1346383019]
 visible = false
+layout_mode = 2
 
-[node name="UpgradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=269319454]
 visible = false
+layout_mode = 2
 text = "Ausbauen:"
 
-[node name="UpgradeMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=874561953]
 visible = false
+layout_mode = 2
 text = "Zu Krankenstation ausbauen (25 Ziegel)"
 
-[node name="UpgradeWorkshopButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeWorkshopButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=167815718]
 visible = false
+layout_mode = 2
 text = "Zu Werkstatt ausbauen (25 Metall)"
 
-[node name="UpgradeStorageButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeStorageButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=450030338]
 visible = false
+layout_mode = 2
 text = "Zu Lager ausbauen (30 Holz)"
 
-[node name="UpgradeBedButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="UpgradeBedButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=2051709306]
 visible = false
+layout_mode = 2
 text = "Zu Schlafraum ausbauen (20 Holz)"
 
-[node name="ConstructionSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="ConstructionSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1043822371]
+layout_mode = 2
 
-[node name="ConstructionList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="ConstructionList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1627293625]
+layout_mode = 2
 
-[node name="AdvancedMedicalSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="AdvancedMedicalSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=925067043]
 visible = false
+layout_mode = 2
 
-[node name="AdvancedMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen"]
+[node name="AdvancedMedicalButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Bauen" unique_id=1470104099]
 visible = false
+layout_mode = 2
 text = "Erweiterte Krankenstation erforschen (Buch: Med. Praxis)"
 
-[node name="Herstellen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+[node name="Herstellen" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=120659192]
 visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+metadata/_tab_index = 1
+
+[node name="RecipeList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Herstellen" unique_id=769673224]
+layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="RecipeList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Herstellen"]
-theme_override_constants/separation = 4
-
-[node name="Einheiten" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+[node name="Einheiten" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=2042936497]
 visible = false
+layout_mode = 2
 theme_override_constants/separation = 4
+metadata/_tab_index = 2
 
-[node name="GroupRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="GroupRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=1342701922]
+layout_mode = 2
 
-[node name="SelectGroup1Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+[node name="SelectGroup1Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow" unique_id=1660500199]
+layout_mode = 2
 text = "Gruppe 1"
 
-[node name="SelectGroup2Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+[node name="SelectGroup2Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow" unique_id=1896064568]
+layout_mode = 2
 text = "Gruppe 2"
 
-[node name="SelectGroup3Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow"]
+[node name="SelectGroup3Button" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten/GroupRow" unique_id=755748449]
+layout_mode = 2
 text = "Gruppe 3"
 
-[node name="RecruitPolicyRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="RecruitPolicyRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=568845859]
+layout_mode = 2
 
-[node name="RecruitPolicyLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow"]
-text = "Neue Rekruten:"
+[node name="RecruitPolicyLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow" unique_id=1187373953]
+layout_mode = 2
 theme_override_font_sizes/font_size = 12
+text = "Neue Rekruten:"
 
-[node name="RecruitPolicyOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow"]
+[node name="RecruitPolicyOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Einheiten/RecruitPolicyRow" unique_id=1127977106]
+layout_mode = 2
 
-[node name="ActiveRecruitCallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="ActiveRecruitCallButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=1045882718]
+layout_mode = 2
 text = "Ruf aussenden"
 
-[node name="UnitsList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="UnitsList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=1159311624]
+layout_mode = 2
 
-[node name="RescueSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="RescueSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=39372711]
+layout_mode = 2
 
-[node name="RescueList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten"]
+[node name="RescueList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Einheiten" unique_id=461188905]
+layout_mode = 2
 
-[node name="Trupp" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+[node name="Trupp" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=1452277808]
 visible = false
+layout_mode = 2
 theme_override_constants/separation = 6
+metadata/_tab_index = 3
 
-[node name="StatsLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="StatsLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=1884802687]
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Kein Trupp ausgewählt."
 
-[node name="WeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="WeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=534523241]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="WeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow"]
+[node name="WeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow" unique_id=1871303198]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Waffe: keine"
-custom_minimum_size = Vector2(150, 0)
 
-[node name="WeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow"]
+[node name="WeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/WeaponRow" unique_id=1576470739]
+layout_mode = 2
 text = "Ausrüsten"
 
-[node name="ArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="ArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=950214006]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow"]
+[node name="ArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow" unique_id=1862250848]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Brustpanzer: keine"
-custom_minimum_size = Vector2(150, 0)
 
-[node name="ArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow"]
+[node name="ArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/ArmorRow" unique_id=1744813428]
+layout_mode = 2
 text = "Anziehen"
 
-[node name="HelmetRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="HelmetRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=682501558]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="HelmetStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow"]
+[node name="HelmetStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow" unique_id=460196941]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Helm: keiner"
-custom_minimum_size = Vector2(150, 0)
 
-[node name="HelmetButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow"]
+[node name="HelmetButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/HelmetRow" unique_id=1236024227]
+layout_mode = 2
 text = "Anziehen"
 
-[node name="SecondaryWeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="SecondaryWeaponRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=1612879365]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="SecondaryWeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow"]
+[node name="SecondaryWeaponStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow" unique_id=553184519]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Nahkampfwaffe: keine"
-custom_minimum_size = Vector2(150, 0)
 
-[node name="SecondaryWeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow"]
+[node name="SecondaryWeaponButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/SecondaryWeaponRow" unique_id=1039762901]
+layout_mode = 2
 text = "Ausrüsten"
 
-[node name="LegArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp"]
+[node name="LegArmorRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Trupp" unique_id=129432501]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LegArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow"]
+[node name="LegArmorStatusLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow" unique_id=418917190]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Beinschutz: keiner"
-custom_minimum_size = Vector2(150, 0)
 
-[node name="LegArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow"]
+[node name="LegArmorButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Trupp/LegArmorRow" unique_id=841505776]
+layout_mode = 2
 text = "Anziehen"
 
-[node name="Handel" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer"]
+[node name="Handel" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=586179284]
 visible = false
+layout_mode = 2
 theme_override_constants/separation = 4
+metadata/_tab_index = 4
 
-[node name="PeerLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="PeerLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=377845655]
+layout_mode = 2
 text = "Ziel-Spieler:"
 
-[node name="PeerOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="PeerOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=231411842]
+layout_mode = 2
 
-[node name="GiftSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="GiftSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=2095154306]
+layout_mode = 2
 
-[node name="GiftLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="GiftLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=105244550]
+layout_mode = 2
 text = "Schenken"
 
-[node name="GiftRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="GiftRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=1231176664]
+layout_mode = 2
 
-[node name="GiftResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+[node name="GiftResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow" unique_id=719791358]
 custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
 
-[node name="GiftAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+[node name="GiftAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow" unique_id=281250426]
+layout_mode = 2
 min_value = 1.0
 max_value = 99999.0
 value = 10.0
 
-[node name="GiftButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow"]
+[node name="GiftButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel/GiftRow" unique_id=1698975128]
+layout_mode = 2
 text = "Schenken"
 
-[node name="TradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="TradeSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=853579746]
+layout_mode = 2
 
-[node name="TradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="TradeLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=706865147]
+layout_mode = 2
 text = "Tauschen"
 
-[node name="TradeOfferRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="TradeOfferRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=1698592573]
+layout_mode = 2
 
-[node name="OfferLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+[node name="OfferLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow" unique_id=917287087]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
 text = "Ich gebe:"
-custom_minimum_size = Vector2(60, 0)
 
-[node name="TradeOfferResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+[node name="TradeOfferResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow" unique_id=295942894]
 custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
 
-[node name="TradeOfferAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow"]
+[node name="TradeOfferAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeOfferRow" unique_id=1157312557]
+layout_mode = 2
 min_value = 1.0
 max_value = 99999.0
 value = 10.0
 
-[node name="TradeWantRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="TradeWantRow" type="HBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=1407525114]
+layout_mode = 2
 
-[node name="WantLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+[node name="WantLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow" unique_id=1095405786]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
 text = "Ich will:"
-custom_minimum_size = Vector2(60, 0)
 
-[node name="TradeWantResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+[node name="TradeWantResourceOption" type="OptionButton" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow" unique_id=1862189189]
 custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
 
-[node name="TradeWantAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow"]
+[node name="TradeWantAmountSpinBox" type="SpinBox" parent="MainTabsUI/Panel/TabContainer/Handel/TradeWantRow" unique_id=1952439657]
+layout_mode = 2
 min_value = 1.0
 max_value = 99999.0
 value = 10.0
 
-[node name="TradeOfferButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="TradeOfferButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=936879340]
+layout_mode = 2
 text = "Angebot senden"
 
-[node name="OffersSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="OffersSeparator" type="HSeparator" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=1515231972]
+layout_mode = 2
 
-[node name="OffersLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="OffersLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=1986203638]
+layout_mode = 2
 text = "Angebote"
 
-[node name="OffersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel"]
+[node name="OffersList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Handel" unique_id=2021125266]
+layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="PauseMenu" parent="." instance=ExtResource("5")]
+[node name="Wetter" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=1485473191]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+metadata/_tab_index = 5
 
-[node name="MinimapUI" parent="." instance=ExtResource("6")]
+[node name="WeatherNowLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Wetter" unique_id=913802503]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Jetzt: Klar"
 
-[node name="MapViewUI" parent="." instance=ExtResource("7")]
+[node name="WeatherNextLabel" type="Label" parent="MainTabsUI/Panel/TabContainer/Wetter" unique_id=2068104346]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Nächster Wechsel: —"
 
-[node name="GameOverUI" parent="." instance=ExtResource("9")]
+[node name="Forschung" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=238985950]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+metadata/_tab_index = 6
 
-[node name="WorldSyncOverlay" parent="." instance=ExtResource("10")]
+[node name="ResearchList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Forschung" unique_id=1743704432]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Karte" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=84221213]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+metadata/_tab_index = 7
+
+[node name="OpenMapButton" type="Button" parent="MainTabsUI/Panel/TabContainer/Karte" unique_id=1575655186]
+layout_mode = 2
+text = "Karte öffnen"
+
+[node name="Ereignisse" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer" unique_id=1784056195]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 2
+metadata/_tab_index = 8
+
+[node name="EventList" type="VBoxContainer" parent="MainTabsUI/Panel/TabContainer/Ereignisse" unique_id=1499450756]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="PauseMenu" parent="." unique_id=1151701671 instance=ExtResource("5")]
+
+[node name="InfoBoxUI" type="CanvasLayer" parent="." unique_id=1722590763]
+
+[node name="Panel" type="Panel" parent="InfoBoxUI" unique_id=446755496]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -420.0
+offset_top = -276.0
+offset_right = -16.0
+offset_bottom = -216.0
+
+[node name="Label" type="Label" parent="InfoBoxUI/Panel" unique_id=2136171870]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 4.0
+offset_right = -8.0
+offset_bottom = -4.0
+theme_override_font_sizes/font_size = 14
+text = "—"
+autowrap_mode = 3
+
+[node name="MinimapUI" parent="." unique_id=2134979390 instance=ExtResource("6")]
+
+[node name="MapViewUI" parent="." unique_id=1435514104 instance=ExtResource("7")]
+
+[node name="GameOverUI" parent="." unique_id=1753317988 instance=ExtResource("9")]
+
+[node name="WorldSyncOverlay" parent="." unique_id=988842665 instance=ExtResource("10")]

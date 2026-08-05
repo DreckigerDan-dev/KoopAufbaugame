@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scenes/entities/base/MedicalStation.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_medicalstation"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(6, 4, 5)
 
 [sub_resource type="StandardMaterial3D" id="Material_medicalstation"]
 albedo_color = Color(0.85, 0.85, 0.85, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_medicalstation"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(6, 4, 5)
 
 [node name="MedicalStation" type="StaticBody3D" groups=["medical_station"]]
 script = ExtResource("1")

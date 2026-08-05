@@ -14,11 +14,20 @@ const GATE_MAX_HP := 100
 @export var is_gate: bool = false
 var wall_id: int = 0
 var owner_peer_id: int = 1
-var hp: int = 0
+# -1 = noch nicht gesetzt (Sentinel, siehe _ready()) — ein echter,
+# persistierter hp-Wert ist nie negativ (bei 0 wird die Mauer sofort
+# über _die() entfernt, siehe take_damage()), daher als Marker sicher.
+var hp: int = -1
 
 
 func _ready() -> void:
-	hp = GATE_MAX_HP if is_gate else WALL_MAX_HP
+	# Catch-up (World._catch_up_wall()) und Spielstand-Laden
+	# (World._load_game_state(), Systematik-Review 2026-08-04) setzen hp
+	# schon VOR dem Hinzufügen zum Baum (also vor _ready()) — nur ohne
+	# vorherigen Override den Default anwenden, sonst würde jeder
+	# wiederhergestellte Beschädigungszustand hier sofort überschrieben.
+	if hp < 0:
+		hp = GATE_MAX_HP if is_gate else WALL_MAX_HP
 	_update_color()
 
 

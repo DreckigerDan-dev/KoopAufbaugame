@@ -62,7 +62,14 @@ Klickposition (`camera.project_ray_origin`/`project_ray_normal`,
 1. **Baumodus aktiv** → Bauversuch statt Auswahl (siehe
    [`docs/building.md`](building.md)), Baumodus hat Vorrang vor allem
    anderen.
-2. **Treffer in `"selectable"`** (eigene oder fremde Einheit/Fahrzeug):
+2. **Noch keine eigene Home-Base** (`_find_own_home_base() == null`) →
+   Start-Basis-Wahl ersetzt die komplette restliche Logik: Klick auf ein
+   `"searchable"`-Gebäude löst `request_choose_start_base()` aus statt
+   Suchen/Claimen (siehe [`docs/zones.md`](zones.md), "Start-Basis
+   wählen"), jeder andere Klick tut nichts. Nur relevant, solange der
+   Peer noch keine Basis gewählt hat — danach entfällt dieser Branch
+   dauerhaft.
+3. **Treffer in `"selectable"`** (eigene oder fremde Einheit/Fahrzeug):
    - **Eigene Einheit** → Toggle in `selected` (ohne Shift: Auswahl
      ersetzt, mit Shift: An-/Abwählen einzelner Einheiten).
    - **Fremdes, unbesetztes Fahrzeug** (`owner_peer_id == 0`) mit aktiver
@@ -72,14 +79,14 @@ Klickposition (`camera.project_ray_origin`/`project_ray_normal`,
      **optimistisch** schon auf das Fahrzeug um (`selected = [hit]`),
      noch bevor der Trupp tatsächlich angekommen ist — sonst bliebe bis
      dahin der (nach dem Einsteigen unsichtbare) Trupp ausgewählt.
-3. **Treffer in `"searchable"`** (Gebäude) mit aktiver Auswahl → Suchen
+4. **Treffer in `"searchable"`** (Gebäude) mit aktiver Auswahl → Suchen
    oder Claimen, siehe [`docs/scavenging.md`](scavenging.md)/
    [`docs/zones.md`](zones.md).
-4. **Sonstiger Boden-Treffer** mit aktiver Auswahl → `order_move()` an
+5. **Sonstiger Boden-Treffer** mit aktiver Auswahl → `order_move()` an
    alle ausgewählten Einheiten, mit `_formation_offset()` versetzt (siehe
    unten). Shift+Klick (`additive`) hängt den Wegpunkt hinten an, statt
    die Schlange zu ersetzen.
-5. **Kein Treffer / nichts auswählbar** → `selected.clear()`.
+6. **Kein Treffer / nichts auswählbar** → `selected.clear()`.
 
 Gemeinsame Ziel-Y-Höhe für alle Bewegungs-/Such-/Claim-Ziele:
 `SURVIVOR_GROUND_Y := 0.85` (feste Konstante statt vom Raycast-Treffpunkt

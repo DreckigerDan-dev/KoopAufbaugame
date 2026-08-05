@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scenes/entities/base/Outpost.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_outpost"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(3, 3, 3)
 
 [sub_resource type="StandardMaterial3D" id="Material_outpost"]
 albedo_color = Color(0.5, 0.42, 0.3, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_outpost"]
-size = Vector3(1.5, 1.5, 1.5)
+size = Vector3(3, 3, 3)
 
 [node name="Outpost" type="StaticBody3D" groups=["outpost"]]
 script = ExtResource("1")

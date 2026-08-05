@@ -221,9 +221,31 @@ zuerst nachschauen, bevor mit einem Punkt begonnen wird.
 - Automatische Multi-Ziel-Pfadfindung beim Plündern (ein Befehl, mehrere
   Ziele nacheinander).
 
+**Karte/Welt (2026-08-05, nach Recherche-Session zu Performance/OSM):**
+- Zonen-/Chunk-Streaming: Welt wird nicht mehr komplett vorab generiert UND
+  komplett an jeden Peer gesynkt, sondern nach Spielernähe geladen/entladen
+  (gleiches Distanzprinzip wie das bestehende `_despawn_far_zombies()`, nur
+  zusätzlich für Gebäude/Ressourcen). Löst den aktuellen Gebäude-Deckel
+  (`BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE`, siehe `docs/status.md`) UND
+  macht Netzwerk-Catch-up bei vielen Peers/spätem Beitritt robuster.
+  **Voraussetzung für den nächsten Punkt.**
+- Echte Kartendaten via OpenStreetMap als ZWEITER Weltgenerierungs-Modus,
+  wählbar in der Lobby (Zufalls-Sandbox bleibt Standard-Modus, kein
+  Ersatz) — Overpass-API liefert Straßen/Gebäude-Umrisse/Tags für einen
+  beliebigen Ort; daraus entstehen dieselben Building-Nodes wie im
+  Zufallsmodus (Loot/Kampf/Claiming/Netzwerk-Code bleibt identisch, nur
+  die Positions-/Typ-Quelle unterscheidet sich). Braucht: Overpass-Abfrage
+  + Parsing, Lat/Lon-Projektion, Gebäude-Umriss auf Bounding-Box
+  vereinfacht, OSM-Tag→`BUILDING_TYPES`-Mapping, UND eine Lösung für
+  unregelmäßige echte Straßen (aktuelles Kachel-Raster ist fest an
+  prozedural erzeugte Blöcke gebunden, siehe `_generate_street_slots()`/
+  `find_vehicle_path()`). Größenordnung vergleichbar mit der
+  ursprünglichen Kartenplanungs-Session. **Erst nach dem Zonen-Streaming
+  oben**, sonst trifft ein reales Straßenviertel dieselbe Performance-Wand.
+  Reverts die frühere "geprüft und verworfen"-Entscheidung unten (bewusste
+  Kurskorrektur, 2026-08-05: als ZUSATZ-Modus statt Ersatz sinnvoll).
+
 **Bewusst NICHT auf dieser Liste (geprüft und verworfen):**
-- Echtes-Orte-Karten via OpenStreetMap — widerspricht KoopGames
-  prozeduraler Fiktiv-Stadt-Generierung, kein sinnvoller Umbau.
 - Story-Modus/Kapitel/Sieg-Bedingung — laut Nutzer explizit nie gewünscht
   (siehe `koopgame_mechanics_review_findings`-Memory), bewusste Abweichung.
 - KI-generierte Survivor-Portraits — KoopGame baut Assets bewusst von Hand

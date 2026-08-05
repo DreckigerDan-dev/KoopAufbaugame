@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scenes/entities/base/Storage.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_storage"]
-size = Vector3(1.6, 1.6, 1.6)
+size = Vector3(4, 3, 4)
 
 [sub_resource type="StandardMaterial3D" id="Material_storage"]
 albedo_color = Color(0.55, 0.45, 0.25, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_storage"]
-size = Vector3(1.6, 1.6, 1.6)
+size = Vector3(4, 3, 4)
 
 [node name="Storage" type="StaticBody3D" groups=["storage"]]
 script = ExtResource("1")

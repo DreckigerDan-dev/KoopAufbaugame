@@ -11,6 +11,16 @@ const ARRIVE_THRESHOLD := 0.05
 # "Lauter als ein Trupp" (siehe ARCHITECTURE.md, Ideen-Backlog) — reines
 # Fahren (ohne Kampf) lockt Zombies an, nicht erst bei Kontakt.
 const NOISE_INTERVAL := 2.0
+# Treibstoff: Auftanken in Reichweite der eigenen Home-Base, gleiches
+# Intervall-Muster wie Survivor._handle_eating() (EAT_INTERVAL/EAT_AMOUNT)
+# statt eines kontinuierlichen Verbrauchs der Ressource "fuel" — Home-Base-
+# Ressourcen sind überall sonst diskrete Ganzzahlen (siehe
+# RESOURCE_DISPLAY_NAMES), kein Bruchteils-Verbrauch. REFUEL_RADIUS größer
+# als Survivor.HEAL_RADIUS (3.0), weil Fahrzeuge größer sind und nicht
+# exakt auf der Home-Base-Position parken müssen.
+const REFUEL_RADIUS := 6.0
+const REFUEL_INTERVAL := 2.0
+const REFUEL_AMOUNT := 20.0
 # Physik-Ebene 2 = Mauern/Tore (siehe scenes/entities/wall/Wall.tscn,
 # `collision_layer = 2`) — bewusst dupliziert aus Survivor.gd/Zombie.gd
 # statt geteilt, gleiches Muster wie schon bei _alert_nearby_zombies()
@@ -36,18 +46,29 @@ const OBSTACLE_LAYER := 2
 # `seats` (Nutzerwunsch 2026-08-03, "autos mehr läute rein passen"): Sitze
 # GESAMT inklusive Fahrer — Motorrad bleibt bewusst bei 1 (kein Soziussitz-
 # Konzept), Auto/LKW bekommen Platz für Mitfahrer, siehe enter()/passengers.
+# Treibstoff (siehe docs/vehicle.md, "Treibstoff") — fuel_capacity/
+# fuel_consumption_per_meter grob so gewählt, dass eine volle Tankfüllung
+# für mehrere Stadt-Zonen-Sprünge reicht (Map 5000×5000, Zonen-Radius
+# 150-260, siehe World.MAP_SIZE/CITY_ZONE_RADIUS_*), ohne dass Auftanken zur
+# Pflicht nach jeder kurzen Fahrt wird — Reichweite grob 3500-4000m pro
+# Typ, noch nicht im Spiel gegengetestet, bei Bedarf anpassen. LKW
+# verbraucht pro Meter am meisten (schwerstes Fahrzeug), Motorrad am
+# wenigsten (leichtestes).
 const VEHICLE_STATS := {
 	"car": {
 		"max_hp": 200, "move_speed": 8.0, "noise_radius": 10.0,
 		"size": Vector3(1.6, 1.2, 3.2), "color": Color(0.25, 0.3, 0.7), "seats": 3,
+		"fuel_capacity": 100.0, "fuel_consumption_per_meter": 0.025,
 	},
 	"motorcycle": {
 		"max_hp": 80, "move_speed": 13.0, "noise_radius": 7.0,
 		"size": Vector3(0.8, 1.0, 2.0), "color": Color(0.55, 0.4, 0.08), "seats": 1,
+		"fuel_capacity": 50.0, "fuel_consumption_per_meter": 0.015,
 	},
 	"truck": {
 		"max_hp": 320, "move_speed": 6.0, "noise_radius": 15.0,
 		"size": Vector3(2.0, 1.6, 4.2), "color": Color(0.2, 0.42, 0.22), "seats": 5,
+		"fuel_capacity": 150.0, "fuel_consumption_per_meter": 0.04,
 	},
 }
 
@@ -68,13 +89,24 @@ var driver: Node3D = null  # nur host-seitig aussagekräftig, siehe _sync_owner(
 # ohnehin unsichtbar/nicht auswählbar, solange er drinsitzt, siehe
 # Survivor._board()). Nur host-seitig aussagekräftig, wie driver.
 var passengers: Array = []
+# Treibstoff (siehe docs/vehicle.md, "Treibstoff") — öffentlich, damit
+# World._update_hud() den aktuellen Stand anzeigen kann (gleiches Muster
+# wie Survivor.carried_loot). Speicherstand-/Catch-up-fähig wie hp.
+var fuel: float = 0.0
 
 var _max_hp: int = 0
 var _move_speed: float = 0.0
 var _noise_radius: float = 0.0
+var _fuel_capacity: float = 0.0
+var _fuel_consumption_per_meter: float = 0.0
+# Einmaliges Status-Feedback statt Dauer-Spam (siehe _handle_movement()) —
+# zurückgesetzt, sobald wieder genug Treibstoff da ist (siehe
+# _handle_refuel()).
+var _out_of_fuel_reported: bool = false
 
 var _waypoints: Array = []
 var _noise_timer: float = 0.0
+var _refuel_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -82,7 +114,13 @@ func _ready() -> void:
 	_max_hp = stats["max_hp"]
 	_move_speed = stats["move_speed"]
 	_noise_radius = stats["noise_radius"]
+	_fuel_capacity = stats["fuel_capacity"]
+	_fuel_consumption_per_meter = stats["fuel_consumption_per_meter"]
 	hp = _max_hp
+	# Startet vollgetankt (frisch generiertes Fahrzeug) — World._create_vehicle()
+	# überschreibt das für Speicherstand/Catch-up danach mit dem tatsächlichen
+	# Wert, exakt gleiches Timing-Prinzip wie hp (siehe dortiger Kommentar).
+	fuel = _fuel_capacity
 	# Mesh/Collision sind SubResources aus der .tscn, standardmäßig über
 	# ALLE Instanzen der Szene geteilt — duplicate() nötig, sonst würde das
 	# Resize der ersten Instanz jedes andere Fahrzeug gleich mit verzerren.
@@ -108,11 +146,16 @@ func _process(delta: float) -> void:
 		return
 	_handle_movement(delta)
 	_handle_noise(delta)
-	_sync_state.rpc(position, hp)
+	_handle_refuel(delta)
+	_sync_state.rpc(position, hp, fuel)
 
 
 func is_idle() -> bool:
 	return _waypoints.is_empty()
+
+
+func fuel_capacity() -> float:
+	return _fuel_capacity
 
 
 func seat_count() -> int:
@@ -136,15 +179,54 @@ func is_occupied() -> bool:
 func _handle_movement(delta: float) -> void:
 	if _waypoints.is_empty():
 		return
+	if fuel <= 0.0:
+		# Kein Treibstoff mehr — Fahrzeug bleibt stehen, bis es (in Reichweite
+		# der eigenen Home-Base, siehe _handle_refuel()) wieder aufgetankt
+		# wurde. Einmaliges Feedback statt Dauer-Spam (siehe
+		# _out_of_fuel_reported).
+		if not _out_of_fuel_reported:
+			_out_of_fuel_reported = true
+			get_tree().current_scene.report_status(owner_peer_id, "Fahrzeug hat keinen Treibstoff mehr.")
+		return
 	var target: Vector3 = _waypoints[0]
 	var next_position := position.move_toward(target, _move_speed * delta)
 	if _is_path_blocked(next_position):
 		# Mauer/fremdes Tor im Weg — Fahrzeug bleibt stehen, kein
 		# Durchbrechen wie beim Zombie, kein Ausweichen (siehe docs/walls.md).
 		return
+	var distance_moved: float = position.distance_to(next_position)
 	position = next_position
+	fuel = max(fuel - distance_moved * _fuel_consumption_per_meter, 0.0)
 	if position.distance_to(target) < ARRIVE_THRESHOLD:
 		_waypoints.pop_front()
+
+
+func _find_home_base() -> Node3D:
+	# Dupliziert Survivor._find_home_base() bewusst statt geteilt (siehe
+	# docs/building.md, "Bewusst dupliziert statt geteilt").
+	for base in get_tree().get_nodes_in_group("home_base"):
+		if base.owner_peer_id == owner_peer_id:
+			return base
+	return null
+
+
+func _handle_refuel(delta: float) -> void:
+	# Analog Survivor._handle_eating() (siehe docs/survivor.md, "Hunger") —
+	# gleiches Intervall-Muster statt kontinuierlichem Bruchteils-Verbrauch
+	# der Ressource "fuel".
+	if fuel >= _fuel_capacity:
+		return
+	var base := _find_home_base()
+	if base == null or global_position.distance_to(base.global_position) > REFUEL_RADIUS:
+		return
+	if base.resources.get("fuel", 0) <= 0:
+		return
+	_refuel_timer += delta
+	if _refuel_timer >= REFUEL_INTERVAL:
+		_refuel_timer -= REFUEL_INTERVAL
+		base.add_resources.rpc({"fuel": -1})
+		fuel = min(fuel + REFUEL_AMOUNT, _fuel_capacity)
+		_out_of_fuel_reported = false
 
 
 func _is_path_blocked(next_position: Vector3) -> bool:
@@ -159,7 +241,14 @@ func _is_path_blocked(next_position: Vector3) -> bool:
 
 
 func _handle_noise(delta: float) -> void:
-	if _waypoints.is_empty():
+	# fuel <= 0.0 (2026-08-04, Systematik-Review) — ein leerer Tank lässt
+	# _waypoints bewusst gefüllt (siehe _handle_movement()), damit das
+	# Fahrzeug automatisch weiterfährt, sobald wieder Treibstoff da ist. Ohne
+	# diese Prüfung hier hätte ein liegengebliebenes, komplett stehendes
+	# Fahrzeug trotzdem weiter "Motorlärm" gemacht und Zombies angelockt —
+	# anders als der Fall "an einer Mauer blockiert" (da läuft der Motor
+	# tatsächlich noch, bewusst weiterhin laut).
+	if _waypoints.is_empty() or fuel <= 0.0:
 		_noise_timer = 0.0
 		return
 	_noise_timer += delta
@@ -284,9 +373,10 @@ func _sync_owner(new_owner_peer_id: int) -> void:
 
 
 @rpc("authority", "call_local", "unreliable_ordered")
-func _sync_state(new_position: Vector3, new_hp: int) -> void:
+func _sync_state(new_position: Vector3, new_hp: int, new_fuel: float) -> void:
 	position = new_position
 	hp = new_hp
+	fuel = new_fuel
 	_update_color()
 
 

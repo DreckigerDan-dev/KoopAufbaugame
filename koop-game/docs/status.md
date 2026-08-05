@@ -1,3 +1,652 @@
+## AKTUELL OFFEN: UI-Redesign Runde 4 — neues Layout, noch nicht getestet (2026-08-05)
+
+**Für die nächste Session, falls der Chat geleert wurde:** Statt den
+leeren Diagnose-Minimalstand aus der vorherigen Runde (siehe Eintrag
+direkt unten) erst wiederherzustellen und dann nochmal umzubauen, kam der
+Nutzerwunsch nach einem neuen Layout ("oben mittig ein kleiner Balken,
+links ein paar Tabs von oben nach unten", angelehnt an IFZ) — beides in
+einem Schritt erledigt.
+
+**Neue Struktur:**
+- `$TopBarUI/Panel`: schmal, horizontal zentriert (statt voller Breite),
+  enthält nur noch Kalender/Uhr/Zeitraffer/Pause (`HBoxContainer` direkt
+  mit den vier Elementen, keine `TimeBox`-Zwischenebene mehr).
+- **Neu:** `$TabColumnUI/Panel` — eigene linke Spalte (x=8–60, oben bei
+  y=60 bis unten y=-8), `VBoxContainer` mit den 9 Tab-Buttons
+  (Wetter/Forschung/Herstellen/Bauen/Einheiten/Trupp/Karte/Ereignisse/
+  Handel), von oben nach unten statt der vorherigen horizontalen
+  `TabButtonsRow`. Gleiche `_on_tab_button_pressed()`-Logik in
+  `World.gd`, nur die Pfade zeigen jetzt hierhin.
+- `$MainTabsUI/Panel` (Overlay-Inhalt): Position von x=16–456 auf
+  x=68–456 verschoben, damit es neben der neuen linken Spalte aufklappt
+  statt sie zu überdecken.
+- `World.gd`: alle betroffenen `@onready var`s zeigen jetzt auf die neuen
+  Pfade. `get_node_or_null()` + `if`-Guards bewusst BEIBEHALTEN (nicht
+  zurück auf strikte `$Pfad`e) — der genaue Auslöser des ursprünglichen
+  Absturzes wurde nie zweifelsfrei bestätigt, der leere Minimalstand kam
+  nie zum tatsächlichen Testen (siehe Eintrag unten). Sicherheitsnetz
+  bleibt also vorerst drin, kann nach einem bestätigt erfolgreichen Test
+  zurückgebaut werden.
+
+**Nutzer sollte als Nächstes testen:** Lädt `World.tscn` jetzt ohne
+Absturz? Falls ja: sieht das neue Layout wie erwartet aus (schmaler
+Balken oben mittig, Tab-Spalte links, Overlay klappt daneben auf, kein
+Überlappen mit dem Ressourcen-Panel oben rechts)? Falls der Absturz
+IMMER NOCH auftritt, lag die Ursache nie in `TopBarUI` selbst (siehe
+"Falls der Minimalstand IMMER NOCH abstürzt" im Eintrag direkt unten für
+die nächsten Verdächtigen).
+
+**Zweiter Nachtrag — eigentliche Ursache gefunden (2026-08-05):** Die
+Godot-Log-Datei (`%APPDATA%/Godot/app_userdata/KoopGame/logs/godot.log`,
+lässt sich direkt einsehen statt auf Screenshots angewiesen zu sein!)
+zeigte: ALLE per Texteditor neu eingefügten Knoten (nicht nur die
+`VBoxContainer`-Umbenennung von eben) hatten "vanished parent". Nutzer
+hat `World.tscn` daraufhin im Godot-Editor selbst geöffnet und mit
+Strg+S gespeichert — dabei hat Godot die komplette Datei ins neue
+Format migriert (`unique_id=`-Attribut pro Node, `uid=` bei
+Ressourcen, `load_steps` entfällt). Diagnose danach: meine per Hand
+eingefügten `Panel`-Nodes (unter `TopBarUI`/`TabColumnUI`) waren dabei
+tatsächlich verloren gegangen — Godot hat ihre Kind-Knoten als
+Rettungsmaßnahme direkt an die Wurzel gehängt, mit kryptischen Namen wie
+`TopBarUI_Panel#HBoxContainer`. **Ursache: von außen eingefügte Nodes
+ohne `unique_id`-Attribut werden von dieser Godot-Version offenbar nicht
+zuverlässig verarbeitet.** Fix: komplette `TopBarUI`/`TabColumnUI`-Struktur
+neu aufgebaut, diesmal mit eigenen `unique_id`-Werten UND `layout_mode`
+(Godot setzt das automatisch auf Kind-Controls von Containern — hatte in
+der vorherigen Fassung gefehlt, wahrscheinlich Teil desselben Problems).
+**Wichtige Lektion fürs weitere Vorgehen:** Sobald `World.tscn` im
+Editor offen ist, gehen externe Datei-Änderungen (auch von mir) beim
+nächsten Editor-Speichern verloren, wenn die Datei zwischenzeitlich nicht
+neu geöffnet wurde — ist genau so passiert (`visible = false` bei
+`InfoBoxUI/Panel` ging beim Speichern wieder verloren, musste ein
+zweites Mal gesetzt werden). Am saubersten: Datei nach jeder Session-
+Änderung von mir im Editor neu öffnen (oder Editor kurz schließen/neu
+starten), bevor im Editor gespeichert wird. **Noch nicht erneut
+getestet.**
+
+**Nachtrag — echter Fehler gefunden (2026-08-05):** Godot-Ausgabe zeigte
+`Parent path './TabColumnUI/Panel/VBoxContainer' for node 'X' has
+vanished when instantiating` für mehrere Tab-Buttons. Ursache: der Name
+"VBoxContainer" wurde doppelt im Baum vergeben (schon vorher bei
+`ResourcesUI/Panel/VBoxContainer`, jetzt zusätzlich neu bei
+`TabColumnUI/Panel`) — Godots Pfadauflösung kam damit offenbar
+durcheinander, obwohl beide unter verschiedenen Eltern liegen. Zum
+Vergleich: das neue `TopBarUI/Panel/HBoxContainer` (einziges seiner Art
+im Baum) hatte laut Fehlerausgabe keine Probleme — stützt die Diagnose.
+Fix: `TabColumnUI/Panel/VBoxContainer` in `TabButtonList` umbenannt
+(Node in `World.tscn` + alle neun `@onready`-Pfade in `World.gd`).
+**Noch nicht erneut getestet.**
+
+**Bekannter, bewusst nicht behobener Nebenpunkt:** `HUD/InfoPanel`,
+`HUD/Label` (Auswahl-Info) und `HUD/StatusLabel` stehen weiterhin bei
+x=352+ (aus einer älteren Runde, als die linke Spalte noch bis x=336
+ging) — überlappen sich jetzt teilweise mit dem aufgeklappten
+`MainTabsUI/Panel`-Overlay (endet bei x=456). Bestand schon vor dieser
+Runde in ähnlicher Form (keine neue Regression), aber jetzt sichtbarer,
+weil die Tab-Spalte selbst viel schmaler geworden ist. Bei Bedarf im
+nächsten Schritt mit nachjustieren.
+
+---
+
+## VORHERIGE RUNDE: UI-Redesign-Absturz, mitten in der Diagnose (2026-08-05)
+
+**Für die nächste Session, falls der Chat geleert wurde — hier steht,
+woran wir hängen:**
+
+Großes UI-Redesign (obere Leiste mit Kalender/Zeit-Steuerung + 9 Tabs
+als IFZ-Stil-Overlay, siehe die mehreren "UI-Redesign"-Einträge weiter
+unten in dieser Datei für die volle Historie) lädt seit der `TopBarUI`-
+Einführung nicht mehr — `World.tscn` stürzt beim Start ab
+("Invalid assignment of property or key 'visible' ... on a base object
+of type 'null instance'" bei `speed_row.visible = ...`, 48-49 Fehler
+insgesamt). Zwei Reparatur-Versuche (Theme-Sub-Resource entfernt) haben
+NICHT geholfen — der Fehler bleibt exakt gleich. Statische Prüfung
+(Eltern-Ketten/Duplikate/Resource-Referenzen per Skript über die ganze
+`.tscn`) findet keine strukturelle Ursache. **Ohne laufenden Godot-
+Editor in dieser Entwicklungsumgebung lässt sich das nicht selbst
+nachstellen/debuggen.**
+
+**Aktueller Zwischenstand (zuletzt umgesetzter Schritt):** `TopBarUI/
+Panel` in `World.tscn` komplett leer geräumt (nur die Panel-Hülle ohne
+Kinder), alle zugehörigen `@onready var`s in `World.gd` (day_label,
+clock_label, speed_row, speed_1x/2x/3x_button, pause_button,
+weather_tab_button, research_tab_button, crafting_tab_button,
+build_tab_button, units_tab_button, unit_detail_tab_button,
+map_tab_button, event_tab_button, trade_tab_button) auf
+`get_node_or_null()` umgestellt, jede Verwendungsstelle mit `if`-Guards
+abgesichert (`_ready()`, `_update_clock_label()`,
+`_update_speed_buttons()`, `_refresh_crafting_ui()`,
+`_update_unit_detail_panel()`). **Nutzer sollte als Nächstes genau
+DIESEN Minimalstand testen** (Absturz weg oder nicht?) — Ergebnis stand
+beim Schreiben dieses Eintrags noch aus.
+
+**Falls der Minimalstand LÄDT:** schrittweise wieder Kinder in
+`TopBarUI/Panel` einfügen (zuerst nur die leere `HBoxContainer`, dann
+`TimeBox` mit den Labels, dann `SpeedRow`, dann `TabButtonsRow` mit den
+9 Buttons), nach JEDEM Schritt neu testen lassen, bis der genaue
+Baustein gefunden ist, der abstürzt — dann NUR den anders lösen (z. B.
+ohne `layout_mode`, oder mit absoluter Positionierung statt
+HBoxContainer, siehe Verdachtsliste unten).
+
+**Falls der Minimalstand IMMER NOCH abstürzt:** Ursache liegt NICHT in
+`TopBarUI` selbst, sondern irgendwo anders in den heutigen Änderungen
+(z. B. `ResourcesUI`-Verschiebung, `InfoBoxUI`, `MainTabsUI`-Overlay-
+Umbau, oder eine der `World.gd`-Änderungen wie `_on_tab_button_pressed()`/
+`_tab_buttons`-Arrays) — als Nächstes DIESE Bereiche genauso isolieren.
+
+**Bereits ausgeschlossene Verdächtige:** gemeinsames `Theme`-Sub-Resource
+(entfernt, Fehler blieb), doppelte Node-Namen (keine gefunden), fehlende
+Sub-/Ext-Resource-Referenzen (keine gefunden), gebrochene Eltern-Ketten
+in der `.tscn`-Textstruktur (alle Pfade lösen textuell korrekt auf).
+
+**Noch nicht behoben, aber niedrige Priorität:** die vielen "UI-Redesign"-
+Einträge unten in dieser Datei liegen aus Versehen NICHT chronologisch
+ganz oben (Anker-Punkt beim Einfügen war nicht mehr aktuell) — rein
+kosmetisches Ordnungsproblem in dieser Doku-Datei selbst, keine
+Auswirkung aufs Spiel.
+
+## Grüner Boden flackert (Z-Fighting) behoben (2026-08-04)
+
+Nutzer-Report nach dem SSAO/Grime-Test: "der grüne Boden flakert das
+asset muss man vielleicht ganz minimal hochsetzen". Ursache: Die
+`Ground`-Box-Oberkante (`size.y/2 = 0.1`) lag HÖHER als
+`$StreetGridMap.position.y` (`-0.1`) — Boden-Box und Straßen-/Gras-
+Kachel-Geometrie überschnitten sich knapp in der Tiefe, SSAO macht so
+etwas als sichtbares Flackern erkennbar (vorher unauffällig ohne SSAO).
+Fix: `Ground`-Node auf `position.y = -0.3` gesetzt statt die Straßen-
+Assets selbst zu verschieben (isolierter, unkritischer Fix — nur die
+Boden-Box bewegt sich, keine andere Systemlogik hängt an ihrer exakten
+Position, nur an ihrer über `MAP_SIZE` gesetzten Größe).
+
+**Nachtrag — Fix reichte nicht:** Nutzer bestätigt "flackert nur in der
+Nähe von Straßen/Kacheln" — das ist NICHT die Ground-Box gegen
+StreetGridMap, sondern vermutlich ein winziger Höhen-Mismatch zwischen
+einzelnen Straßen-Kachel-Assets selbst (Asphalt- vs. Gras-Kachel,
+sub-mm-Ungenauigkeit aus dem Blender-Export) — kann ohne Editor-Zugriff
+nicht exakt vermessen werden. Pragmatische Abmilderung statt Geometrie-
+Fix: SSAO deutlich sanfter (`ssao_intensity` 2.5→1.0, `ssao_power`
+1.8→1.0, `ssao_radius` 1.5→1.0, neu `ssao_sharpness` 0.5 für mehr
+Weichzeichnung), damit es solche Mini-Überschneidungen nicht mehr so
+hart als Flackern zeigt. Kein garantierter Fix, nur eine Abmilderung —
+laut Nutzer immer noch da.
+
+**Zweiter Nachtrag — Screenshot zeigt fleckige/facettierte Grasfläche**
+(`bilder/fehler in grünen feld.PNG`): sichtbare gerade Kanten zwischen
+einzelnen Gras-Kacheln, typisches Muster für SSAO-Verschattung an
+Kachel-Rändern (jede Kachel wird einzeln verschattet statt als
+zusammenhängende Fläche). `ssao_enabled` komplett auf `false` gesetzt zum Test — **Nutzer
+bestätigt: flackert trotzdem**, also unabhängig von SSAO. Damit war die
+Ursache nie SSAO selbst, sondern echte Geometrie-Überschneidung
+zwischen einzelnen Gras-Kacheln (Blender-Export-Ungenauigkeit an den
+Kachel-Rändern, ohne Editor-Zugriff nicht exakt vermessbar).
+
+**Pragmatischer Fix (Nutzerwunsch "kann man das Feld vorerst raus
+nehmen"):** `_build_zone_street_tiles()` platziert die separate
+"grass"-GridMap-Kachel-Ebene in Stadt-Zonen jetzt gar nicht mehr — die
+ohnehin grüne `Ground`-Box scheint stattdessen einfach durch.
+`_place_grid_tile()` war schon defensiv für ein fehlendes "grass"-Item
+ausgelegt, das Weglassen bricht nichts. Straßen-Kacheln (Asphalt)
+selbst sind unverändert. SSAO wieder auf die ursprünglichen, kräftigeren
+Werte zurückgesetzt (Grund für die Abschwächung ist mit den
+Gras-Kacheln entfallen). Noch nicht vom Nutzer im Spiel gesichtet.
+
+## Gebäudezahl moderat angehoben (2026-08-04)
+
+Nutzerwunsch "paar mehr Gebäude zum Testen" nach dem Größen-Vorziehen.
+`BUILDINGS_PER_LARGE_ZONE`/`_SMALL_ZONE` 100/50 → 130/65 (Summe 350→455).
+Die ursprüngliche Rücknahme auf 100/50 war wegen eines strukturellen
+Netzwerk-Absturzes bei 1750 Gebäuden — der ist seitdem unabhängig von der
+Gebäudezahl behoben (siehe `networking.md`, Bündel-RPCs +
+`_create_building_local()`), 455 bleibt weit darunter. Faustregel aus
+`networking.md` sagt, jede Erhöhung nochmal echt zu zweit/mehreren zu
+testen — passiert mit dem geplanten Freundes-Test ohnehin.
+
+## Platzhalter-Boxen auf echte Zielmaße vorgezogen (2026-08-04)
+
+Nutzerwunsch, um schon jetzt mit Freunden testen zu können, während
+weiter an echten Blender-Assets gearbeitet wird — zehn Loot-Gebäude
++ vier Ausbauten + Außenposten von winzigen Platzhaltern (~1,5-3m) auf
+die echten Checklisten-Zielmaße (bis zu 14m) vergrößert. Dabei einen
+echten Bug gefunden+behoben: die vier Ausbauten (Krankenstation/
+Werkstatt/Lager/Bett) übernahmen bisher die Y-Position des vorherigen,
+geplünderten Gebäudes 1:1 — bei größeren Gebäuden/Strukturen wäre das
+sichtbar daneben gewesen, jetzt eigene Boden-Y-Konstanten pro Typ.
+Details in [`building.md`](building.md), "Platzhalter-Boxen auf echte
+Zielmaße vorgezogen". Noch nicht vom Nutzer im Spiel gesichtet.
+
+## UI-Redesign: Absturz-Diagnose per Rückbau (2026-08-05)
+
+Theme-Entfernung hat den Absturz NICHT behoben (Nutzer bestätigt, gleicher
+Fehler nach Neustart). Statische Prüfung (Eltern-Ketten-Check, Duplikat-
+Check, Resource-Referenz-Check per Python-Skript über die ganze
+`World.tscn`) findet keine strukturelle Ursache. Da kein Godot-Editor in
+dieser Entwicklungsumgebung verfügbar ist (kann nicht selbst starten/
+testen), jetzt methodisches Eingrenzen statt weiterem Raten: `TopBarUI/
+Panel` komplett leer geräumt (nur die Panel-Hülle bleibt), alle
+betroffenen `@onready var`s auf `get_node_or_null()` umgestellt (liefert
+`null` statt Ladefehler) und jede Verwendungsstelle in `World.gd` mit
+`if`-Guards abgesichert (`_ready()`, `_update_clock_label()`,
+`_update_speed_buttons()`, `_refresh_crafting_ui()`,
+`_update_unit_detail_panel()`). Sobald DIESE Minimalversion lädt, kommt
+der Leisten-Inhalt schrittweise zurück, bis der genaue Baustein
+gefunden ist, der abstürzt.
+
+## UI-Redesign: Ladefehler durch geteiltes Theme behoben (2026-08-05)
+
+Nutzer-Report: World lud nicht mehr, `speed_row.visible = ...` schlug mit
+"null instance" fehl, 48 Fehler insgesamt, Ausgabe-Panel aber leer (kein
+Parse-Fehler). Ursache vermutlich das neu eingeführte, gemeinsame
+`Theme`-Sub-Resource (`Theme_compact_tabs`, `default_font_size = 13`),
+angewendet auf drei Panels (`TopBarUI`/`MainTabsUI`/`ResourcesUI`) —
+einzige wirklich neue, in diesem Projekt bisher ungetestete .tscn-
+Technik dieser Runde, alles andere folgt bewährten Mustern. Komplett
+entfernt (Deklaration + alle drei Anwendungsstellen). Kompaktere Schrift
+bleibt dort erhalten, wo sie schon einzeln pro Label gesetzt war
+(Wetter/Forschung/Event-Log/Ressourcen), nur die Tab-Buttons ohne
+eigene Font-Size-Override sind wieder auf Godot-Standardgröße (16) —
+unkritisch, da das Overlay jetzt nicht mehr dauerhaft mit anderen
+Panels um Platz konkurriert.
+
+## UI-Redesign: IFZ-Stil-Overlay statt dauerhafter Fläche (2026-08-05)
+
+Nutzer verwies auf `bilder/ui.PNG` (Infection Free Zone) — dort sind die
+Tab-Icons oben links kompakt in der Ecke, der Inhalt klappt erst bei
+Klick auf. Kompletter Umbau der letzten beiden Runden: neue, dünne
+`TopBarUI` (44px) mit Kalender/Uhr/Zeitraffer/Pause links + 9 kompakten
+Tab-Buttons rechts daneben, alle in EINER Reihe. `MainTabsUI/Panel` ist
+jetzt nur noch ein unsichtbares Overlay (`visible=false` default),
+`TabContainer.tabs_visible=false` blendet die eingebaute Kopfzeile aus —
+ein Button-Klick setzt `current_tab` + blendet das Panel ein, erneuter
+Klick auf den schon offenen Tab blendet es wieder aus
+(`_on_tab_button_pressed()`). Löst nebenbei das 648px-Höhenproblem der
+letzten beiden Runden komplett — das Overlay muss sich mit nichts mehr
+dauerhaft den Platz teilen. "Karte"-Button ruft `toggle_map_view()`
+direkt auf (kein Overlay nötig). `ResourcesUI` wieder oben rechts, wie
+ursprünglich. `crafting_tab_button`/`unit_detail_tab_button` folgen
+jetzt derselben Sichtbarkeits-Logik wie ihre Tabs (`_refresh_crafting_
+ui()`/`_update_unit_detail_panel()`), inkl. Auto-Schließen des Overlays,
+falls es gerade den jetzt versteckten Tab zeigt.
+
+## UI-Redesign: linke Spalte statt oberer Leiste (2026-08-05)
+
+Nutzerwunsch nach dem zweiten Screenshot-Test ("der Balken in der Mitte
+soll nach links, von Wetter bis Bücher alles links schmal an die Seite
+nach unten"): `MainTabsUI/Panel` UND `ResourcesUI/Panel` jetzt beide in
+derselben schmalen linken Spalte (x=16–336) statt der vollen Breite oben
+bzw. oben rechts — `ResourcesUI/Panel` direkt unter `MainTabsUI/Panel`
+angeschlossen (8px Abstand), wirkt wie ein durchgehender Streifen.
+`TimeBox` (Kalender/Uhr/Zeitraffer/Pause) jetzt ÜBER statt NEBEN dem
+`TabContainer` (beide bleiben Geschwister-Controls im selben `Panel`,
+keine der vielen bestehenden Tab-Pfade geändert). Auf Nutzerwunsch
+("Tab-Inhalt kompakter/kleiner, alles reinquetschen") überall auf
+Schriftgröße 12–13 reduziert. `HUD/InfoPanel`/`Label`/`StatusLabel`
+(Auswahl-Info/Status-Meldungen) mussten dafür ein drittes Mal umziehen —
+jetzt rechts von der neuen (jetzt viel höheren) linken Spalte statt
+darüber/darunter.
+
+**Bekannter Kompromiss:** 9 Tab-Kopfzeilen passen nicht mehr nebeneinander
+in die schmale Spalte — Godots `TabContainer` zeigt dafür automatisch
+kleine Scroll-Pfeile im Kopf, alle Tabs bleiben erreichbar, nur nicht
+mehr alle gleichzeitig sichtbar.
+
+## UI-Redesign: Nachtrag nach Screenshot-Test (2026-08-04, `bilder/ui falsch positioniert.PNG`)
+
+Erster echter Screenshot zeigte zwei Probleme: (1) der Bauen-Tab-Inhalt
+lief komplett unbegrenzt über den Bildschirm und überlappte das
+Ressourcen-Panel — `MainTabsUI/Panel` clippte nicht (Godot-Container
+clippen NICHT automatisch), jetzt `clip_contents = true` gesetzt, dazu
+ein kompaktes `Theme` (`default_font_size = 13` statt Godot-Standard 16)
+auf das ganze Panel angewendet (kaskadiert auf alle Buttons/Labels ohne
+eigene Font-Size-Override, spart zusätzlich Platz). (2) `BaseChoiceLabel`
+("Wähle deine Start-Basis") + `HUD/InfoPanel`/`HUD/Label` (Auswahl-Info)
++ `HUD/StatusLabel` lagen alle noch an ihren ALTEN Positionen im
+Top-Bereich, der jetzt von der neuen Leiste belegt ist — alle vier nach
+unten verschoben (deutlich unter `MainTabsUI/Panel`s neues Ende bei
+y=160). **Weiterhin unbehoben:** Clipping versteckt überschüssigen
+Bauen-Inhalt nur, macht ihn nicht erreichbar — ein `ScrollContainer`
+bleibt der eigentliche nächste Schritt, falls das stört.
+
+## UI-Redesign: obere Leiste + Wetter-System + Forschung + Event-Log (2026-08-04)
+
+Große Runde nach Nutzer-Skizze (`bilder/ui skizze.jpg`), geplant über
+`/plan`-Modus (Plandatei `floating-shimmying-stonebraker.md`). Kalender/
+Zeit-Steuerung + alle 9 Tabs (bestehende 5 + neue Wetter/Forschung/Karte/
+Ereignisse) jetzt in einer oberen Leiste, plus ein echtes neues Gameplay-
+System (Regen reduziert Fog-of-War-Sichtweite) und ein neues Event-Log +
+kompakte Info-Box (füllt sich automatisch über den bestehenden
+`report_status()`-Weg). Details in [`world.md`](world.md), "UI-Redesign
+Runde 3". **Bekannte Einschränkung:** wegen der 648px-UI-Basishöhe musste
+die neue obere Leiste deutlich flacher werden als die alte Bauen-Tab-
+Box — Tab-Inhalte mit vielen Einträgen (v. a. Bauen) passen jetzt
+sichtbar nicht mehr vollständig hinein, ein `ScrollContainer`-Umbau
+bleibt offen (siehe `pending-tests.md`). Noch nicht vom Nutzer im Spiel
+gesichtet.
+
+## Nebel-Schleier ergänzt (2026-08-04)
+
+Nutzerwunsch direkt nach dem bestätigten Grime/SSAO-Test: "nebel fehlt
+dann noch ... ein ganz leichten nebel schleier". Einfacher, günstiger
+Distanz-Nebel über `Environment.fog_enabled` in `World.tscn`
+(`fog_density = 0.006`, neutrales Grau statt bläulichem Himmel-Ton) —
+kein `FogVolume`. Details in [`building.md`](building.md), "Nebel-
+Schleier". **Vom Nutzer bestätigt: "ja nebel schaut gut aus."**
+
+## Grime-Overlay-Bugfix: World.gd lud nicht mehr (2026-08-04)
+
+Nutzer-Report "konnte nicht starten kam ein Fehler" (Screenshot). Ursache:
+`_apply_grime_overlay()`s `var base_material := node.get_surface_override_
+material(...)` löste die schon bekannte GDScript-Variant-Inferenz-Falle
+aus (`node` ist als generischer `Node` deklariert, `:=` kann den Rückgabe-
+typ darüber nicht ableiten) — `World.gd` lud dadurch komplett nicht,
+`World.tscn`s Root-Node fiel auf den nackten `Node3D`-Basistyp zurück
+(Folgefehler: `_draw_fog()`s `FOG_CELL_SIZE`-Zugriff schlug fehl, weil
+die eigene Konstante ohne Skript nicht existiert). Fix: `base_material`
+explizit als `Material` typisiert. **Vom Nutzer bestätigt, danach lief
+es:** "besser so schaut ganz gut aus" (Grime-Overlay + SSAO zusammen).
+
+## Grime-Overlay-Shader + SSAO als A/B-Vergleich gebaut (2026-08-04)
+
+Nutzerfrage nach den ersten flach eingefärbten Blender-Modellen: reicht
+ein Shader, oder braucht es mehr Mesh-Detail? Zwei Optionen gebaut statt
+sich für eine zu entscheiden — Details in [`building.md`](building.md),
+"Grime-Overlay-Experiment". Noch nichts final, User soll im Editor
+vergleichen und sagen, welches (wenn überhaupt) bleibt.
+
+## Systematik-Review abgeschlossen (2026-08-04)
+
+Vollständiger Durchgang durch alle `docs/<system>.md`-Dateien (Nutzerwunsch
+nach Frust über den bisherigen Screenshot-für-Screenshot-Bugfixing-Takt:
+"einmal alles klären ... systematisch durch was weg kann was geändert
+werden muss"), vorher Backup des ganzen `koop-game`-Ordners angelegt
+(`koop-game-backup-2026-08-04.tar.gz`). Reihenfolge: World → Building →
+Survivor → Zombies/Bandits → Vehicle → Recruitment/Scavenging → Trading →
+Zones → Walls → Base → Networking → Save/Load → Loading → Commander →
+Mechanics-Review (bewusst unangetastet, historischer Snapshot) →
+Settings/Gameplay-Walkthrough. Zwei echte Code-Fixe gefunden (Fahrzeug-
+Lärm bei leerem Tank, Mauer-HP bei Catch-up/Speicherstand), der Rest
+waren veraltete Doku-Stellen (Bekannte-Grenzen-Bullets, die ein längst
+behobenes Problem noch als offen listeten, oder Zahlen/Aufzählungen, die
+nach der Treibstoff- bzw. Universal-Buch-Migration nicht mitaktualisiert
+wurden) — jeweils einzeln mit dem Nutzer abgestimmt, bevor etwas geändert
+wurde. `commander.md` bekam zusätzlich einen fehlenden Fallunterschei-
+dungs-Schritt (Start-Basis-Wahl) in der `_select_at()`-Reihenfolge
+nachgetragen, `gameplay-walkthrough.md` seine Ressourcenzahl/-liste
+korrigiert.
+
+## Systematik-Review: base.md Ressourcenzahl/Lagerkapazität korrigiert (2026-08-04)
+
+Drei veraltete Zahlen in `base.md` gefunden: fehlendes `"fuel": 20` im
+`START_RESOURCES`-Codeschnipsel (Treibstoffsystem kam heute dazu, `base.md`
+wurde dabei nicht mitaktualisiert), Ressourcenarten-Zahl entsprechend
+falsch (13/16 statt korrekt 14), und die "Bekannte Grenzen"-Zeile behauptete
+noch `BASE_STORAGE_CAPACITY` sei "temporär auf 300", obwohl der Code das
+schon am 2026-08-03 auf 150 zurückgebaut hatte. Alle drei nur Doku, kein
+Code betroffen.
+
+## Mauer-HP bei Catch-up + Spielstand behoben (2026-08-04, Systematik-Review)
+
+`_catch_up_wall()` und `_collect_save_data()`/`_load_game_state()` haben
+`Wall.hp` bisher nie mitgenommen — bei jedem Laden eines Spielstands
+wurden dadurch ALLE beschädigten Mauern/Tore stillschweigend komplett
+geheilt (nicht nur, wie ursprünglich in `walls.md` vermerkt, eine reine
+Catch-up-Lücke für spät beitretende Peers). `Wall.hp` jetzt in beiden
+Pfaden enthalten, `Wall._ready()` überschreibt einen von außen
+gesetzten Wert nicht mehr (neuer Sentinel `hp == -1` statt vorherigem
+unconditional Reset). Details in [`walls.md`](walls.md). Noch nicht vom
+Nutzer getestet.
+
+## Systematik-Review: veraltete "Bekannte Grenzen"-Bullets bereinigt (2026-08-04)
+
+Drei Doku-Stellen gefunden und korrigiert, alle vom selben Muster —
+ein "Bekannte Grenzen"-Bullet behauptete weiterhin eine Einschränkung,
+die durch einen späteren Fix im selben oder verlinkten Dokument längst
+behoben war, nur nie nachträglich gestrichen. Kein Code betroffen.
+
+- **`recruitment.md`**: "genau ein rekrutierbares Gebäude, kein
+  Zufallsmechanismus" widersprach der direkt darüberstehenden
+  "Erweiterten Rekrutierung" (Plünder-Zufallschance + Schutzsuchende).
+- **`zones.md`**: "Kein Außenposten-Sonderfall — noch nicht umgesetzt"
+  war von vor 2026-08-01, Außenposten existieren seitdem als eigener
+  Bautyp.
+- **`building.md`**: "Außenposten: 'Rasten/Schlafen' nicht umgesetzt"
+  widersprach dem im selben Dokument beschriebenen Fund-5-Fix
+  (`Survivor._handle_resting()` akzeptiert seit 2026-08-04 auch einen
+  Außenposten als Rastpunkt).
+
+## Fahrzeug-Lärm bei leerem Tank behoben (2026-08-04, Systematik-Review)
+
+`Vehicle._handle_noise()` prüfte nur, ob noch Wegpunkte offen sind, nicht
+ob sich das Fahrzeug tatsächlich bewegt — bei leerem Tank bleibt die
+Warteschlange bewusst gefüllt (fährt automatisch weiter, sobald wieder
+Treibstoff da ist), wodurch ein liegengebliebenes, komplett stehendes
+Fahrzeug trotzdem weiter alle 2s Zombies alarmiert hätte. Jetzt
+zusätzlich `fuel > 0.0` geprüft. Details in [`vehicle.md`](vehicle.md),
+"Treibstoff". Noch nicht vom Nutzer getestet.
+
+## Home-Base: Kollisionsbox an echtes Modell angepasst (2026-08-04)
+
+Nutzer-Screenshot ("base versetzt.PNG") — "Modell vs. Kollision stimmt
+nicht". Ursache gefunden: `HomeBase.tscn`s Platzhalter-Box (`Vector3(3,
+1.5, 3)`) war nie an das echte `startbasetest.glb`-Modell angepasst
+worden — die reale glTF-Bounding-Box ist `6,4×6,93×6,4m`, mehr als
+doppelt so groß in jeder Achse. Die frühere "Größenkorrektur" (siehe
+[`base.md`](base.md)) betraf nur den visuellen Maßstab, nie die
+Kollisionsbox selbst. `BoxMesh`/`BoxShape3D` in `HomeBase.tscn` jetzt auf
+die echten Maße gesetzt, neue `World.HOME_BASE_GROUND_Y := 3.464`
+ersetzt den alten festen Wert `0.75` beim Spawnen einer neuen Home-Base
+(behebt nebenbei ein leichtes Schweben). Details in [`base.md`](base.md).
+Noch nicht vom Nutzer getestet.
+
+## Apotheke: echtes Asset + genereller Y-Ausgleich-Fix (2026-08-04)
+
+Drittes vom Nutzer geliefertes Gebäude-Asset (`assets/Ahpoteke.glb`).
+Maße aus der glTF-Bounding-Box (7,1×8,2×6,1m) — Grundfläche trifft den
+Checklisten-Wert fast exakt, Höhe deutlich drüber (gleiches Muster wie
+Wohnhaus). Wichtiger Nebenfund: der Modell-Ursprung dieses Assets liegt
+NICHT nahe der Basis (Y≈−7,17 relativ zur Unterkante, verglichen mit
+Wohnhaus/Supermarkt nahe 0) — die bisherige Y-Ausgleich-Formel hätte das
+Gebäude über 7m im Boden versenkt. Neue `World._model_min_y()` liest die
+tatsächliche Unterkante jedes Modells aus der Mesh-AABB aus, statt einen
+Ursprung an der Basis anzunehmen — funktioniert jetzt für JEDEN
+Modell-Ursprung, Wohnhaus/Supermarkt profitieren automatisch mit (der
+Supermarkt hatte denselben, nur viel kleineren Effekt — 22cm statt 7m —
+und ist damit nebenbei mitbehoben). Details in [`building.md`](building.md),
+"Apotheke". Noch nicht vom Nutzer im Spiel gesichtet.
+
+## Bildlook: Entsättigung für Apokalypse-Stil (2026-08-04)
+
+Nutzerfrage nach Shader-Möglichkeiten für mehr "Apokalypsen-Style" —
+erste, günstigste Stufe: Godots eingebaute `Environment`-Adjustments
+(Sättigung 0.55, Kontrast 1.15, Helligkeit 0.95) auf der globalen
+Environment-Resource aktiviert, kein eigener Shader-Code nötig. Details +
+weitere mögliche Ausbaustufen (Nebel, Grime-Shader, Postprocessing) in
+[`world.md`](world.md), "Bildlook". Noch nicht vom Nutzer gesichtet.
+
+## Erste Gebäude-Varianten eingebaut (2026-08-04)
+
+Nutzer hat drei Wohnhaus-Varianten (`wohnhausVar2.glb`/`wohnhausVar3.glb`/
+`wohnhausVar3kleinesdach.glb`, reine Farb-/Dach-Unterschiede) und zwei
+Supermarkt-Varianten (`supermarkVar1.glb`/`supermarkVar2.glb`) geliefert —
+erste echte Nutzung der bereits am 2026-08-04 gebauten `"model_paths"`-
+Infrastruktur (siehe `docs/building.md`, "Gebäude-Varianten pro Typ").
+Beide `BUILDING_TYPES`-Einträge entsprechend umgestellt, Wohnhaus-
+`procedural_chance` 0.5→0.3 gesenkt (bei vier echten Varianten würde ein
+weiterhin hoher Prozedural-Anteil die neue Abwechslung verwässern). Noch
+nicht vom Nutzer im Spiel gesichtet.
+
+## Außenposten als Rastpunkt (Fund 5 der Systematik-Review, 2026-08-04)
+
+Aus der Survivor-Review: die Vision nennt Außenposten explizit als
+Rastpunkt ("nur zum Rasten/Schlafen der Trupps"), umgesetzt wurde beim
+ursprünglichen Außenposten-Bau (2026-08-01) aber nur das Zwischenlagern —
+mit dem expliziten Vorbehalt, Rasten bräuchte erst ein Müdigkeits-/
+Bedürfnissystem, das es damals noch nicht gab. Dieses System kam einen
+Tag später (Betten), der Außenposten wurde dabei nie nachgerüstet, bis
+jetzt. `Survivor._handle_resting()` akzeptiert seitdem auch einen eigenen
+Außenposten (`_find_nearby_rest_point()`, gleicher Radius/gleiche Rate wie
+ein Bett). Details in [`survivor.md`](survivor.md), "Bedürfnisse:
+Müdigkeit + Moral". Noch nicht vom Nutzer getestet.
+
+## Gebäude-HP/Abriss-Ertrag größenabhängig + Start-Basis-Loot gutgeschrieben (2026-08-04)
+
+Fund 3+4 aus der Systematik-Review abgeschlossen. Fund 3: `Building.
+MAX_HP`/`YIELD` (100 HP, 20 Stein/10 Ziegel) waren für JEDE Vorlage
+gleich, unabhängig von der Größe — jetzt aus dem tatsächlichen
+Gebäude-Volumen berechnet (`max_hp`/`YIELD` als Instanzfelder statt
+Konstanten, an der kleinsten echten Gebäudegröße/Tankstelle verankert,
+größere Gebäude skalieren linear hoch). Fund 4: das als Start-Basis
+gewählte Gebäude verlor seinen eigenen, längst gewürfelten Loot einfach
+beim Markieren als geplündert — wird jetzt direkt der neuen Home-Base
+gutgeschrieben. Details in [`building.md`](building.md), "Abreißen", und
+[`zones.md`](zones.md), "Start-Basis wählen". Noch nicht vom Nutzer
+getestet.
+
+## Lager-Kapazität + Ausbau-Bauzeit rekalibriert (2026-08-04)
+
+Fund aus der systematischen Review (Ausbauten/`building.md`): `STORAGE_
+CAPACITY_PER_VOLUME` (40.0) und `STORAGE_CONSTRUCTION_WORK_PER_VOLUME`
+(1.5) waren noch auf die alten Platzhalter-Boxen (~14-23 m³) kalibriert —
+der eigene Code-Kommentar von damals sagte explizit "muss neu kalibriert
+werden, sobald echte Assets die Platzhalter ersetzen". Beim echten
+Supermarkt (927 m³) hätte das ein Lager mit 37.080 Kapazität ergeben
+(Home-Base-Basiskapazität: 150) — kompletter Balance-Bruch. Zurück auf
+~1:1 (m³ ≈ Kapazität), `40.0 → 1.0`. Gleichzeitig (Nutzerwunsch, "kann man
+skalieren"): Krankenstation/Werkstatt/Bett hatten bisher eine FESTE
+Bauzeit unabhängig von der Gebäudegröße, nur das Lager skalierte — jetzt
+skalieren alle vier mit dem Gebäude-Volumen (neue `BED_/MEDICAL_STATION_/
+WORKSHOP_CONSTRUCTION_WORK_PER_VOLUME`-Konstanten, Lager-Bauzeit ebenfalls
+neu kalibriert 1.5→0.05). Nur die Bauzeit skaliert, nicht die
+Ressourcenkosten. Details in [`building.md`](building.md), "Lager"/
+"Ausbauen". Noch nicht vom Nutzer getestet.
+
+## Zwei Bugs nach Backup behoben: Gebäude-Rotation + Start-Base-Abstand (2026-08-04)
+
+Nutzer-Screenshots (`bilder/falsche ausrichtung.PNG`,
+`bilder/startbasevfehler.PNG`) nach dem Supermarkt-Einbau, dann
+Backup (`KoopGame/koop-game-backup-2026-08-04.tar.gz`) und systematischer
+Review-Einstieg (siehe `Infos/05 Assets im Spiel...`, "GRÖSSEN-FRAGE
+ENDGÜLTIG GEKLÄRT" für die parallel geklärte Größen-Diskussion).
+
+1. **Gebäude-Rotation:** Gebäude bekamen nie eine `rotation.y`, dieselbe
+   Modell-Ausrichtung landete auf jeder Blockkante gleich. Jetzt pro Slot
+   aus der Blender-Achsen-Konvention abgeleitet (0°/180°/±90° je nach
+   Süd/Nord/West/Ost-Kante), dreht Mesh+Collision+Model gemeinsam auf dem
+   Building-Node. Details in [`world.md`](world.md), "Gebäude-Rotation".
+2. **Start-Base-Abstand:** `BASE_CHOICE_HOME_OFFSET`/`_SURVIVOR_OFFSET`
+   waren feste 4,5m/2,0m ab Gebäude-Mittelpunkt — bei einem großen Gebäude
+   (Supermarkt, 9m halbe Breite) landete die Home-Base buchstäblich im
+   Gebäude drin. Jetzt zusätzlich um die halbe Gebäude-DIAGONALE erweitert
+   (`request_choose_start_base()`, liest die Mesh-Box-Größe aus) —
+   funktioniert unabhängig von der tatsächlichen Gebäudegröße und davon,
+   in welche Richtung "away" zeigt.
+
+Beide **noch nicht vom Nutzer getestet**, insbesondere die genaue
+Rotationsrichtung (West/Ost könnten vertauscht sein, siehe `world.md`).
+
+## Straßenabstand tiefenabhängig + kompaktere Stadt (2026-08-04)
+
+Direkte Reaktion auf den Supermarkt-Screenshot (Front stand fast auf der
+Straße) UND das Nutzer-Feedback "das Spiel ist 3x größer als IFZ" —
+Nutzer-Entscheidung nach Rückfrage: Gebäude bleiben bei ihren echten
+Maßen, Stadt wird stattdessen INSGESAMT kompakter gepackt (nicht: Assets
+neu skalieren). `BUILDING_ROW_INSET` (fest, 5.0) ersetzt durch
+tiefenabhängiges `BUILDING_STREET_MARGIN` (1.5, plus halbe Gebäudetiefe) —
+behebt das Supermarkt-Problem UND passt sich automatisch an jede künftige
+Gebäudetiefe an. `BUILDING_MIN_SPACING` 10m→5m halbiert (Abstand
+INNERHALB einer Reihe, Straßenbreite selbst bleibt unverändert — an echte
+Straßen-Kachel-Assets gebunden). `MAX_BUILDING_SLOT_SPAN` von 3 auf 5
+angehoben, damit der Supermarkt bei der kleineren Spacing weiterhin
+korrekt (nicht zu knapp) reserviert wird. Gebäudezahl pro Zone bewusst
+NICHT erhöht (siehe eigener Kommentar im Code — frühere Netzwerk-
+Absturzursache bei 1750 Gebäuden, separates Risiko). Details in
+[`world.md`](world.md), "Straßenabstand tiefenabhängig + kompaktere
+Stadt". Noch nicht vom Nutzer getestet.
+
+## Supermarkt: echtes Asset (2026-08-04)
+
+Zweites vom Nutzer geliefertes Gebäude-Asset (`assets/supermarkttest.glb`,
+noch früher Entwurf ohne Material/Farbe, "nur mal grob Fenster Türen zum
+angucken"). Datei lag zunächst wieder im Workspace-Root statt
+`koop-game/assets/`, verschoben (wie schon bei Ziegelhaufen/Steinhaufen/
+Baum/Feld). Maße aus der echten glTF-Bounding-Box (18,1×4,2×12,2m) treffen
+die Vision-Zielwerte praktisch exakt — genau der Größenbereich, für den
+das direkt zuvor gebaute Mehrfach-Reihenplätze-System gedacht ist. Eine
+kleine, noch offene Unsauberkeit: Modell-Ursprung liegt nicht exakt an der
+Unterkante (ca. 22cm Versinken), bei einem finalen Modell in Blender zu
+beheben statt im Code. Details in [`building.md`](building.md),
+"Supermarkt". Noch nicht vom Nutzer im Spiel gesichtet.
+
+## Mehrfach-Reihenplätze für breite Gebäudetypen (2026-08-04)
+
+Nutzerfrage beim Blender-Modellieren: Supermarkt ist laut Vision-
+Checkliste 18×12m, aber ein Straßen-Reihenplatz hat nur 10m Abstand zum
+nächsten (`BUILDING_MIN_SPACING`) — bekannte, bisher bewusst offen
+gelassene Lücke (siehe `Infos/05 Assets im Spiel (aktueller Stand).md`).
+Statt den Nutzer das Asset kleiner modellieren zu lassen: `World.
+_generate_street_slots()` liefert jetzt strukturierte Slots mit
+Reihen-Zugehörigkeit (`row_id`/`row_index`/`along_x`), `_generate_city_
+zone()` reserviert für Typen, deren Breite entlang der Reihe
+`BUILDING_MIN_SPACING` überschreitet, automatisch mehrere direkt
+benachbarte Slots (`span`, aus der Template-`size` abgeleitet, kein
+manuelles Flag pro Typ nötig). Supermarkt-Platzhalter schon jetzt auf die
+echten 18×4,5×12m gesetzt, damit der Mechanismus am Platzhalter testbar
+ist, bevor das echte Modell da ist. Details in [`world.md`](world.md),
+"Mehrfach-Reihenplätze". Noch nicht vom Nutzer getestet.
+
+## Multi-Ziel-Pfadfindung beim Plündern (2026-08-04)
+
+Zweites ohne-Rückfrage-machbares Item aus derselben Reihenfolge-Empfehlung.
+Shift-Klick auf weitere durchsuchbare Gebäude hängt sie als Route an, statt
+den laufenden Suchauftrag zu ersetzen — `Survivor.order_search()` bekommt
+einen `additive`-Parameter (gleiches Konzept wie bei `order_move()`), neue
+`_search_queue`, `_finish_search()` läuft über eine neue
+`_advance_search_queue_or_return_to_base()` direkt zum nächsten Ziel
+weiter statt immer erst zur Basis zurückzukehren. Details in
+[`scavenging.md`](scavenging.md), "Multi-Ziel-Pfadfindung". Noch nicht vom
+Nutzer getestet.
+
+## Treibstoff für Fahrzeuge (2026-08-04)
+
+Nutzerwunsch ("mach das fertig wo du dir sicher bist das soll rein") — aus
+der Reihenfolge-Empfehlung in `Infos/07 Backlog-Umsetzungspläne.md` als
+nächstes ohne-Rückfrage-machbares Item umgesetzt. `Vehicle.gd` bekommt eine
+neue Ressource `"fuel"` (float, pro Typ unterschiedliche Kapazität/
+Verbrauch, siehe `VEHICLE_STATS`), Verbrauch proportional zur gefahrenen
+Strecke, automatisches Auftanken in Reichweite der eigenen Home-Base
+(exakt das `_handle_eating()`-Intervall-Muster). Tankstelle liefert jetzt
+`fuel` statt `food` als Hauptloot. Details in [`vehicle.md`](vehicle.md),
+"Treibstoff". Noch nicht vom Nutzer getestet.
+
+## Banditen als echte NPC-Gegner (2026-08-04)
+
+Nutzerentscheidung nach Rückfrage, welches offene Backlog-Item als Nächstes
+dran ist (Alternative wäre Durst als drittes Grundbedürfnis gewesen —
+bewusst verworfen, siehe unten). Aus dem Ideen-Backlog
+(`Infos/01 Architektur.md`, "Fraktionen"): "Banditen-Fraktion als echte
+NPC-Gegner mit eigenen Lagern, die nachspawnen" — bisher gab es nur das
+"Banditen-Restloot" (reine Loot-Mechanik an bestehenden Gebäuden, bleibt
+unverändert bestehen).
+
+Neue Entities `Bandit.gd`/`BanditHideout.gd`
+(`scenes/entities/bandit/`), gleiches Grundmuster wie Zombie/Zombie-Nest,
+aber mit bewussten Unterschieden: Fernkampf statt Nahkampf, kein
+automatischer Gegenschaden, Hideout gekappt auf 3 gleichzeitig lebende
+Bandits (statt unbegrenzt wie das Zombie-Nest), Hideout-Zerstörung ist
+permanent + gibt einmaligen Bonus-Loot. Drei Hideouts in der Wildnis
+verteilt (`BANDIT_HIDEOUT_COUNT`). Klick-Angriff, Wachposten-
+Autoverteidigung, Karten-/Minimap-Anzeige alle um Bandits erweitert. Volle
+Details, Konstanten und die eine bewusste Lücke (Bandits selbst werden
+nicht gespeichert, nur die Hideouts) in [`bandits.md`](bandits.md). Noch
+nicht vom Nutzer getestet.
+
+**Verworfen: Durst als drittes Grundbedürfnis.** Nächster Punkt der
+Reihenfolge-Empfehlung (`Infos/07 Backlog-Umsetzungspläne.md`) wäre Durst
+gewesen — Nutzer-Einwand ("aber lohnt sich durst") direkt eingesehen: wäre
+mechanisch praktisch identisch zu Hunger gewesen (gleicher Decay-/
+Regenerations-Loop, nur ein anderes Label), hätte nur eine 17. Ressourcenart
+in ein laut Nutzer-Feedback schon "zu volles" Panel gebracht, ohne neue
+Entscheidung fürs Spiel. Bleibt vorerst nicht umgesetzt.
+
 ## Feld-Ghost-Fix + Skalierung Baum/Stein/Ziegel (2026-08-04)
 
 Zwei kleine Nutzer-Nachbesserungen direkt nach dem Asset-Einbau:

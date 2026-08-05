@@ -15,11 +15,23 @@ extends StaticBody3D
 # Start-Basen vor versehentlichem Abriss). take_damage()/hp/YIELD folgen
 # demselben Interface wie Tree.gd/CarWreck.gd/StonePile.gd/BrickPile.gd,
 # damit Survivor._process_harvest() (über order_demolish_building()
-# gestartet) es generisch mitbenutzen kann. Bewusst NICHT pro Vorlage
-# unterschiedlich — schon vor dem Kartenumbau hatte jedes Gebäude
-# dieselbe MAX_HP/YIELD, unabhängig von seiner Größe.
-const MAX_HP := 100
-const YIELD := {"stone": 20, "brick": 10}
+# gestartet) es generisch mitbenutzen kann.
+# 2026-08-04, Systematik-Review: waren bis dahin für JEDE Vorlage gleich
+# (100 HP, 20 Stein/10 Ziegel), unabhängig von der Gebäudegröße — bei den
+# jetzt sehr unterschiedlich großen echten Assets (Tankstelle ~90 m³ bis
+# Supermarkt ~927 m³) fiel das auf. `max_hp`/`YIELD` sind deshalb jetzt
+# INSTANZ-Felder statt Konstanten (kein `const MAX_HP`/`YIELD` mehr, siehe
+# DEFAULT_MAX_HP/DEFAULT_YIELD unten für die alten Werte als Fallback) —
+# `World._create_building()` berechnet beide aus dem tatsächlichen
+# Gebäude-Volumen. `YIELD` bleibt trotzdem groß geschrieben (ungewöhnlich
+# für ein `var`) — Survivor._process_harvest() liest
+# `_harvest_target.YIELD` als Duck-Typing-Schnittstelle, ein Umbenennen
+# würde diese Schnittstelle brechen.
+const DEFAULT_MAX_HP := 100
+const DEFAULT_YIELD := {"stone": 20, "brick": 10}
+
+var max_hp: int = DEFAULT_MAX_HP
+var YIELD: Dictionary = DEFAULT_YIELD.duplicate()
 
 var building_id: int = 0
 var loot: Dictionary = {}
@@ -58,7 +70,7 @@ var zone_center: Vector3 = Vector3.ZERO
 
 var is_looted: bool = false
 var owner_peer_id: int = 0  # 0 = nicht geclaimt
-var hp: int = MAX_HP
+var hp: int = DEFAULT_MAX_HP
 # Schutzsuchende (2026-08-04, Rekrutierungs-Erweiterung, siehe
 # docs/mechanics-review.md) — reine Wiederverwendung des bestehenden
 # has_survivor-Mechanismus (Survivor._finish_search() ruft World.
@@ -302,7 +314,7 @@ func _update_visual() -> void:
 		# Dunkelt beim Abreißen zusätzlich nach (gleiches Prinzip wie
 		# Tree/CarWreck/StonePile/BrickPile/ZombieNest) — bleibt bei vollem
 		# hp beim bisherigen Grau, geht Richtung Schwarz.
-		var ratio: float = float(hp) / float(MAX_HP)
+		var ratio: float = float(hp) / float(max_hp)
 		mat.albedo_color = Color(0.25, 0.25, 0.25).lerp(Color(0.05, 0.05, 0.05), 1.0 - ratio)
 	else:
 		# Weder geclaimt noch geplündert — Standard-Fassadenfarbe der

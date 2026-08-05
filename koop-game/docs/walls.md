@@ -118,13 +118,22 @@ tatsächlicher HP-Änderung statt jeden Frame (`_sync_hp.rpc()`, analog zu
 Tor und Mauer haben unterschiedliche Basisfarben (Holzbraun vs.
 Steingrau).
 
+## HP bei Catch-up + Spielstand (Fix 2026-08-04, Systematik-Review)
+
+Ursprünglich übernahmen `_catch_up_wall()` (spät beitretende Peers) und
+`_collect_save_data()`/`_load_game_state()` (Spielstand) nur Position/
+Rotation/`is_gate`/Besitzer — der aktuelle HP-Stand eines schon
+beschädigten Segments ging in beiden Fällen verloren (bei Catch-up
+sah der neue Peer eine unbeschädigte Mauer, bei jedem Laden eines
+Spielstands wurden ALLE beschädigten Mauern kommentarlos komplett
+geheilt). Behoben nach demselben Muster wie `Building.hp`: `Wall.hp`
+jetzt Teil beider Pfade, `Wall._ready()` wendet den normalen Default
+(`WALL_MAX_HP`/`GATE_MAX_HP`) nur noch an, falls kein Wert von außen
+gesetzt wurde (Sentinel `hp < 0`, gültige Werte sind nie negativ — bei
+0 wird die Mauer sofort über `_die()` entfernt).
+
 ## Bekannte Grenzen (noch nicht gelöst)
 
-- **Kein Catch-up-Sonderfall über die reine Node-Existenz hinaus** — wie
-  bei allen `MultiplayerSpawner`-Entitäten übernimmt `_catch_up_wall()`
-  Position/Rotation/`is_gate`/Besitzer korrekt, aber der aktuelle
-  HP-Stand eines schon beschädigten Segments wird für spät beitretende
-  Peers nicht extra nachgeliefert.
 - **Keine Reparatur** — einmal beschädigt, bleibt eine Mauer beschädigt.
 - **Snap-Raster ist global, nicht pro Zone** — zwei weit voneinander
   entfernte Mauer-Züge landen zufällig auf demselben Weltraster, auch

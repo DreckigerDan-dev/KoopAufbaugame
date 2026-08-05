@@ -13,9 +13,22 @@ Erstes eigenes 3D-Asset des Nutzers, `assets/startbasetest.glb`
 eingebaut (`[node name="Model" ... instance=ExtResource(...)]` in
 `HomeBase.tscn`) — die alte `BoxMesh` bleibt als unsichtbarer Platzhalter
 für die Kollisionsform erhalten (`visible = false`). **Vom Nutzer nach
-einmaliger Größenkorrektur bestätigt** — siehe
+einmaliger Größenkorrektur bestätigt** (visuelle Größe/Maßstab) — siehe
 [`docs/survivor.md`](survivor.md) für die daraus resultierende
 1,70-m-Kapselgröße als Maßstabs-Referenz.
+
+**Kollisionsbox nachträglich korrigiert (2026-08-04, Nutzer-Screenshot
+"base versetzt.PNG", "Modell vs. Kollision stimmt nicht"):** die damalige
+Größenkorrektur betraf nur den visuellen Maßstab, nie die
+`BoxMesh`/`BoxShape3D`-Größe selbst — die blieb beim ursprünglichen
+Rateswert `Vector3(3, 1.5, 3)` stehen, während das echte Modell laut
+glTF-Bounding-Box `6,4×6,93×6,4m` misst, also mehr als doppelt so groß in
+jeder Achse. Klickfläche/Kollision saßen dadurch weit innerhalb des
+sichtbaren Modells, UND die Home-Base schwebte leicht (die Y-Position
+beim Spawnen ging von der halben ALTEN Höhe aus). Beide Werte jetzt an
+die echten Maße angepasst (`HomeBase.tscn`, `World.HOME_BASE_GROUND_Y`
+statt des vorherigen festen `0.75`). Noch nicht erneut vom Nutzer
+getestet.
 
 Gleiches Muster seitdem auch für `GuardPost.tscn`
 (`assets/wachturmtest.glb`) und `Wall.tscn`
@@ -83,7 +96,7 @@ hatte keinen Sieg-/Niederlage-Zustand.
 ## Ressourcen
 
 ```gdscript
-const START_RESOURCES := {"food": 60, "wood": 50, "metal": 25, "stone": 40, "brick": 25, "medicine": 25, "ammo": 30, "weapon": 1, "armor": 1, "helmet": 1, "melee_weapon": 1, "leg_armor": 1}
+const START_RESOURCES := {"food": 60, "wood": 50, "metal": 25, "stone": 40, "brick": 25, "medicine": 25, "ammo": 30, "weapon": 1, "armor": 1, "helmet": 1, "melee_weapon": 1, "leg_armor": 1, "fuel": 20}
 var resources: Dictionary = START_RESOURCES.duplicate()
 ```
 
@@ -98,14 +111,18 @@ Holz) direkt zu Spielbeginn. Kein `book_research` im Startbestand — Bücher
 sind NUR über seltenen Zombie-Loot erreichbar (siehe
 [`docs/zombies.md`](zombies.md)). Ausrüstungs-Startbestand (`weapon`/
 `armor`/`helmet`/`melee_weapon`/`leg_armor`) bewusst bei 1 belassen —
-Einzel-Slots, kein Grund die zu erhöhen.
+Einzel-Slots, kein Grund die zu erhöhen. `"fuel": 20` (ein Refuel-Tick,
+siehe [`vehicle.md`](vehicle.md), "Treibstoff") kam am 2026-08-04 mit dem
+Fahrzeug-Treibstoffsystem dazu, war hier zwischenzeitlich nicht
+nachgetragen (Systematik-Review, gefunden + korrigiert).
 
-Dreizehn Ressourcenarten (2026-08-04: Universal-Buch-Migration — die
+Vierzehn Ressourcenarten (2026-08-04: Universal-Buch-Migration — die
 vorher fünf getrennten `book_*`-Ressourcen sind jetzt eine einzige
 `book_research`, siehe [`building.md`](building.md), "Forschungsbücher";
 2026-08-02: `melee_weapon`/`leg_armor` seit Punkt 18 der Gesamtliste
 dazugekommen, siehe [`survivor.md`](survivor.md), "Haupt-/Sekundärwaffe"/
-"Dritter Rüstungs-Slot"). `food` wird beim Essen
+"Dritter Rüstungs-Slot"; 2026-08-04: `fuel` seit dem
+Fahrzeug-Treibstoffsystem, siehe oben). `food` wird beim Essen
 verbraucht (siehe [`docs/survivor.md`](survivor.md)), `medicine` beim
 Heilen, `wood`/`metal`/`stone`/`brick` beim Bauen/Claimen (siehe unten).
 `weapon`/`armor`/`helmet`/`melee_weapon`/`leg_armor` kommen über
@@ -200,10 +217,11 @@ Reine Anzeige, kein Caching — liest `resources` direkt bei jedem
   Buch-Kopieren, keine Lese-Aktion am Survivor).
 - **Obergrenze über `storage_capacity`** (siehe
   [`docs/building.md`](building.md), "Lager") — EIN gemeinsamer Deckel für
-  alle sechzehn Ressourcenarten, kein separates Limit pro Art. Startwert
-  `BASE_STORAGE_CAPACITY` aktuell **temporär auf 300** (normal 150, siehe
-  "Ressourcen" oben), erhöht sich dauerhaft durchs Ausbauen von Gebäuden
-  zu Lagern.
+  alle vierzehn Ressourcenarten, kein separates Limit pro Art.
+  `BASE_STORAGE_CAPACITY := 150` (die zwischenzeitliche Test-Erhöhung auf
+  300 wurde am 2026-08-03 zurückgebaut, siehe `HomeBase.gd`-Kommentar —
+  diese Zeile war seitdem veraltet, hier korrigiert), erhöht sich dauerhaft
+  durchs Ausbauen von Gebäuden zu Lagern.
 - **Kein Ressourcen-/Kapazitäts-Catch-up-Sonderfall** — `HomeBase` läuft
   über `MultiplayerSpawner`/`_catch_up_home_base()` wie Survivor/Zombie/
   etc., aber weder `resources` noch `storage_capacity` werden beim

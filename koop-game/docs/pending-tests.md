@@ -1,5 +1,434 @@
 # Offene Tests
 
+## UI-Redesign Runde 4: TopBarUI + linke Tab-Spalte (siehe `status.md`, 2026-08-05, ersetzt die IFZ-Stil-Overlay-Runde direkt darunter)
+
+1. ⬜ **Zuerst wichtig:** Lädt `World.tscn` überhaupt ohne Absturz? (Der
+   vorherige Fehler kam beim leeren Minimalstand nie zum echten Test.)
+2. ⬜ Oben mittig: schmaler Balken mit Tag/Uhrzeit/Zeitraffer-Buttons/
+   Pause — nicht mehr über die volle Breite.
+3. ⬜ Links: 9 Tab-Icons von oben nach unten gestapelt statt einer Reihe.
+4. ⬜ Auf einen Tab klicken — Overlay klappt RECHTS von der Tab-Spalte
+   auf (nicht mehr darunter/darüber), zeigt den richtigen Inhalt.
+   Nochmal auf denselben Tab klicken — klappt wieder zu.
+5. ⬜ Auf einen Tab, dann direkt auf einen anderen klicken — Overlay
+   bleibt offen, Inhalt wechselt nur.
+6. ⬜ "Herstellen"/"Trupp"-Tabs unsichtbar ohne Werkstatt/ausgewählten
+   Trupp, erscheinen erst wenn zutreffend (Tab-Button UND Tab-Inhalt).
+7. ⬜ "Karte" anklicken — öffnet direkt die Vollbild-Karte, kein Overlay
+   dazwischen.
+8. ⬜ Ressourcen-Panel weiterhin oben rechts, kein Überlappen mit dem
+   neuen oberen Balken.
+9. ⬜ Zeitraffer-Buttons (1x/2x/3x) + Pause funktionieren weiterhin, nur
+   der Host sieht/bedient sie.
+10. ⬜ Bekannter Nebenpunkt (siehe `status.md`): Auswahl-Info/Status-
+    Meldungen (`HUD/Label`/`HUD/StatusLabel`) könnten sich jetzt sichtbar
+    mit dem aufgeklappten Overlay überlappen — falls störend, Rückmeldung
+    für eine Nachjustierung.
+
+## UI-Redesign: IFZ-Stil-Overlay (siehe `status.md`, 2026-08-05, ersetzt die beiden Vorgänger-Runden)
+
+1. ⬜ Dünne obere Leiste sichtbar (Kalender/Uhr/Zeitraffer/Pause links, 9
+   kompakte Buttons rechts) — keine dauerhaft offene Fläche mehr.
+2. ⬜ Auf "Bauen" klicken — Overlay klappt auf, zeigt die Bau-Liste.
+   Nochmal auf "Bauen" klicken — Overlay klappt wieder zu.
+3. ⬜ Auf "Bauen" dann direkt auf "Einheiten" klicken — Overlay bleibt
+   offen, Inhalt wechselt nur.
+4. ⬜ "Herstellen"/"Trupp"-Buttons unsichtbar ohne Werkstatt/ausgewählten
+   Trupp, erscheinen erst, wenn zutreffend.
+5. ⬜ "Karte" anklicken — öffnet direkt die Vollbild-Karte, kein Overlay
+   dazwischen.
+6. ⬜ Ressourcen-Panel wieder oben rechts, kein Überlappen mit der neuen
+   dünnen Leiste.
+
+## UI-Redesign: obere Leiste + Wetter + Forschung + Event-Log (siehe `world.md`, "UI-Redesign Runde 3", 2026-08-04)
+
+1. ⬜ Obere Leiste sichtbar, Kalender ("Tag N") + Uhr + Zeitraffer-Buttons +
+   Pause-Button links, 9 Tabs rechts daneben — kein Überlappen mit dem
+   Ressourcen-Panel oder der Minimap.
+2. ⬜ **Wichtig:** Bauen-Tab anklicken — vermutlich passen nicht alle
+   Buttons/Listen sichtbar in die neue, flachere Leiste. Falls ja: sag
+   Bescheid, dann bauen wir einen `ScrollContainer` (bewusst in dieser
+   Runde zurückgestellt, siehe `status.md`).
+3. ⬜ Wettervorhersage-Tab öffnen — zeigt "Jetzt: Klar/Regen" + nächsten
+   Wechsel. Bei Regen sichtbar kleinere aufgedeckte Fog-of-War-Fläche als
+   bei Klarwetter.
+4. ⬜ Forschungs-Tab öffnen — zeigt alle Rezepte/Ausbaustufen mit
+   korrektem Erforscht-Status, ändert sich nach einer echten Forschung
+   im Herstellen-/Bauen-Tab.
+5. ⬜ Karte-Tab anklicken — öffnet dieselbe Vollbild-Karte wie die M-Taste.
+6. ⬜ Ereignisse-Tab + Info-Box — bei einer Horde-Nacht/SOS-Alarm füllen
+   sich beide automatisch, Info-Box zeigt nur die neueste Zeile.
+7. ⬜ Kurz vor einer Blutmond-Nacht (2 Spielstunden vorher) — neue
+   Warnung "Blutmond nähert sich!" erscheint einmalig.
+8. ⬜ Speichern/Laden — Wetter-Zustand bleibt nach dem Laden erhalten,
+   kein Reset auf "Klar".
+
+## Gras-Kacheln entfernt, SSAO wieder verstärkt (siehe `status.md`, 2026-08-04)
+
+1. ⬜ Stadt-Zonen ansehen — keine fleckige/facettierte grüne Fläche mehr,
+   kein Flackern. Boden sollte gleichmäßig grün wirken (Ground-Box statt
+   Gras-Kacheln).
+2. ⬜ Straßen selbst (Asphalt) unverändert, keine Regression bei
+   Kreuzungen/Kurven.
+
+## Gebäudezahl 100/50 → 130/65 (siehe `status.md`, 2026-08-04)
+
+1. ⬜ Mit deinen Freunden (mehrere echte Peers) spielen — genau der von
+   `networking.md` geforderte Echt-Test nach jeder Zahlen-Erhöhung. Spät
+   beitretender Peer sollte trotz mehr Gebäuden weiterhin schnell/ohne
+   Verbindungsabbruch laden (Bündel-RPC-Fix sollte das abdecken).
+
+## Platzhalter-Boxen auf echte Zielmaße vergrößert (siehe `building.md`, 2026-08-04)
+
+1. ⬜ Stadt-Zonen mit den zehn vergrößerten Loot-Gebäuden ansehen — sollten
+   proportional zu Wohnhaus/Supermarkt/Apotheke wirken, nicht mehr winzig
+   dazwischenstehen. Mehrfach-Reihenplätze bei den breiten Typen
+   (Militärbasis 14m, Feuerwehr/Uni 12m) sollten automatisch mehrere
+   Slots belegen, keine Überlappung mit Nachbargebäuden.
+2. ⬜ Ein Gebäude zur Krankenstation/Werkstatt/Lager/Bett ausbauen lassen —
+   sollte jetzt SELBST größer sein UND korrekt auf dem Boden stehen
+   (nicht mehr in der Luft/versunken), unabhängig davon, wie groß das
+   ursprüngliche geplünderte Gebäude war.
+3. ⬜ Außenposten frei bauen — Ghost-Vorschau sollte schon in der richtigen
+   (größeren) Größe erscheinen, platzierte Struktur steht auf dem Boden.
+
+## Grime-Overlay-Shader vs. SSAO (siehe `building.md`, "Grime-Overlay-Experiment", 2026-08-04)
+
+**Vom Nutzer bestätigt: "besser so schaut ganz gut aus"** (Grime + SSAO
+zusammen, nach dem Ladefehler-Fix). Rest noch offen:
+
+1. ⬜ Eine Stadt-Zone mit mehreren Wohnhaus-/Supermarkt-Instanzen ansehen —
+   Grime-Overlay sollte auf jedem Gebäude ein ANDERES Fleckenmuster
+   zeigen (nicht identisch bei gleichem Modell-Typ).
+2. ⬜ Auf Wachposten/Mauer/Home-Base ausweiten? (bisher nur Gebäude.)
+
+## Nebel-Schleier (siehe `building.md`, "Nebel-Schleier", 2026-08-04)
+
+**Vom Nutzer bestätigt: "ja nebel schaut gut aus"** — erledigt, `fog_density
+= 0.006` bleibt.
+
+## Mauer-HP bei Catch-up + Spielstand (siehe `walls.md`, 2026-08-04)
+
+1. ⬜ Eine Mauer von einem Zombie beschädigen lassen (nicht zerstören),
+   Spiel speichern und neu laden — Mauer bleibt beschädigt (dunklere
+   Farbe), heilt nicht mehr komplett.
+2. ⬜ (Mit zweitem Client) Mauer beschädigen, DANACH zweiten Peer
+   beitreten lassen — sieht sofort die korrekte, dunklere Farbe statt
+   einer scheinbar unbeschädigten Mauer.
+3. ⬜ Zum Vergleich: frisch gebaute Mauer — volle HP/Farbe wie bisher,
+   keine Regression.
+
+## Fahrzeug-Lärm bei leerem Tank (siehe `vehicle.md`, "Treibstoff", 2026-08-04)
+
+1. ⬜ Fahrzeug leerfahren (Tank auf 0), mit Zombies in Hörweite stehen
+   bleiben — Zombies werden NICHT mehr alarmiert, solange der Tank leer
+   ist.
+2. ⬜ Zum Vergleich: Fahrzeug mit vollem Tank an einer Mauer blockieren
+   lassen — macht weiterhin normal Lärm (keine Regression, nur der
+   Leer-Tank-Fall ist stumm).
+3. ⬜ Fahrzeug auftanken (in Reichweite der Home-Base) — Lärm setzt wieder
+   normal ein, sobald es weiterfährt.
+
+## Home-Base: Kollisionsbox korrigiert (siehe `base.md`, 2026-08-04)
+
+1. ⬜ Als Start-Basis wählen — Home-Base-Modell steht sauber auf dem Boden
+   (kein leichtes Schweben mehr).
+2. ⬜ Auf verschiedene Stellen des sichtbaren Home-Base-Modells klicken
+   (Mitte, Rand, Barrikaden-Bereich außen) — sollte jetzt überall als
+   Treffer registrieren, nicht nur in einem kleinen Bereich in der Mitte.
+3. ⬜ Bestehenden Spielstand mit einer VOR diesem Fix gespeicherten
+   Home-Base laden — Position bleibt erhalten (kein Sprung), da die
+   Y-Koordinate beim Laden direkt aus dem Speicherstand kommt, nicht neu
+   berechnet wird.
+4. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht dieselbe, jetzt
+   korrekt große Kollision/Position.
+
+## Apotheke: echtes Asset + Y-Ausgleich-Fix (siehe `building.md`, "Apotheke", 2026-08-04)
+
+1. ⬜ In einer Stadt-Zone eine Apotheke finden — zeigt das echte Modell,
+   steht sauber auf dem Boden (KEIN Versinken trotz des ungewöhnlichen
+   Modell-Ursprungs).
+2. ⬜ Wohnhaus UND Supermarkt nochmal gezielt anschauen — beide weiterhin
+   korrekt auf dem Boden (Supermarkts vorheriges leichtes 22cm-Versinken
+   sollte jetzt ebenfalls behoben sein, da derselbe generische Fix
+   greift).
+3. ⬜ Alle Wohnhaus-/Supermarkt-Varianten (siehe unten) ebenfalls korrekt
+   am Boden — der Fix betrifft ALLE modellbasierten Gebäude gleichermaßen.
+4. ⬜ Claimen/Durchsuchen/Abreißen einer Apotheke funktioniert normal
+   (Kollisionsbox unabhängig vom Y-Ausgleich, bleibt wie gehabt korrekt).
+
+## Bildlook: Entsättigung (siehe `world.md`, "Bildlook", 2026-08-04)
+
+1. ⬜ Spiel starten — Bild wirkt sichtbar entsättigter/kontrastreicher als
+   vorher, nicht übertrieben (keine reine Graustufen-Optik).
+2. ⬜ Tag/Nacht-Übergang weiterhin normal sichtbar (Himmel-/Umgebungsfarbe
+   ändert sich weiterhin, Entsättigung liegt nur zusätzlich DRÜBER).
+3. ⬜ UI/HUD bleibt gut lesbar (Adjustments wirken nur auf die 3D-Szene,
+   nicht auf CanvasLayer-UI — sollte unverändert aussehen).
+4. ⬜ Gesamteindruck: passt die Stärke, oder soll nachjustiert werden
+   (mehr/weniger entsättigt)?
+
+## Erste Gebäude-Varianten (siehe `building.md`, "Gebäude-Varianten pro Typ", 2026-08-04)
+
+1. ⬜ Mehrere Wohnhäuser in einer Stadt-Zone anschauen — mindestens 2-3
+   unterschiedliche Varianten (Farbe/Dach) sollten nebeneinander
+   auftauchen, nicht immer dasselbe Modell.
+2. ⬜ Mehrere Supermärkte anschauen — beide Varianten sollten vorkommen,
+   deutlich unterschiedliche Höhe (eine Variante ~4,2m, die anderen
+   beiden ~7,9m) fällt aber nicht negativ auf (falls doch: Rückmeldung,
+   ggf. Höhe in Blender anpassen).
+3. ⬜ Bodenkontakt bei allen Varianten korrekt (kein Schweben/Versinken).
+4. ⬜ Prozeduraler Anteil bei Wohnhäusern wirkt nach der Senkung (0.5→0.3)
+   nicht mehr so dominant wie vorher.
+5. ⬜ Speichern + Laden — jede Instanz behält ihre gewürfelte Variante.
+
+## Außenposten als Rastpunkt (siehe `survivor.md`, "Bedürfnisse: Müdigkeit + Moral", 2026-08-04)
+
+1. ⬜ Trupp mit niedriger Müdigkeit/Moral zu einem eigenen Außenposten
+   schicken (OHNE in der Nähe eines Betts zu sein) — beide Werte steigen
+   jetzt, genau wie an einem Bett.
+2. ⬜ Ohne Bett UND ohne Außenposten in der Nähe — beide Werte fallen
+   weiterhin normal, keine Regeneration (keine Regression).
+3. ⬜ Trupp in Reichweite von BEIDEM (Bett und Außenposten gleichzeitig) —
+   funktioniert weiterhin normal (kein doppelter Regenerations-Effekt,
+   keine Fehlermeldung).
+4. ⬜ Außenposten eines ANDEREN Spielers in der Nähe — kein Effekt (nur der
+   eigene Außenposten zählt, `owner_peer_id`-Check).
+
+## Gebäude-HP/Abriss-Ertrag + Start-Basis-Loot (siehe `survivor.md`, "Gebäude abreißen", 2026-08-04)
+
+1. ⬜ Eine kleine, schon geplünderte Tankstelle/Apotheke von einem Bautrupp
+   abreißen lassen — Ertrag liegt im Bereich ~18 Stein/9 Ziegel (nicht
+   mehr pauschal 20/10, aber ähnliche Größenordnung).
+2. ⬜ Einen Supermarkt (sobald geplündert + unbesetzt) abreißen lassen —
+   deutlich mehr Ertrag (~185 Stein/93 Ziegel) UND spürbar mehr Treffer
+   nötig (höhere HP) als bei einer Tankstelle.
+3. ⬜ Farbverlauf beim Abreißen (Grau → Schwarz) funktioniert weiterhin
+   korrekt über die GESAMTE Lebensdauer des jeweiligen Gebäudes, nicht zu
+   früh/spät dunkel (Ratio nutzt jetzt `max_hp` pro Instanz statt der
+   alten festen Konstante).
+4. ⬜ Als Start-Basis ein Gebäude mit sichtbarem Hauptloot wählen (z. B.
+   Supermarkt oder Waffenladen) — Ressourcen-Panel zeigt direkt nach der
+   Wahl den entsprechenden Bonus (z. B. mehr Nahrung oder eine Waffe) ZUSÄTZLICH
+   zu den normalen festen Startressourcen.
+5. ⬜ (Mit zweitem Client) Jeder Spieler bekommt nur den Loot SEINES eigenen
+   gewählten Start-Gebäudes, nicht das des Mitspielers.
+6. ⬜ Speichern + Laden — größenabhängige HP eines teilweise beschädigten
+   Gebäudes bleibt nach dem Laden exakt erhalten (kein Reset auf den neuen
+   berechneten Maximalwert).
+
+## Lager-Kapazität + Ausbau-Bauzeit rekalibriert (siehe `building.md`, "Lager"/"Ausbauen", 2026-08-04)
+
+1. ⬜ Ein kleines geclaimtes Gebäude (z. B. Wohnhaus) zu einem Lager
+   ausbauen — Kapazität liegt jetzt im Bereich ~600-700 (Wohnhaus-Volumen
+   671 m³), NICHT mehr im Zehntausender-Bereich.
+2. ⬜ Denselben Ausbau mit dem Supermarkt versuchen — Kapazität ~900-1000,
+   Bauzeit einige Dutzend Sekunden (nicht mehr 20+ Minuten).
+3. ⬜ Krankenstation/Werkstatt/Bett an einem kleinen vs. einem großen
+   Gebäude ausbauen — Bauzeit beim großen Gebäude sichtbar länger, aber
+   nicht extrem (Faktoren sind auf den bisherigen Flachwert bei
+   Wohnhaus-Größe kalibriert).
+4. ⬜ Ressourcenkosten aller vier Ausbauten unverändert (nur die Zeit hat
+   sich geändert, nicht der Preis) — Werkstatt-Rabatt (falls eigene
+   Werkstatt vorhanden) funktioniert weiterhin normal.
+5. ⬜ Mehrere Bautrupps einem großen Ausbau zuweisen — Fortschritt
+   beschleunigt sich weiterhin sichtbar mit mehr zugewiesenen Trupps
+   (keine Regression durch die Rekalibrierung).
+6. ⬜ Ressourcen-Panel zeigt bei einem ausgebauten Lager die neue,
+   plausible Kapazität an (nicht mehr die alten Zehntausender-Werte, falls
+   vorher schon eins gebaut wurde — bei einem Speicherstand von VOR diesem
+   Fix bleibt die alte Kapazität bestehen, erst ein neu gebautes Lager
+   nutzt den neuen Faktor).
+
+## Gebäude-Rotation + Start-Base-Abstand (siehe `world.md`, "Gebäude-Rotation", 2026-08-04)
+
+1. ⬜ Mehrere Supermärkte in verschiedenen Stadt-Zonen anschauen — Front
+   (Fenster/Tür) sollte JEWEILS zur nächsten Straße zeigen, nicht in
+   irgendeine feste Weltrichtung.
+2. ⬜ Speziell auf West/Ost-Blockkanten prüfen — falls die Front dort in
+   die FALSCHE Richtung zeigt (Rückseite zur Straße statt Front), sind die
+   beiden Rotationsvorzeichen in `_generate_street_slots()` vertauscht
+   (`+PI/2`/`-PI/2` tauschen behebt es).
+3. ⬜ Wohnhaus (und prozedurale Häuser) ebenfalls auf allen vier
+   Kanten-Richtungen anschauen — keine Regression, Dach/Fassade weiterhin
+   plausibel ausgerichtet.
+4. ⬜ Klickfläche/Kollision eines rotierten Gebäudes testen (durchsuchen,
+   claimen, abreißen) — Klick muss weiterhin auf dem TATSÄCHLICH
+   sichtbaren Gebäude-Umriss funktionieren, nicht auf der unrotierten
+   Ausgangsposition.
+5. ⬜ Speichern + Laden — Rotation bleibt nach dem Laden exakt erhalten.
+6. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht dieselbe Rotation
+   wie der Host.
+7. ⬜ Start-Basis wählen, dabei GEZIELT ein großes Gebäude (Supermarkt)
+   anklicken — Home-Base UND Start-Trupps spawnen jetzt sichtbar AUSSERHALB
+   des Supermarkt-Umrisses, kein Ineinander-Verschmelzen mehr (Vergleich
+   zum alten Screenshot `bilder/startbasevfehler.PNG`).
+8. ⬜ Start-Basis wählen mit einem kleinen Gebäude (z. B. Wohnhaus) —
+   weiterhin normaler, nicht unnötig übertriebener Abstand (keine
+   Regression durch die größenabhängige Berechnung).
+
+## Straßenabstand tiefenabhängig + kompaktere Stadt (siehe `world.md`, 2026-08-04)
+
+1. ⬜ Supermarkt in einer Stadt-Zone finden — Front steht jetzt sichtbar
+   VOR der Straße, nicht mehr fast auf der Fahrbahnmarkierung (Vergleich
+   zum alten Screenshot `bilder/supermarkt in game.PNG`).
+2. ⬜ Wohnhaus in einer Stadt-Zone finden — steht weiterhin normal mit
+   sichtbarem, aber jetzt etwas knapperem Abstand zur Straße (kein
+   Zurückregression, keine neue Überlappung).
+3. ⬜ Gesamteindruck einer Stadt-Zone von oben (Kartenansicht `M`) —
+   Gebäude sollten sichtbar dichter/näher zusammenstehen als vorher,
+   weniger große Lücken zwischen benachbarten Gebäuden in derselben Reihe.
+4. ⬜ Keine sichtbar überlappenden Gebäude trotz der engeren Packung (bei
+   JEDEM Gebäudetyp, nicht nur Wohnhaus/Supermarkt).
+5. ⬜ Performance-Gegenprobe: Weltgenerierung weiterhin unauffällig schnell
+   (die zusätzliche Slot-Anzahl pro Zone ist reine Generierungs-Rechenzeit,
+   keine zusätzlichen Entities).
+6. ⬜ Speichern + Laden — Gebäudepositionen bleiben exakt erhalten (keine
+   Neuberechnung/Verschiebung beim Laden).
+7. ⬜ Gesamteindruck im Vergleich zu vorher: fühlt sich die Stadt spürbar
+   kompakter an, oder braucht es eine weitere Runde (z. B. doch mehr
+   Gebäude pro Zone, mit dem bekannten Netzwerk-Risiko)?
+
+## Supermarkt: echtes Asset (siehe `building.md`, "Supermarkt", 2026-08-04)
+
+1. ⬜ In einer Stadt-Zone einen Supermarkt finden — zeigt jetzt das echte
+   (noch farblose/graue) Modell statt der Platzhalter-Box, deutlich
+   größer als alle anderen Gebäude.
+2. ⬜ Bodenkontakt prüfen — laut Bounding-Box-Analyse sollte das Modell
+   aktuell ca. 22cm im Boden versinken (bekannte, noch nicht behobene
+   Kleinigkeit, siehe `building.md`). Bestätigen, ob das im Spiel
+   tatsächlich auffällt.
+3. ⬜ Claimen/Durchsuchen/Abreißen funktioniert normal trotz des echten
+   Modells (Kollisionsbox bleibt die unsichtbare Platzhalter-Box in
+   korrekter Größe).
+4. ⬜ Speichern + Laden — Supermarkt behält sein echtes Modell (kein
+   Rückfall auf die Platzhalter-Box).
+5. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht ebenfalls das
+   echte Modell, nicht die Box.
+
+## Mehrfach-Reihenplätze für breite Gebäudetypen (siehe `world.md`, "Mehrfach-Reihenplätze", 2026-08-04)
+
+1. ⬜ In einer Stadt-Zone einen Supermarkt finden (aktuell noch Platzhalter-
+   Box, farblich Ocker/Braun) — deutlich größer/breiter als die anderen
+   Platzhalter-Boxen (18×4,5×12m), NICHT mit dem Nachbargebäude überlappend.
+2. ⬜ Mehrere Zonen abgehen — Supermärkte tauchen normal in der zufälligen
+   Verteilung auf (kein "kommt nie vor", kein Crash/Hänger bei der
+   Weltgenerierung).
+3. ⬜ Speichern + Laden — ein Supermarkt bleibt an exakt derselben Stelle
+   mit derselben Größe (kein "wandert" oder wird beim Laden kleiner/
+   überlappend).
+4. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht den Supermarkt an
+   derselben Stelle wie der Host.
+5. ⬜ Performance-Gegenprobe: Weltgenerierung dauert nicht spürbar länger
+   als vorher (die zusätzliche Nachbarschafts-Prüfung läuft nur einmalig
+   bei der Zonen-Erzeugung, nicht laufend).
+6. ⬜ Sobald das echte Supermarkt-Modell eingebaut ist: Bodenkontakt/
+   Kollisionsform passen zur tatsächlichen 18×12m-Größe (gleiche
+   Y-Ausgleich-Prüfung wie beim Wohnhaus).
+
+## Multi-Ziel-Pfadfindung beim Plündern (siehe `scavenging.md`, 2026-08-04)
+
+1. ⬜ Feldtrupp auf ein durchsuchbares Gebäude schicken (normaler Klick),
+   DANACH mit Shift auf ein zweites, noch nicht durchsuchtes Gebäude
+   klicken — Trupp durchsucht zuerst das erste Gebäude normal weiter,
+   läuft danach OHNE Zwischenstopp an der Basis direkt zum zweiten Gebäude
+   und durchsucht es ebenfalls.
+2. ⬜ Drei oder mehr Gebäude nacheinander per Shift-Klick anhängen — alle
+   werden in der geklickten Reihenfolge abgearbeitet, erst nach dem
+   LETZTEN läuft der Trupp automatisch zur Basis/zum nächsten Außenposten
+   zurück.
+3. ⬜ Shift-Klick auf ein Gebäude, während der Trupp noch UNTÄTIG ist (kein
+   laufender Befehl) — startet sofort (kein sinnloses Warten auf eine nie
+   abgearbeitete Warteschlange).
+4. ⬜ Während eine Route läuft, einen normalen (nicht-Shift-) Befehl geben
+   (z. B. Bewegen, Angreifen) — verwirft die komplette restliche
+   Warteschlange, kein Geister-Weiterlaufen zu alten Zielen danach.
+5. ⬜ Loot-Kapazität während einer Mehrfach-Route ausreizen (mehrere kleine
+   Gebäude nacheinander, bis `CARRY_CAPACITY` erreicht ist) — Verhalten wie
+   bisher (überschüssiger Loot geht verloren), keine neue Regel für die
+   Route.
+6. ⬜ Ein Gebäude in der Route ist bei Ankunft schon von einem anderen Trupp
+   geplündert (Wettlauf) — Trupp bekommt dafür keinen Loot, läuft aber
+   trotzdem normal zum NÄCHSTEN Ziel der eigenen Route weiter, bleibt nicht
+   stehen.
+7. ⬜ Ein Ziel in der Route ist ein Banditen-Restloot-Gebäude — funktioniert
+   normal innerhalb der Route (Loot einsammeln, dann weiter zum nächsten
+   Ziel).
+8. ⬜ (Mit zweitem Client) Route für einen Trupp von Spieler A stören/
+   beobachten sollte Spieler B nicht betreffen — rein lokaler Zustand pro
+   Trupp.
+
+## Treibstoff für Fahrzeuge (siehe `vehicle.md`, "Treibstoff", 2026-08-04)
+
+1. ⬜ Fahrzeug einsteigen und losfahren — HUD zeigt zusätzlich zu
+   "F: Aussteigen" eine Zeile "Treibstoff: X/Y", X sinkt sichtbar
+   während der Fahrt.
+2. ⬜ Lange genug fahren, bis Treibstoff auf 0 fällt — Fahrzeug bleibt
+   stehen, Statusmeldung "Fahrzeug hat keinen Treibstoff mehr." erscheint
+   EINMALIG (nicht wiederholt jeden Frame).
+3. ⬜ Mit leerem Tank zur eigenen Home-Base fahren (zu Fuß aussteigen und
+   das Fahrzeug hinschieben ist nicht möglich — ggf. vorher schon in
+   Reichweite der Home-Base leerfahren) — Treibstoff steigt automatisch,
+   solange `"fuel"`-Ressource im Home-Base-Lager vorhanden ist, Fahrzeug
+   fährt danach wieder normal weiter.
+4. ⬜ Ohne `"fuel"`-Ressource im Lager in Reichweite der Home-Base stehen —
+   Treibstoff bleibt bei 0, kein automatisches Auftanken.
+5. ⬜ Tankstelle durchsuchen — Hauptloot ist jetzt Treibstoff (15-30), nicht
+   mehr Nahrung (Nahrung bleibt als kleinerer Nebenloot-Anteil erhalten).
+6. ⬜ Neues Spiel starten — Home-Base hat sofort 20 `"fuel"` im Lager
+   (Ressourcen-Panel, Kategorie "Überleben"), ein frisch gefundenes
+   Fahrzeug ist unabhängig davon von Anfang an vollgetankt.
+7. ⬜ Speichern + Laden während ein Fahrzeug einen Teil-Tank hat — Fuel-Stand
+   bleibt nach dem Laden exakt erhalten (kein Reset auf voll/leer).
+8. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht den korrekten
+   Treibstoff-Stand eines schon fahrenden fremden Fahrzeugs.
+9. ⬜ Treibstoff im Handel-Tab verschenken/tauschen — sollte wie jede andere
+   Ressource normal funktionieren (generische Dropdown-Liste).
+
+## Banditen als echte NPC-Gegner (siehe `bandits.md`, 2026-08-04)
+
+Komplett neues Feature, größerer Umfang — gründlich gegentesten.
+
+1. ⬜ In der Wildnis (nicht in Stadt-/Waldzonen) ein Bandit-Hideout finden
+   (dunkles Ockerbraun, größere Box) — sollten 3 auf der Karte verteilt
+   sein, auch auf Karte/Minimap in derselben Farbfamilie sichtbar.
+2. ⬜ In der Nähe eines Hideouts warten — nach spätestens 30s sollte ein
+   Bandit (Kapsel, dunkles Rotbraun) auftauchen, bis zu 3 gleichzeitig,
+   nicht mehr.
+3. ⬜ Trupp in die Nähe eines Bandits laufen lassen — Bandit bleibt auf
+   Distanz (ca. 6m) stehen und schießt, läuft NICHT bis auf Nahkampf-
+   Distanz heran.
+4. ⬜ Bandit angreifen lassen (Klick auf den Bandit mit ausgewähltem
+   Feldtrupp) — Trupp nimmt Schaden vom Bandit, aber KEIN automatischer
+   Gegenschaden vom Bandit selbst (anders als bei Zombies) — nur der
+   eigene `order_attack()`-Schaden wirkt.
+5. ⬜ Bandit töten — gelegentlich Munition/Waffe/Rüstung/Helm als Loot
+   ("Banditen-Beute: ..."-Statusmeldung), nicht bei jedem Kill.
+6. ⬜ Eigenen Wachposten in Reichweite eines Bandits/Hideouts bauen —
+   Wachposten feuert automatisch auch auf Bandits/Hideouts, nicht nur auf
+   Zombies.
+7. ⬜ Gruppenangriff: mehrere Trupps auf einen angeklickten Bandit mit
+   weiteren Bandits in der Nähe — Trupps verteilen sich auf mehrere
+   Bandits statt alle denselben anzugreifen (gleiches Verhalten wie bei
+   Zombie-Gruppen).
+8. ⬜ Ein ganzes Hideout zerstören (HP auf 0) — Hideout verschwindet
+   PERMANENT (kein Wiederaufbau), Verursacher bekommt einen deutlich
+   größeren Bonus-Loot-Batzen ("Hideout ausgehoben — reiche Beute
+   erhalten!").
+9. ⬜ Bandits greifen NUR Survivor/geclaimte Gebäude/Home-Bases an, nicht
+   Zombies — bei Bandits UND Zombies in derselben Gegend sollten sich
+   beide Fraktionen gegenseitig ignorieren.
+10. ⬜ Speichern + Laden: Hideouts bleiben mit korrekter Position/HP
+    erhalten. Bewusste Lücke: einzelne, zum Speicherzeitpunkt lebende
+    Bandits sind nach dem Laden weg, füllen sich aber innerhalb von 30s
+    wieder auf (siehe `bandits.md`, "Bewusste Lücke") — kein Absturz,
+    keine Geister-Bandits.
+11. ⬜ (Mit zweitem Client) Spät beitretender Peer sieht schon existierende
+    Hideouts UND Bandits korrekt (Position/HP), kann sie normal angreifen.
+12. ⬜ Performance-Gegenprobe: keine spürbare FPS-Verschlechterung durch
+    die zusätzlichen `_process()`-Läufe der Hideouts/Bandits (Population
+    bleibt klein, sollte nicht auffallen).
+
 ## Feld-Ghost-Fix + Skalierung (siehe `status.md`, 2026-08-04)
 
 1. ⬜ Baumodus für Feld öffnen — Vorschau-Box ist jetzt sichtbar

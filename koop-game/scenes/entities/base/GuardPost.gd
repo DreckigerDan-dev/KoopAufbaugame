@@ -59,6 +59,10 @@ func _try_fire(delta: float) -> void:
 		# das andere Zombies sinnvoll verfolgen könnten, und implementiert
 		# auch kein alert().
 		_alert_nearby_zombies(target)
+	elif target.is_in_group("bandit"):
+		# Gleiches Prinzip für Bandits (siehe docs/bandits.md) — ein
+		# beschossenes Hideout hat wie das Zombie-Nest kein alert().
+		_alert_nearby_bandits(target)
 
 
 func _find_nearest_zombie() -> Node3D:
@@ -70,8 +74,13 @@ func _find_nearest_zombie() -> Node3D:
 	# World.zombies_near() (Spatial Grid, siehe World.ZOMBIE_GRID_CELL_SIZE)
 	# statt der vollen "zombie"-Gruppenabfrage — Zombie-Nest bleibt normale
 	# Gruppenabfrage (immer nur wenige, eine pro Stadt-Zone, lohnt sich nicht).
+	# "bandit"/"bandit_hideout" (siehe docs/bandits.md) laufen ebenfalls über
+	# normale Gruppenabfragen statt eines eigenen Spatial Grids — Bandit-
+	# Population bleibt pro Hideout stark gekappt, lohnt sich hier nicht.
 	var candidates: Array = get_tree().current_scene.zombies_near(global_position, FIRE_RANGE)
 	candidates.append_array(get_tree().get_nodes_in_group("zombie_nest"))
+	candidates.append_array(get_tree().get_nodes_in_group("bandit"))
+	candidates.append_array(get_tree().get_nodes_in_group("bandit_hideout"))
 	var nearest: Node3D = null
 	var nearest_dist := FIRE_RANGE
 	for candidate in candidates:
@@ -92,6 +101,14 @@ func _alert_nearby_zombies(target: Node3D) -> void:
 	for zombie in get_tree().current_scene.zombies_near(global_position, FIRE_NOISE_RADIUS):
 		if is_instance_valid(zombie):
 			zombie.alert(target)
+
+
+func _alert_nearby_bandits(target: Node3D) -> void:
+	# Analog _alert_nearby_zombies(), aber linearer Scan über die (kleine)
+	# "bandit"-Gruppe statt des Spatial Grids (siehe docs/bandits.md).
+	for bandit in get_tree().get_nodes_in_group("bandit"):
+		if is_instance_valid(bandit) and global_position.distance_to(bandit.global_position) <= FIRE_NOISE_RADIUS:
+			bandit.alert(target)
 
 
 @rpc("any_peer", "call_local", "reliable")

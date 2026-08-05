@@ -106,14 +106,22 @@ statt neu gebaut.
   aufgebraucht, kürzer als ein einziger Erkundungslauf. Neue Werte: ~11
   Minuten (Müdigkeit) bzw. ~22 Minuten (Moral) bis 0, gleiches
   2:1-Verhältnis beibehalten.
-- **Regeneration NUR am eigenen Schlafraum** (`_handle_resting()`,
-  `BED_REST_RADIUS` 5.0 um ein Gebäude der Gruppe `"bed"`,
-  `REST_RATE` 10/s für BEIDE Werte gleichzeitig) — bewusst KEINE
-  Home-Base-Grundrate wie bei Hunger/Heilung. Ohne eigenen Schlafraum
-  sinken beide dauerhaft, das ist laut Vision der ganze Sinn der
-  Betten-Mechanik. Kein Ressourcenverbrauch beim Regenerieren selbst (nur
-  die Baukosten des Schlafraums, siehe [`building.md`](building.md),
-  "Betten").
+- **Regeneration am eigenen Schlafraum ODER Außenposten**
+  (`_handle_resting()`/`_find_nearby_rest_point()`, `BED_REST_RADIUS` 5.0
+  um ein Gebäude der Gruppe `"bed"` ODER `"outpost"`, `REST_RATE` 10/s für
+  BEIDE Werte gleichzeitig) — bewusst KEINE Home-Base-Grundrate wie bei
+  Hunger/Heilung. Ohne eigenen Schlafraum/Außenposten in der Nähe sinken
+  beide dauerhaft, das ist laut Vision der ganze Sinn der Betten-Mechanik.
+  Kein Ressourcenverbrauch beim Regenerieren selbst (nur die Baukosten,
+  siehe [`building.md`](building.md), "Betten"/"Außenposten").
+  **Außenposten seit 2026-08-04 dabei** (Systematik-Review, Fund 5) — die
+  Vision nennt Außenposten explizit als Rastpunkt ("nur zum Rasten/
+  Schlafen der Trupps"), das war beim ursprünglichen Außenposten-Bau
+  (2026-08-01) nur deshalb ausgelassen, weil dieses Bedürfnissystem noch
+  nicht existierte; beim Nachbau des Systems einen Tag später wurde der
+  Außenposten dann schlicht vergessen. Gleicher Radius/gleiche Rate wie
+  ein Bett (bewusst keine eigene, schwächere Außenposten-Stufe, um nicht
+  ungefragt eine neue Balance-Unterscheidung einzuführen).
 - **Leistungsminderung, zwei unterscheidbare Effekte statt eines
   doppelten Speed-Malus:**
   - `fatigue <= FATIGUE_LOW_THRESHOLD` (30): Bewegung `*
@@ -632,12 +640,29 @@ Gruppenzugehörigkeit wäre unnötig gewesen.
   Ablauf wie beim Abbauen eines Baums/Wracks/Haufens (siehe oben).
 - **`Building.gd`** implementiert dafür dasselbe `take_damage()`/`hp`/
   `YIELD`-Interface wie `Tree.gd`/`CarWreck.gd`/`StonePile.gd`/
-  `BrickPile.gd` (`MAX_HP := 100`, `YIELD := {"stone": 20, "brick":
-  10}` — ein Gebäude gibt beim Abreißen **beide** Arten gleichzeitig,
-  `add_resources()` verarbeitet das transparent). `_update_visual()`
-  dunkelt das bisherige Grau (geplündert, unbesetzt) zusätzlich Richtung
-  Schwarz nach, je näher am Abriss — gleiches Prinzip wie bei den anderen
-  Ressourcenquellen.
+  `BrickPile.gd` — ein Gebäude gibt beim Abreißen **beide** Arten
+  gleichzeitig, `add_resources()` verarbeitet das transparent.
+  `_update_visual()` dunkelt das bisherige Grau (geplündert, unbesetzt)
+  zusätzlich Richtung Schwarz nach, je näher am Abriss — gleiches Prinzip
+  wie bei den anderen Ressourcenquellen.
+  **Größenabhängig seit 2026-08-04** (Systematik-Review, Fund 3): `max_hp`/
+  `YIELD` waren vorher `Building.MAX_HP := 100`/`YIELD := {"stone": 20,
+  "brick": 10}` als KONSTANTEN, für jede der 14 Vorlagen exakt gleich,
+  unabhängig von der tatsächlichen Größe — bei den inzwischen sehr
+  unterschiedlich großen echten Assets (Tankstelle ~90 m³ bis Supermarkt
+  ~927 m³) fiel das auf. Jetzt Instanzfelder, `World._create_building()`
+  berechnet beide aus dem echten Gebäude-Volumen
+  (`BUILDING_HP_PER_VOLUME := 0.5`, `BUILDING_STONE_YIELD_PER_VOLUME :=
+  0.2`, `BUILDING_BRICK_YIELD_PER_VOLUME := 0.1`, je mit einem
+  `MIN_BUILDING_*`-Boden verankert an der kleinsten bekannten echten
+  Gebäudegröße) — ein Tankstellen-Abriss bleibt ungefähr beim alten Gefühl
+  (HP 50, 18 Stein/9 Ziegel), ein Supermarkt-Abriss gibt deutlich mehr
+  (HP 464, 185 Stein/93 Ziegel). `Building.DEFAULT_MAX_HP`/`DEFAULT_YIELD`
+  bleiben als Fallback-Konstanten für Aufrufer ohne Größenangabe (aktuell
+  keiner). `YIELD` ist bewusst weiterhin groß geschrieben, obwohl jetzt
+  `var` statt `const` — Survivor._process_harvest() liest
+  `_harvest_target.YIELD` als Duck-Typing-Schnittstelle, ein Umbenennen
+  hätte die gebrochen.
 
 ### Bekannte Grenzen (Trupp-Arten)
 

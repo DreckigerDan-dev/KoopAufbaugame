@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/entities/bandit/BanditHideout.gd" id="1"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_bandit_hideout"]
+size = Vector3(2.8, 2.2, 2.8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bandit_hideout"]
+size = Vector3(2.8, 2.2, 2.8)
+
+[node name="BanditHideout" type="StaticBody3D" groups=["bandit_hideout"]]
+script = ExtResource("1")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_bandit_hideout")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_bandit_hideout")

@@ -13,6 +13,9 @@ const OWN_COLOR := Color(1, 1, 1)
 const ALLY_COLOR := Color(0.3, 0.85, 0.9)
 const ZOMBIE_COLOR := Color(0.85, 0.2, 0.2)
 const NEST_COLOR := Color(0.5, 0.05, 0.05)
+# Bandits (siehe docs/bandits.md, MapView.gd für dieselbe Farbwahl).
+const BANDIT_COLOR := Color(0.55, 0.3, 0.15)
+const BANDIT_HIDEOUT_COLOR := Color(0.4, 0.28, 0.1)
 const UNCLAIMED_BUILDING_COLOR := Color(0.6, 0.6, 0.6)
 const VEHICLE_COLOR := Color(0.3, 0.4, 0.85)
 const CAMERA_MARKER_COLOR := Color(1, 1, 0.3)
@@ -20,6 +23,8 @@ const FOG_COLOR := Color(0.02, 0.02, 0.02, 1.0)
 const UNIT_RADIUS := 2.5
 const ZOMBIE_RADIUS := 2.0
 const NEST_RADIUS := 3.5
+const BANDIT_RADIUS := 2.0
+const BANDIT_HIDEOUT_RADIUS := 3.5
 const BUILDING_HALF_SIZE := 3.0
 const CAMERA_MARKER_SIZE := 6.0
 # Gegenseitige Verteidigung/Hilfe (siehe docs/world.md, "Gegenseitige
@@ -40,6 +45,7 @@ func _draw() -> void:
 	_draw_home_bases(own_peer_id)
 	_draw_living(own_peer_id)
 	_draw_zombies()
+	_draw_bandits()
 	_draw_fog()
 	_draw_sos_alerts()
 	_draw_camera_marker()
@@ -102,6 +108,15 @@ func _draw_zombies() -> void:
 	for nest in get_tree().get_nodes_in_group("zombie_nest"):
 		if is_instance_valid(nest):
 			draw_circle(_to_minimap(nest.position), NEST_RADIUS, NEST_COLOR)
+
+
+func _draw_bandits() -> void:
+	for bandit in get_tree().get_nodes_in_group("bandit"):
+		if is_instance_valid(bandit):
+			draw_circle(_to_minimap(bandit.position), BANDIT_RADIUS, BANDIT_COLOR)
+	for hideout in get_tree().get_nodes_in_group("bandit_hideout"):
+		if is_instance_valid(hideout):
+			draw_circle(_to_minimap(hideout.position), BANDIT_HIDEOUT_RADIUS, BANDIT_HIDEOUT_COLOR)
 
 
 func _draw_sos_alerts() -> void:

@@ -111,6 +111,57 @@ exakt übereinanderstehen), leert `driver`/`passengers`, setzt
 **Mitfahrer können nicht einzeln aussteigen** — kein eigenständiges
 Aussteigen einzelner Passagiere ohne den Fahrer, siehe "Bekannte Grenzen".
 
+## Treibstoff (2026-08-04, Ideen-Backlog "Treibstoff/Energie für Fahrzeuge")
+
+Neue Ressource `"fuel"`, `VEHICLE_STATS[...]["fuel_capacity"]`/
+`["fuel_consumption_per_meter"]` pro Typ (Auto 100/0,025, Motorrad 50/0,015,
+LKW 150/0,04 — LKW verbraucht pro Meter am meisten, Motorrad am wenigsten,
+grobe Reichweite 3500-4000m pro volle Tankfüllung, noch nicht im Spiel
+gegengetestet, bei Bedarf anpassen).
+
+- **Verbrauch proportional zur tatsächlich gefahrenen Strecke**
+  (`_handle_movement()`, NICHT zur Zeit in Bewegung) — `fuel` sinkt um
+  `distance_moved * _fuel_consumption_per_meter` pro Frame, in dem sich das
+  Fahrzeug wirklich bewegt (blockiert an einer Mauer stehend verbraucht
+  nichts).
+- **Bei `fuel <= 0.0` bleibt das Fahrzeug stehen**, unabhängig von
+  Wegpunkten — einmaliges Status-Feedback ("Fahrzeug hat keinen Treibstoff
+  mehr.", `_out_of_fuel_reported`-Sperre gegen Dauer-Spam), kein
+  automatisches Verwerfen der Wegpunkt-Schlange (fährt normal weiter,
+  sobald wieder Treibstoff da ist). **Fund bei der Systematik-Review:**
+  `_handle_noise()` prüfte ursprünglich nur, ob noch Wegpunkte offen sind
+  — bei leerem Tank blieb die Schlange aber bewusst gefüllt (siehe oben),
+  ein liegengebliebenes Fahrzeug hätte dadurch trotzdem weiter alle 2s
+  Zombies alarmiert, obwohl es sich gar nicht bewegt. Jetzt zusätzlich
+  `fuel > 0.0` geprüft — anders als der Fall "an einer Mauer blockiert"
+  (dort läuft der Motor tatsächlich noch, macht bewusst weiter Lärm).
+- **Automatisches Auftanken in Reichweite der eigenen Home-Base**
+  (`_handle_refuel()`, `REFUEL_RADIUS := 6.0`) — exakt dasselbe Intervall-
+  Muster wie `Survivor._handle_eating()` (`REFUEL_INTERVAL := 2.0`,
+  `REFUEL_AMOUNT := 20.0` pro Tick, verbraucht dabei 1 Einheit der
+  diskreten Ganzzahl-Ressource `"fuel"` aus `HomeBase.resources` — kein
+  Bruchteils-Verbrauch der Home-Base-Ressource, nur `Vehicle.fuel` selbst
+  ist ein `float`). Läuft nur, solange ein Fahrer drinsitzt (`driver !=
+  null`, gleiche Bedingung wie der ganze übrige `_process()`-Block) — ein
+  verlassenes, unbesetztes Fahrzeug hat keinen Besitzer/keine Home-Base
+  mehr, an die es sich halten könnte.
+- **Tankstelle als Hauptloot-Quelle** (`World.BUILDING_TYPES`,
+  "Tankstelle") — `main_loot` von `food` auf `fuel` (15-30) umgestellt,
+  "passt thematisch perfekt" (siehe `Infos/07 Backlog-Umsetzungspläne.md`).
+  Der vorherige Nahrungs-Loot bleibt als kleinerer `secondary_loot`-Anteil
+  erhalten.
+- **HUD-Anzeige** — `World._update_hud()` zeigt bei ausgewähltem,
+  eingesetzem Fahrzeug zusätzlich zum bestehenden "F: Aussteigen"-Hinweis
+  eine Zeile "Treibstoff: X/Y".
+- **Start-Ressourcen** — `HomeBase.START_RESOURCES` bekommt `"fuel": 20`
+  (ein Refuel-Tick), Fahrzeuge selbst starten unabhängig davon immer
+  vollgetankt (`_ready()`, gleiches Timing-Prinzip wie `hp`).
+- **Speicherstand-/Catch-up-fähig** wie `hp` — `_collect_save_data()`/
+  `_load_game_state()`/`_catch_up_vehicle()` führen `fuel` mit
+  (`.get("fuel", ...)`-Fallback für ältere Spielstände ohne dieses Feld).
+
+**Noch nicht vom Nutzer getestet.**
+
 ## Bewegung + Blocking
 
 `order_move()`/`order_stop()` — identisches Muster wie

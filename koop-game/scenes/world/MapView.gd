@@ -13,6 +13,11 @@ const OWN_COLOR := Color(1, 1, 1)
 const ALLY_COLOR := Color(0.3, 0.85, 0.9)
 const ZOMBIE_COLOR := Color(0.85, 0.2, 0.2)
 const NEST_COLOR := Color(0.5, 0.05, 0.05)
+# Bandits (siehe docs/bandits.md) — eigene Braun/Ocker-Farbfamilie statt des
+# Zombie-Rots, auf der Karte auf den ersten Blick als andere Bedrohungsart
+# erkennbar (gleiche Unterscheidung wie bei den 3D-Entity-Farben selbst).
+const BANDIT_COLOR := Color(0.55, 0.3, 0.15)
+const BANDIT_HIDEOUT_COLOR := Color(0.4, 0.28, 0.1)
 const UNCLAIMED_BUILDING_COLOR := Color(0.6, 0.6, 0.6)
 const VEHICLE_COLOR := Color(0.3, 0.4, 0.85)
 const CAMERA_MARKER_COLOR := Color(1, 1, 0.3)
@@ -57,6 +62,8 @@ const LEGEND_FONT_SIZE := 14
 const UNIT_RADIUS := 6.0
 const ZOMBIE_RADIUS := 5.0
 const NEST_RADIUS := 9.0
+const BANDIT_RADIUS := 5.0
+const BANDIT_HIDEOUT_RADIUS := 9.0
 const BUILDING_HALF_SIZE := 7.0
 const CAMERA_MARKER_SIZE := 16.0
 # Gegenseitige Verteidigung/Hilfe (siehe docs/world.md, "Gegenseitige
@@ -108,6 +115,7 @@ func _draw() -> void:
 	_draw_home_bases(own_peer_id)
 	_draw_living(own_peer_id)
 	_draw_zombies()
+	_draw_bandits()
 	_draw_fog()
 	_draw_sos_alerts()
 	_draw_camera_marker()
@@ -175,6 +183,15 @@ func _draw_zombies() -> void:
 	for nest in get_tree().get_nodes_in_group("zombie_nest"):
 		if is_instance_valid(nest):
 			draw_circle(_to_map(nest.position), NEST_RADIUS, NEST_COLOR)
+
+
+func _draw_bandits() -> void:
+	for bandit in get_tree().get_nodes_in_group("bandit"):
+		if is_instance_valid(bandit):
+			draw_circle(_to_map(bandit.position), BANDIT_RADIUS, BANDIT_COLOR)
+	for hideout in get_tree().get_nodes_in_group("bandit_hideout"):
+		if is_instance_valid(hideout):
+			draw_circle(_to_map(hideout.position), BANDIT_HIDEOUT_RADIUS, BANDIT_HIDEOUT_COLOR)
 
 
 func _draw_sos_alerts() -> void:

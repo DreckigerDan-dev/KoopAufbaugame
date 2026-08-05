@@ -51,12 +51,14 @@ erzeugten Node zurück, schon vorher so genutzt z. B. in
 wie das normale Spiel, nur mit Daten aus der Save-Datei statt frisch
 generierten Positionen — kein neuer Replikationsweg nötig.
 
-Sieben `_create_*()`-Funktionen bekamen dafür **zusätzliche, optionale**
+Acht `_create_*()`-Funktionen bekamen dafür **zusätzliche, optionale**
 `data.get("hp", ...)`/`data.get("is_marked", false)`-Fallbacks
 (`_create_survivor`, `_create_zombie`, `_create_tree`, `_create_car_wreck`,
-`_create_stone_pile`, `_create_brick_pile`, `_create_guard_post`) —
-bestehende Aufrufer (normales Spiel) übergeben diese Keys nie, Verhalten
-dort bleibt exakt unverändert.
+`_create_stone_pile`, `_create_brick_pile`, `_create_guard_post`,
+`_create_wall` — Letzteres erst 2026-08-04, Systematik-Review, siehe
+[`walls.md`](walls.md), vorher fehlte `hp` dort komplett) — bestehende
+Aufrufer (normales Spiel) übergeben diese Keys nie, Verhalten dort bleibt
+exakt unverändert.
 
 **Bekannte `@export`-Timing-Falle beachtet:** `Zombie._ready()` berechnet
 `hp = _max_hp` abhängig von `is_brute` (siehe `docs/zombies.md`,

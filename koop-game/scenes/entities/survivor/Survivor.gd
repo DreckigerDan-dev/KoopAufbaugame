@@ -238,6 +238,13 @@ var _pending_station_target: Node3D = null
 var _searching: bool = false
 var _search_timer: float = 0.0
 var _pending_building_path: NodePath = NodePath()
+# Multi-Ziel-Pfadfindung beim Plündern (siehe docs/scavenging.md) — weitere,
+# per Shift-Klick angehängte Suchziele, die nacheinander abgearbeitet werden,
+# sobald das jeweils aktuelle fertig ist (siehe order_search()/
+# _advance_search_queue_or_return_to_base()). Jeder Eintrag: {"target":
+# Vector3, "building_path": NodePath} — dasselbe Paar, das order_search()
+# sonst direkt bekommt.
+var _search_queue: Array[Dictionary] = []
 
 # "Im Haus" (siehe is_sheltered()) — bleibt bewusst über das Ende der Suche
 # hinaus true, solange der Trupp am Gebäude stehen bleibt. Erst ein neuer
@@ -609,6 +616,7 @@ func _finish_search() -> void:
 	var building := get_node_or_null(_pending_building_path)
 	_pending_building_path = NodePath()
 	if building == null:
+		_advance_search_queue_or_return_to_base()
 		return
 	if building.has_bandit_loot:
 		# Banditen-Restloot (siehe docs/scavenging.md, "Banditen-Restloot") —
@@ -619,9 +627,14 @@ func _finish_search() -> void:
 		# Durchsuchen).
 		_pick_up_loot(building.bandit_loot)
 		building.clear_bandit_loot.rpc()
-		_return_to_base()
+		_advance_search_queue_or_return_to_base()
 		return
 	if building.is_looted:
+		# Zwischenzeitlich schon von einem anderen Trupp geplündert (z. B.
+		# beim gemeinsamen Anlaufen mehrerer Multi-Ziel-Ketten) — kein Loot
+		# hier, aber die Warteschlange soll trotzdem weiterlaufen statt
+		# einfach stehen zu bleiben.
+		_advance_search_queue_or_return_to_base()
 		return
 	building.mark_looted.rpc()
 	_pick_up_loot(building.loot)
@@ -640,7 +653,22 @@ func _finish_search() -> void:
 		# Gebäude (siehe docs/mechanics-review.md, "Spieler-Kapazität") —
 		# unabhängig vom festen has_survivor-Gebäude und den Schutzsuchenden.
 		get_tree().current_scene.spawn_recruit(owner_peer_id, position)
-	_return_to_base()
+	_advance_search_queue_or_return_to_base()
+
+
+func _advance_search_queue_or_return_to_base() -> void:
+	# Multi-Ziel-Pfadfindung (siehe docs/scavenging.md) — läuft direkt zum
+	# nächsten per Shift-Klick angehängten Suchziel weiter, ohne erst zur
+	# Basis zurückzukehren (Loot bis zur Trage-Kapazität bleibt dabei
+	# einfach getragen, siehe CARRY_CAPACITY). Nur wenn die Warteschlange
+	# leer ist, greift der normale automatische Rückweg.
+	if _search_queue.is_empty():
+		_return_to_base()
+		return
+	var next: Dictionary = _search_queue.pop_front()
+	_sheltered = false
+	_waypoints = [next["target"]]
+	_pending_building_path = next["building_path"]
 
 
 func _pick_up_loot(loot: Dictionary) -> void:
@@ -840,6 +868,7 @@ func _cancel_search() -> void:
 	_pending_claim_path = NodePath()
 	_attack_target = null
 	_harvest_target = null
+	_search_queue.clear()
 
 
 func _handle_hunger(delta: float) -> void:
@@ -931,16 +960,39 @@ func _find_nearby_bed() -> Node3D:
 	return null
 
 
+func _find_nearby_rest_point() -> Node3D:
+	# Außenposten zählen seit 2026-08-04 (Systematik-Review, Fund 5) auch als
+	# Rastpunkt — Bett bleibt Vorrang (billigere Gruppenabfrage, meist auch
+	# näher an der Basis). Vision-Text für Außenposten sagt wörtlich "nur
+	# zum Rasten/Schlafen der Trupps"; beim ursprünglichen Außenposten-Bau
+	# (2026-08-01) war das explizit NUR ausgelassen, weil es noch kein
+	# Bedürfnissystem gab ("bräuchte ein Müdigkeits-/Bedürfnissystem, das es
+	# noch nicht gibt", siehe docs/building.md, "Außenposten") — das kam
+	# einen Tag später (Betten, 2026-08-02), der Außenposten wurde seitdem
+	# nur nie nachgerüstet. Gleicher Radius/gleiche Rate wie ein Bett
+	# (BED_REST_RADIUS/REST_RATE) — bewusst keine eigene, schwächere
+	# Außenposten-Rate, um nicht ungefragt eine neue Balance-Unterscheidung
+	# einzuführen; nach Testen leicht trennbar, falls gewünscht.
+	var bed := _find_nearby_bed()
+	if bed != null:
+		return bed
+	for outpost in get_tree().get_nodes_in_group("outpost"):
+		if is_instance_valid(outpost) and outpost.owner_peer_id == owner_peer_id and global_position.distance_to(outpost.global_position) <= BED_REST_RADIUS:
+			return outpost
+	return null
+
+
 func _handle_resting(delta: float) -> void:
 	# Müdigkeit + Moral regenerieren NUR in der Nähe eines eigenen
-	# Schlafraums (siehe FATIGUE_DECAY_RATE-Kommentar oben) — anders als
-	# Hunger/Heilung gibt es hier bewusst KEINE Home-Base-Grundrate, das ist
-	# der ganze Sinn der Betten-Mechanik aus der Vision. Kein Ressourcen-
-	# verbrauch (Vision nennt für die Regeneration selbst keine Kosten,
-	# nur die Baukosten des Schlafraums, siehe docs/building.md, "Betten").
+	# Schlafraums ODER Außenpostens (siehe FATIGUE_DECAY_RATE-Kommentar oben
+	# und _find_nearby_rest_point()) — anders als Hunger/Heilung gibt es
+	# hier bewusst KEINE Home-Base-Grundrate, das ist der ganze Sinn der
+	# Betten-Mechanik aus der Vision. Kein Ressourcenverbrauch (Vision nennt
+	# für die Regeneration selbst keine Kosten, nur die Baukosten des
+	# Schlafraums, siehe docs/building.md, "Betten").
 	if fatigue >= 100.0 and morale >= 100.0:
 		return
-	if _find_nearby_bed() == null:
+	if _find_nearby_rest_point() == null:
 		return
 	fatigue = min(fatigue + REST_RATE * delta, 100.0)
 	morale = min(morale + REST_RATE * delta, 100.0)
@@ -973,10 +1025,17 @@ func order_move(target: Vector3, requesting_peer_id: int, queue: bool, start_del
 
 
 @rpc("any_peer", "call_local", "reliable")
-func order_search(target: Vector3, building_path: NodePath, requesting_peer_id: int) -> void:
+func order_search(target: Vector3, building_path: NodePath, requesting_peer_id: int, additive: bool = false) -> void:
 	# building_path als NodePath, weil Gebäude statisch in World.tscn
-	# verankert sind (siehe _pending_building_path oben). Ersetzt immer die
-	# ganze Schlange — Durchsuchen ist ein einzelnes, unmittelbares Ziel.
+	# verankert sind (siehe _pending_building_path oben). Ersetzt normalerweise
+	# die ganze Schlange — Durchsuchen ist ein einzelnes, unmittelbares Ziel.
+	# additive (Shift-Klick, siehe docs/scavenging.md, "Multi-Ziel-
+	# Pfadfindung") hängt statt dessen ein weiteres Suchziel HINTEN an
+	# _search_queue an, ohne den aktuell laufenden Befehl zu unterbrechen —
+	# analog zum additive-Parameter von order_move() für die
+	# Bewegungs-Wegpunkte, nur als eigene Warteschlange, weil Suchaufträge
+	# (Hinlaufen + SEARCH_DURATION abwarten) mehr Zustand brauchen als ein
+	# reiner Bewegungs-Wegpunkt.
 	if not multiplayer.is_server() or requesting_peer_id != owner_peer_id:
 		return
 	if troop_type != TroopType.FIELD:
@@ -985,10 +1044,23 @@ func order_search(target: Vector3, building_path: NodePath, requesting_peer_id: 
 		# Nutzerwunsch nach Test: "die sollen nur abbauen können".
 		get_tree().current_scene.report_status(requesting_peer_id, "Nur Feldtrupps können Gebäude durchsuchen.")
 		return
+	if additive:
+		if is_idle():
+			# Untätiger Trupp hat nichts, an das angehängt werden könnte —
+			# Shift-Klick startet dann direkt, statt eine Warteschlange
+			# aufzubauen, die nie abgearbeitet würde (nur _finish_search()/
+			# _advance_search_queue_or_return_to_base() leeren _search_queue).
+			_sheltered = false
+			_waypoints = [target]
+			_pending_building_path = building_path
+		else:
+			_search_queue.append({"target": target, "building_path": building_path})
+		return
 	_unstation()
 	_searching = false
 	_sheltered = false
 	_pending_vehicle_path = NodePath()
+	_search_queue.clear()
 	_waypoints = [target]
 	_pending_building_path = building_path
 

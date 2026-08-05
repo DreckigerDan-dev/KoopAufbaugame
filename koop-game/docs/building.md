@@ -120,13 +120,18 @@ austauschbares `MeshInstance3D.mesh`, kein generischer Szenen-Container).
 
 Aus der Vision übernommen (`Infos/01 Architektur.md`, "Außenposten": "Kleine,
 unabhängige Bauten außerhalb der Hauptzone, nur zum Rasten/Schlafen der
-Trupps — Ausnahme von der Zusammenhang-Regel"). **Wichtige Abgrenzung:** nur
-der Teil, der sich mit dem aktuellen Spielstand sinnvoll umsetzen lässt, ist
-umgesetzt — "Rasten/Schlafen" bräuchte ein Müdigkeits-/Bedürfnissystem
-(Punkt 16 der Gesamtliste), das es noch nicht gibt. Umgesetzt ist die
-zweite, in der Vision genannte Funktion: ein kürzerer Rückweg beim
-Scavenging ("Rückweg zur Basis (oder zum Außenposten zum Zwischenlagern)",
-`Infos/01 Architektur.md`, "Trage-Kapazität").
+Trupps — Ausnahme von der Zusammenhang-Regel"). Ursprünglich (2026-08-01)
+nur die zweite, in der Vision genannte Funktion umgesetzt — ein kürzerer
+Rückweg beim Scavenging ("Rückweg zur Basis (oder zum Außenposten zum
+Zwischenlagern)", `Infos/01 Architektur.md`, "Trage-Kapazität") — mit dem
+Vorbehalt, "Rasten/Schlafen" bräuchte erst ein Müdigkeits-/Bedürfnissystem,
+das es damals noch nicht gab. Das System kam einen Tag später (Betten,
+Punkt 16 der Gesamtliste), der Außenposten wurde dabei aber nie
+nachgerüstet — erst am 2026-08-04, bei der Systematik-Review (Fund 5),
+aufgefallen und behoben: **`Survivor._handle_resting()` akzeptiert seitdem
+auch einen eigenen Außenposten als Rastpunkt**, exakt wie ursprünglich in
+der Vision vorgesehen (siehe [`survivor.md`](survivor.md),
+"Bedürfnisse: Müdigkeit + Moral").
 
 - **Ursprünglich einziger Bautyp ohne Zonen-Prüfung** — das war die
   "Ausnahme von der Zusammenhang-Regel" aus der Vision, ein Außenposten
@@ -207,12 +212,26 @@ units dort hin 4 dort hin etc. besseres management rts feeling".
   bewusst nicht als Typ-Abhängigkeit)/`construction_progress`/
   `construction_required`/`construction_worker_count`/
   `_construction_workers` (Array, privat).
-- **Bauzeit:** `World.CONSTRUCTION_WORK` (Dictionary, Krankenstation 30/
-  Werkstatt 35/Schlafraum 20 Trupp-Sekunden) — Lager skaliert stattdessen
-  mit dem Gebäude-Volumen wie schon seine Kapazität
-  (`STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 1.5`, analog zu
-  `STORAGE_CAPACITY_PER_VOLUME`). Alles Startwerte, nach Testen
-  nachjustierbar.
+- **Bauzeit:** `World._construction_work_required()` — bis 2026-08-04 hatten
+  Krankenstation/Werkstatt/Schlafraum einen FESTEN Wert (30/35/20 Trupp-
+  Sekunden), unabhängig von der Größe des ausgewählten Gebäudes, nur das
+  Lager skalierte mit dem Volumen. Bei den jetzt sehr unterschiedlich
+  großen echten Gebäude-Assets (Tankstelle ~90 m³ bis Supermarkt ~927 m³)
+  fiel diese Inkonsistenz bei der Systematik-Review auf — **alle vier
+  Ausbauten skalieren jetzt mit dem Gebäude-Volumen**, exakt wie das
+  Lager: `BED_CONSTRUCTION_WORK_PER_VOLUME := 0.03`,
+  `MEDICAL_STATION_CONSTRUCTION_WORK_PER_VOLUME := 0.045`,
+  `WORKSHOP_CONSTRUCTION_WORK_PER_VOLUME := 0.05`,
+  `STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 1.5 → 0.05` (ebenfalls neu
+  kalibriert, siehe "Lager" oben — der alte Wert hätte bei echten
+  Gebäude-Volumen absurd lange Bauzeiten ergeben). Faktoren so gewählt,
+  dass ein Wohnhaus (671 m³) ungefähr die alten Flachwerte trifft (Bett
+  20,1s, Krankenstation 30,2s, Werkstatt 33,6s) — größere Gebäude dauern
+  jetzt proportional länger, kleinere kürzer, statt für jede Gebäudegröße
+  gleich lang. **Nur die Bauzeit skaliert, nicht die Ressourcenkosten**
+  (`_cost_for_build_type()` bleibt bewusst flach) — gleiches Prinzip wie
+  beim Lager selbst (dort skaliert auch nur Zeit+Kapazität, nicht der
+  Holzpreis). Alles weiterhin Startwerte, nach Testen nachjustierbar.
 - **Fortschritt:** `Building._process()` (host-only wie GuardPost/Survivor,
   erst seit dem Bau-Markier-Modus hat `Building.gd` überhaupt einen
   `_process()`) erhöht `construction_progress` um
@@ -613,6 +632,157 @@ Nutzerfrage "Supermarkt 18×12, Tiles nur 12×12"): `BUILDING_MIN_SPACING`
 gilt einheitlich für alle Typen, macht die Straßen insgesamt etwas
 lichter besetzt, bis auch die übrigen Typen echte Assets bekommen.
 
+## Supermarkt (echtes Asset, 2026-08-04)
+
+Zweites Loot-Gebäude-Asset (`assets/supermarkttest.glb`) — noch ein
+FRÜHER Entwurf des Nutzers ("noch keine Farbe drauf, nur mal grob Fenster
+Türen zum Angucken"), gleiches Einbau-Muster wie beim Wohnhaus
+(`World.SUPERMARKT_MODEL_PATH`, `model_path`-Feld im `BUILDING_TYPES`-
+Eintrag).
+
+- **Maße aus der echten glTF-Bounding-Box ausgelesen:** 18,1m × 4,2m ×
+  12,2m — praktisch exakt die Vision-Zielwerte (18×4,5×12m, siehe
+  `Infos/03 Asset-Checkliste.md`), kein Nachjustieren nötig. Genau der
+  Größenbereich, für den das Mehrfach-Reihenplätze-System gebaut wurde
+  (siehe [`world.md`](world.md), "Mehrfach-Reihenplätze") — der
+  Supermarkt-Platzhalter hatte diese Maße schon VOR der Asset-Lieferung,
+  jetzt bekommt er zusätzlich das echte Modell.
+- **Modell-Ursprung nicht exakt an der Basis** — die glTF-Bounding-Box
+  läuft von Y=−0,22 bis Y=4,0 (Wohnhaus lief dagegen exakt 0 bis 9, siehe
+  oben), das Modell hätte dadurch ca. 22cm im Boden versunken. **Behoben
+  (2026-08-04, siehe "Apotheke" unten):** statt weiterhin auf einen exakt
+  bei 0 liegenden Ursprung zu vertrauen, liest `_model_min_y()` jetzt die
+  TATSÄCHLICHE Unterkante jedes Modells aus und gleicht sie aus — der
+  Supermarkt profitiert davon automatisch mit, ohne dass am Modell selbst
+  etwas geändert werden musste.
+- Noch OHNE eigenes Material/Farbe (Platzhalter-Grau aus Blender) — die
+  Farb-Feedback-Logik (`Building._update_visual()`, siehe oben bei
+  Wohnhaus) färbt trotzdem ein, sobald das Gebäude geclaimt/HP-gemindert
+  wird, nur eben aktuell alles grau statt der finalen Textur.
+
+**Noch nicht vom Nutzer im Spiel gesichtet.**
+
+## Apotheke (echtes Asset, 2026-08-04)
+
+Drittes Loot-Gebäude-Asset (`assets/Ahpoteke.glb`, Dateiname vom Nutzer so
+geliefert, bewusst nicht umbenannt). Maße aus der echten glTF-Bounding-Box
+(7,1×8,2×6,1m) — Grundfläche trifft den Checklisten-Zielwert (7×6m) fast
+exakt, Höhe (8,2m) liegt weit über der Vorgabe (4,5m), gleiches Muster wie
+schon beim Wohnhaus (Höhen kommen in der Praxis öfter höher raus als
+geplant).
+
+**Auslöser für eine generelle Korrektur:** Anders als Wohnhaus/Supermarkt
+(Modell-Ursprung nahe Y=0, siehe dort) liegt der Ursprung dieses Assets
+bei Y≈−7,17 relativ zur tatsächlichen Unterkante — die alte Annahme
+"Modell-Ursprung ist die Basis" hätte das Gebäude um über 7m im Boden
+versenkt. `World._model_min_y()` (neu) berechnet die tatsächliche
+Unterkante rekursiv aus der Mesh-AABB aller Kind-Nodes, BEVOR das Modell
+positioniert wird, und gleicht exakt diesen Wert aus (`model.position.y =
+-size.y / 2.0 - _model_min_y(model)`) — funktioniert jetzt unabhängig
+davon, wo genau der Ursprung in Blender liegt, nicht mehr nur für den
+Sonderfall "Ursprung exakt an der Basis". Wohnhaus/Supermarkt profitieren
+automatisch mit (ersetzt die dortige Sonderfall-Erklärung).
+
+**Noch nicht vom Nutzer im Spiel gesichtet.**
+
+## Grime-Overlay-Experiment (2026-08-04, Nutzerfrage)
+
+Nutzerfrage: Modelle sind bisher nur flach eingefärbt (keine Vertex-AO,
+keine Detail-Geometrie) — reicht ein Shader, um das aufzuwerten, oder
+braucht es mehr Blender-Arbeit? Zwei güngstige, sofort testbare Optionen
+gebaut, EXPLIZIT als A/B-Vergleich, noch nichts endgültig entschieden
+(kein laufender Godot-Editor in dieser Entwicklungsumgebung verfügbar,
+kann selbst nicht visuell gegenprüfen):
+
+- **Grime-Overlay-Shader** (`assets/shaders/grime_overlay.gdshader`) —
+  ein zusätzlicher `next_pass` auf JEDEM Material eines echten
+  Asset-Modells (nur Gebäude bisher, siehe `_apply_grime_overlay()` in
+  `World.gd`), legt fleckige, dunkle Patches per Value-Noise drüber,
+  stärker nahe der Objekt-Basis (Verwitterung sammelt sich unten). Ändert
+  die eigentliche Blender-Farbe nicht, reine Overlay-Ebene. Jedes Gebäude
+  bekommt eine eigene Material-Kopie + eigenen Zufalls-Seed (`.duplicate()`
+  Pflicht — ein importiertes glTF-Material ist sonst zwischen ALLEN
+  Instanzen desselben Modells geteilt, gleiches Resource-Sharing-Problem
+  wie bei `BoxMesh` in `_create_building()`, siehe dortiger Kommentar).
+- **SSAO** (`Environment_day_night` in `World.tscn`, `ssao_enabled = true`)
+  — Godots eingebautes Screen-Space-Ambient-Occlusion, verdunkelt Ecken/
+  Kanten/Kontaktflächen automatisch aus der Tiefenkarte, KEIN eigener
+  Shader-Code, KEIN Blender-Schritt nötig (Alternative zur ursprünglich
+  angedachten Vertex-Color-AO, die einen zusätzlichen AO-Bake-Schritt in
+  Blender gebraucht hätte).
+
+Beide unabhängig voneinander vergleichbar/abschaltbar: SSAO über den
+`Environment`-Inspektor (`ssao_enabled`-Haken), Grime-Overlay durch
+Entfernen des `_apply_grime_overlay(model)`-Aufrufs in `_create_building()`.
+Bisher nur auf Gebäude verdrahtet (nicht Wachposten/Mauer/Home-Base) —
+Ausweitung auf die anderen echten Assets erst, falls der Effekt gefällt.
+
+**Vom Nutzer bestätigt (2026-08-04): "besser so schaut ganz gut aus"** —
+Grime-Overlay + SSAO zusammen bleiben aktiv. Dabei ein echter Bug
+gefunden+behoben (siehe `status.md`, "Grime-Overlay-Bugfix"):
+`_apply_grime_overlay()`s `base_material`-Variable löste die GDScript-
+Variant-Inferenz-Falle aus (`node` ist als generischer `Node` deklariert,
+`:=` kann den Rückgabetyp von `get_surface_override_material()` darüber
+nicht ableiten) — Skript lud dadurch gar nicht, `World.tscn` fiel auf
+den nackten `Node3D`-Basistyp zurück. Fix: `base_material` explizit als
+`Material` typisiert statt `:=`.
+
+## Nebel-Schleier (2026-08-04, Nutzerwunsch nach dem Grime/SSAO-Test)
+
+Direkter Folgewunsch: "nebel fehlt dann noch ... ein ganz leichten nebel
+schleier". Godots eingebauter, einfacher Distanz-Nebel (kein
+`FogVolume`/volumetrischer Nebel — dafür reicht der einfache
+`Environment`-Nebel, deutlich billiger, passt zum "ganz leicht"-Wunsch)
+in `Environment_day_night` (`World.tscn`): `fog_enabled = true`,
+`fog_density = 0.006` (bewusst niedrig gehalten), `fog_light_color =
+Color(0.62, 0.64, 0.62, 1)` (neutrales Grau, passt zur schon bestehenden
+Entsättigung statt eines bläulichen Himmel-Nebels). Werte nicht selbst
+gegengeprüft (kein laufender Editor hier) — im Inspektor bei Bedarf
+`fog_density` nachjustieren, falls zu stark/schwach.
+
+**Vom Nutzer bestätigt (2026-08-04): "ja nebel schaut gut aus"** — bleibt
+unverändert bei `fog_density = 0.006`.
+
+## Platzhalter-Boxen auf echte Zielmaße vorgezogen (2026-08-04)
+
+Nutzerwunsch: "lass vorerst Platzhalterboxen bis ich Blender weiter bin,
+aber mach die Platzhalterboxen so groß wie die eigentlichen Gebäude" —
+Freunde sollen schon jetzt testen, während weiter an echten Assets
+gearbeitet wird, ohne dass die Stadt bei den noch-Platzhalter-Typen
+unrealistisch klein wirkt (gleiches Vorziehen-Prinzip, das beim
+Supermarkt schon vor dessen Asset-Lieferung angewendet wurde).
+
+- **Zehn Loot-Gebäude** (`World.BUILDING_TYPES`, alle noch ohne Modell):
+  Waffenladen/Polizeistation, Feuerwehrstation, Privatbunker, Restaurant/
+  Kneipe, Tankstelle, Bibliothek, Universität, Garten-Center, Camping-
+  Laden auf die exakten Maße aus `Infos/03 Asset-Checkliste.md`
+  vorgezogen; Klinik + Militärbasis haben dort keinen Eintrag (Checkliste:
+  "Map-abhängig" bzw. gar nicht gelistet), Größe aus `Infos/05 Assets im
+  Spiel.md`s eigenem Vorschlag + geschätzter Höhe.
+- **Vier "Ausbauten"** (Krankenstation/Werkstatt/Lager/Bett,
+  `MedicalStation.tscn`/`Workshop.tscn`/`Storage.tscn`/`Bed.tscn`) und
+  **Außenposten** (`Outpost.tscn`) ebenfalls auf Checklisten-Maße
+  vergrößert (vorher alle ~1,5³, jetzt 3–6m je Achse).
+- **Fund beim Vergrößern (echter Bug, gleich mitbehoben):**
+  `finish_construction()` übernahm für die vier Ausbauten bisher
+  ungeprüft `building.position.y` des GEPLÜNDERTEN Gebäudes (dessen
+  eigenes Box-Zentrum) als Y-Position der NEUEN Struktur — bei überall
+  ähnlich kleinen Platzhaltern fiel die Differenz kaum auf, bei einem
+  großen Gebäude (z. B. Wohnhaus, Zentrum bei 4,5m) UND den jetzt
+  größeren neuen Strukturen wäre die neue Struktur deutlich zu hoch in
+  der Luft gelandet. Jede der vier bekommt jetzt ihre eigene halbe
+  Zielhöhe (neue `MEDICAL_STATION_GROUND_Y`/`WORKSHOP_GROUND_Y`/
+  `STORAGE_GROUND_Y`/`BED_GROUND_Y`-Konstanten). Außenposten (freies
+  Platzieren wie Wachturm) bekam aus demselben Grund eine eigene
+  `OUTPOST_GROUND_Y` + eigene, größenrichtige Ghost-Preview-Mesh
+  (`OUTPOST_GHOST_SIZE`) statt der generischen 1,5³-Box.
+- **Nicht angefasst:** Wachturm (Checklisten-Zahl dort laut `Infos/05`
+  vertauscht/unplausibel, aktueller Platzhalter schon schmal+hoch wie
+  gewollt), Tor/Mauer (eigenes Ziehen-System, Größe schon nah am
+  Zielwert).
+
+**Noch nicht vom Nutzer im Spiel gesichtet.**
+
 ## Gebäude-Varianten pro Typ (2026-08-04)
 
 Nutzerwunsch: "brauchen die wohnhäuser variationen von den gebäuden für
@@ -642,8 +812,19 @@ dasselbe Modell für jede Instanz eines Typs.
   unterschiedliche Gebäude schon deutlich mehr Abwechslung liefern als
   mehrere Varianten desselben Typs.
 
-**Noch nicht vom Nutzer getestet** (keine zweite Variante existiert
-bisher, um es zu prüfen).
+**Erste echte Varianten seit 2026-08-04:** Wohnhaus bekommt drei
+zusätzliche Varianten (`WOHNHAUS_VARIANT_2_PATH`/`_3_PATH`/`_4_PATH` —
+laut Nutzer reine Farb-/Dach-Unterschiede, "hab einfach farben bischen
+getauscht"), Supermarkt zwei zusätzliche (`SUPERMARKT_VARIANT_2_PATH`/
+`_3_PATH`, deutlich höher als das erste Modell — 7,89m statt 4,2m,
+vermutlich anderer Dachstil, geometrisch unproblematisch, der Y-Ausgleich
+in `_create_building()` ist höhenunabhängig). Beide `BUILDING_TYPES`-
+Einträge nutzen jetzt `"model_paths"` statt `"model_path"`. Wohnhaus-
+`procedural_chance` gleichzeitig 0.5→0.3 gesenkt — bei vier statt einer
+echten Variante hätte ein weiterhin hoher Prozedural-Anteil die neue
+Abwechslung optisch verwässert.
+
+**Noch nicht vom Nutzer im Spiel gesichtet.**
 
 ## Prozedurale "Masse"-Häuser (2026-08-04)
 
@@ -783,15 +964,18 @@ System") — das Limit-System entstand gleich mit.
 - **Kapazität aus Gebäude-Volumen berechnet**
   (`World._building_volume(building)` — liest `size` der `BoxMesh` unter
   `$Mesh` aus, `size.x × size.y × size.z`), multipliziert mit
-  `STORAGE_CAPACITY_PER_VOLUME := 40.0`. Kalibriert an
-  `Infos/03 Asset-Checkliste.md` (Nutzer-Vorgabe: ein "Wohnhaus" grob 500
-  Kapazität, ein "Hochhaus"/eine "alte Schule" grob 1000) — die
-  aktuellen Platzhalter-Gebäude sind mit ~14–23 m³ aber viel kleiner als
-  echte Gebäude aus der Vision (~500–1000 m³ laut Asset-Checkliste), der
-  Faktor ist deshalb entsprechend hochskaliert, damit ein einzelnes Lager
-  schon jetzt sinnvolle Werte (~550–920) liefert. **Muss neu kalibriert
-  werden**, sobald echte, unterschiedlich große Gebäude-Assets die
-  Platzhalter-Boxen ersetzen.
+  `STORAGE_CAPACITY_PER_VOLUME`. Kalibriert an `Infos/03 Asset-
+  Checkliste.md` (Nutzer-Vorgabe: ein "Wohnhaus" grob 500 Kapazität, ein
+  "Hochhaus"/eine "alte Schule" grob 1000) — also ungefähr 1 Kapazität
+  pro m³.
+  **Neu kalibriert (2026-08-04):** `40.0 → 1.0`. Bis dahin gab es nur
+  Platzhalter-Boxen (~14–23 m³), der Faktor war deshalb künstlich
+  hochskaliert, mit dem eigenen Kommentar, das MUSS neu kalibriert
+  werden, sobald echte Assets die Platzhalter ersetzen — beim alten
+  Faktor hätte ein Lager aus dem inzwischen echten Supermarkt (927 m³)
+  37.080 Kapazität ergeben (Home-Base-Basiskapazität ohne jedes Lager:
+  150) — kompletter Balance-Bruch, gefunden bei der Systematik-Review nach
+  dem Supermarkt-Einbau (siehe `docs/status.md`).
 - **`Storage.gd`** trägt die berechnete Kapazität einmalig bei Erstellung
   ein (`_ready()` → `HomeBase.add_storage_capacity.rpc()`), rein
   host-seitig ausgelöst (`if not multiplayer.is_server(): return`) — sonst
@@ -828,7 +1012,10 @@ Müdigkeits-/Moral-Bedürfnissystem auf (siehe
 - **Keine eigene Laufzeit-Logik am Gebäude selbst** — die eigentliche
   Regeneration passiert in `Survivor._handle_resting()`
   (`BED_REST_RADIUS` 5.0 um ein eigenes Bett), siehe
-  [`survivor.md`](survivor.md).
+  [`survivor.md`](survivor.md). **Seit 2026-08-04 (Systematik-Review,
+  Fund 5) auch um einen eigenen Außenposten** — siehe "Außenposten" oben,
+  war ursprünglich genau dafür vorgesehen, wurde beim Bau der Betten-
+  Mechanik aber nie nachgerüstet.
 - **Fund beim Umsetzen:** ein Grundgerüst (Szene, Kosten-Konstante,
   Spawner/Container, UI-Button) lag schon im Code, war aber nicht fertig
   verdrahtet — `_cost_for_build_type()`/`request_upgrade_building()`
@@ -899,9 +1086,6 @@ Lärm-Alarm-Schleife (`_alert_nearby_zombies()` in `GuardPost.gd` und
   Bauauftrags korrekt (siehe "Baustellen" oben, `_catch_up_building()`).
   **Bewusst weiterhin fehlend:** die zugewiesenen Trupps selbst werden
   nicht mitübertragen, der Spieler muss nach Catch-up/Laden neu zuweisen.
-- **Außenposten: "Rasten/Schlafen" aus der Vision nicht umgesetzt** —
-  braucht erst ein Müdigkeits-/Bedürfnissystem (Punkt 16 der Gesamtliste,
-  siehe `docs/status.md`). Nur die Rückweg-Funktion ist umgesetzt.
 - **Außenposten haben kein HP/keine Zerstörbarkeit** (wie
   `MedicalStation`/`Workshop`) und keinen eigenen Bau-Timer.
 

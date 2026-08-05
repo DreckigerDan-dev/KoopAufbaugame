@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scenes/entities/base/Bed.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_bed"]
-size = Vector3(1.5, 1.0, 2.0)
+size = Vector3(3, 3, 2)
 
 [sub_resource type="StandardMaterial3D" id="Material_bed"]
 albedo_color = Color(0.55, 0.4, 0.6, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_bed"]
-size = Vector3(1.5, 1.0, 2.0)
+size = Vector3(3, 3, 2)
 
 [node name="Bed" type="StaticBody3D" groups=["bed"]]
 script = ExtResource("1")

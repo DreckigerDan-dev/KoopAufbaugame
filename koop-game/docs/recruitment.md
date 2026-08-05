@@ -160,10 +160,15 @@ andere neue Trupp auch.
 
 ## Bekannte Grenzen (noch nicht gelöst)
 
-- **Genau ein rekrutierbares Gebäude auf der ganzen Karte** — kein
-  Zufalls- oder Wiederauffüll-Mechanismus, sobald es durchsucht ist, gibt
-  es keine weitere Rekrutierungsquelle mehr.
-- **Kein Limit** auf die maximale Truppzahl pro Spieler.
+- **~~Genau ein rekrutierbares Gebäude auf der ganzen Karte~~ — überholt
+  durch "Erweiterte Rekrutierung" oben (2026-08-04, Systematik-Review):
+  Plünder-Zufallschance + Schutzsuchende sind seitdem zwei weitere,
+  unabhängige Kanäle. Stand hier war seit dem 2026-08-04-Update oben nie
+  korrigiert worden, obwohl er dem widerspricht.**
+- **Kein Limit** auf die maximale Truppzahl pro Spieler — gilt weiterhin
+  für das feste Rekrutierungs-Gebäude und die Plünder-Zufallschance
+  (beide ungedeckelt); nur die Schutzsuchenden haben mit
+  `REFUGEE_RECRUIT_CAP_PER_PEER` einen Deckel.
 - **Fester Zweit-Trupp bleibt bestehen**, obwohl es jetzt eine echte
   Rekrutierungsquelle gibt — beide Mechanismen koexistieren, ohne dass
   der Startbonus reduziert wurde.

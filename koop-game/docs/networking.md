@@ -265,12 +265,11 @@ aufrufenden Nodes existieren: `report_status()` (siehe
   Peer vorbei (`server_disconnected`/`connection_failed` führen zurück
   ins Hauptmenü).
 - **Kein State-Catch-up über reine Node-Existenz hinaus** bei manchen
-  Feldern (z. B. `Wall`-HP eines schon beschädigten Segments,
-  `GuardPost.worker_count`, Fog of War) — siehe die jeweiligen "Bekannte
-  Grenzen"-Abschnitte in den Entity-Docs. `Building.is_looted` und
-  `GuardPost.built` sind inzwischen behoben (siehe `scavenging.md`/
-  `building.md`), hier als Beispiele entfernt, um nicht wieder zu
-  veralten.
+  Feldern (z. B. `GuardPost.worker_count`, Fog of War) — siehe die
+  jeweiligen "Bekannte Grenzen"-Abschnitte in den Entity-Docs.
+  `Building.is_looted`, `GuardPost.built` und `Wall.hp` sind inzwischen
+  behoben (siehe `scavenging.md`/`building.md`/`walls.md`), hier als
+  Beispiele entfernt, um nicht wieder zu veralten.
 
 ## Testen
 

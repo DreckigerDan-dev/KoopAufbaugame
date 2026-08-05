@@ -21,7 +21,7 @@ signal resources_changed(new_resources: Dictionary)
 # Wachposten (30 Holz) direkt zu Spielbeginn. Ausrüstungs-Startbestand
 # (weapon/armor/helmet/melee_weapon/leg_armor) bewusst bei 1 belassen —
 # das sind Einzel-Slots, kein Grund die zu erhöhen.
-const START_RESOURCES := {"food": 60, "wood": 50, "metal": 25, "stone": 40, "brick": 25, "medicine": 25, "ammo": 30, "weapon": 1, "armor": 1, "helmet": 1, "melee_weapon": 1, "leg_armor": 1}
+const START_RESOURCES := {"food": 60, "wood": 50, "metal": 25, "stone": 40, "brick": 25, "medicine": 25, "ammo": 30, "weapon": 1, "armor": 1, "helmet": 1, "melee_weapon": 1, "leg_armor": 1, "fuel": 20}
 # Lagerkapazität (siehe docs/building.md, "Lager") — EIN gemeinsamer
 # Deckel für alle Ressourcenarten (kein separates Limit pro Art,
 # einfacher zu verstehen/anzuzeigen). Gilt schon ohne jedes Lager,

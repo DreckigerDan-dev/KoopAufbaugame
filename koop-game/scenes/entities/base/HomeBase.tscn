@@ -4,10 +4,10 @@
 [ext_resource type="PackedScene" uid="uid://384rhcrqksaa" path="res://assets/startbasetest.glb" id="2"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_homebase"]
-size = Vector3(3, 1.5, 3)
+size = Vector3(6.4, 6.928, 6.4)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_homebase"]
-size = Vector3(3, 1.5, 3)
+size = Vector3(6.4, 6.928, 6.4)
 
 [node name="HomeBase" type="StaticBody3D" groups=["home_base"]]
 script = ExtResource("1")

@@ -65,6 +65,16 @@ festen `HOME_BASE_POSITIONS`/`START_POSITIONS`-Kartenecken vollständig.
   (siehe [`docs/world.md`](world.md)) zonen-relativ statt
   weltursprung-relativ berechnet, siehe "Warum Claimen ohne
   Abstandsprüfung" unten für den Grund dieses Fixes).
+- **Gebäude-Loot geht an die neue Home-Base** (2026-08-04, Systematik-
+  Review, Fund 4) — das gewählte Gebäude hat schon einen vorgewürfelten
+  `loot` (siehe `docs/scavenging.md`, "Gebäude-Typen + Loot-Tabellen"),
+  der bis dahin beim `mark_looted()` einfach verworfen wurde, ohne je
+  eingesammelt zu werden. `request_choose_start_base()` schreibt ihn jetzt
+  direkt der neu gespawnten Home-Base gut (`home_base.add_resources.rpc(
+  building.loot)`) — kein Neu-Würfeln, kein Einfluss auf die festen
+  `HomeBase.START_RESOURCES`, nur ein kleiner thematischer Bonus je nach
+  zufällig gewähltem Starttyp (z. B. etwas mehr Nahrung bei einem
+  Supermarkt-Start, eine Waffe bei einem Waffenladen-Start).
 - **Home-Base bleibt ein eigener Node** neben dem gewählten Gebäude, keine
   Verschmelzung von `Building` und `HomeBase` — das Gebäude ist optisch die
   "Basis" (bläulich eingefärbt wie jedes andere geclaimte Gebäude), das
@@ -183,6 +193,11 @@ Krankenstation/Werkstatt/Lager/Bett), sind nur kein Bauzonen-Anker mehr.
 
 ## Bekannte Grenzen (noch nicht gelöst)
 
+**Update 2026-08-04 (Systematik-Review):** Bullet "Kein Außenposten-
+Sonderfall — noch nicht umgesetzt" entfernt, war veraltet (von vor
+2026-08-01) — Außenposten existieren seitdem als eigener Bautyp, siehe
+[`building.md`](building.md), "Außenposten".
+
 - **Catch-up für `Building.owner_peer_id`/`is_looted` seit dem
   Kartenumbau gelöst** (siehe `docs/world.md`): Gebäude laufen jetzt über
   `MultiplayerSpawner`, `_catch_up_building()` schickt den vollständigen
@@ -196,8 +211,6 @@ Krankenstation/Werkstatt/Lager/Bett), sind nur kein Bauzonen-Anker mehr.
 - **Erster Claim ist "frei" von der Zusammenhang-Regel** (siehe oben,
   bewusste Design-Entscheidung wegen der Kartengeometrie) — echte
   Zusammenhang-Pflicht gilt erst ab dem zweiten Gebäude.
-- **Kein Außenposten-Sonderfall** aus der Vision (kleine, unabhängige
-  Bauten außerhalb der Hauptzone) — noch nicht umgesetzt.
 - **Kein Fallback, wenn ein Peer nie wählt** — bleibt ohne Home-Base
   handlungsunfähig (kein Trupp, kein Bauen), solange niemand ein Gebäude
   anklickt. Für ein Coop-Spiel unter Freunden bewusst kein Timeout/

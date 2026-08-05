@@ -16,6 +16,33 @@ const BUILDING_SCENE := preload("res://scenes/world/Building.tscn")
 # den Wohnhaus-Typ braucht (siehe BUILDING_TYPES/model_path-Feld unten),
 # alle anderen Typen bleiben Platzhalter-Boxen.
 const WOHNHAUS_MODEL_PATH := "res://assets/wohnhaustest.glb"
+# Gebäude-Varianten (2026-08-04, siehe docs/building.md, "Gebäude-
+# Varianten pro Typ") — drei weitere Wohnhaus-Varianten, reine
+# Farb-/Dach-Unterschiede laut Nutzer ("hab einfach farben bischen
+# getauscht"). glTF-Bounding-Box aller drei: 9,3×7,54(bzw. 6,43 bei der
+# "kleinesdach"-Variante)×8,3m — nah genug an WOHNHAUS_MODEL_PATH (9,1×
+# 9,0×8,2), keine BUILDING_TYPES-Größenanpassung nötig (der Y-Ausgleich in
+# _create_building() ist ohnehin höhen-unabhängig, siehe dort).
+const WOHNHAUS_VARIANT_2_PATH := "res://assets/wohnhausVar2.glb"
+const WOHNHAUS_VARIANT_3_PATH := "res://assets/wohnhausVar3.glb"
+const WOHNHAUS_VARIANT_4_PATH := "res://assets/wohnhausVar3kleinesdach.glb"
+# Zweites echtes Gebäude-Asset (siehe docs/building.md, "Supermarkt") —
+# gleiches Muster wie WOHNHAUS_MODEL_PATH.
+const SUPERMARKT_MODEL_PATH := "res://assets/supermarkttest.glb"
+# Zwei weitere Supermarkt-Varianten (2026-08-04) — glTF-Bounding-Box
+# 18,08×7,89×12,16m, deutlich höher als SUPERMARKT_MODEL_PATH (4,2m) —
+# vermutlich ein anderer Dachstil/Aufbau, keine Korrektur nötig (Y-
+# Ausgleich ist höhen-unabhängig, siehe oben), nur optisch macht das eine
+# sichtbar unterschiedliche Silhouette zwischen den Varianten.
+const SUPERMARKT_VARIANT_2_PATH := "res://assets/supermarkVar1.glb"
+const SUPERMARKT_VARIANT_3_PATH := "res://assets/supermarkVar2.glb"
+# Drittes echtes Gebäude-Asset (siehe docs/building.md, "Apotheke") —
+# `Ahpoteke.glb` (Dateiname vom Nutzer so geliefert, bewusst nicht
+# umbenannt). Erstes Asset mit einem Modell-Ursprung, der NICHT an der
+# Basis liegt (min_y ≈ -7,17 statt ≈0) — deshalb jetzt der generische
+# `_model_min_y()`-Ausgleich in `_create_building()` statt der alten
+# "Ursprung ist immer die Basis"-Annahme.
+const APOTHEKE_MODEL_PATH := "res://assets/Ahpoteke.glb"
 const VEHICLE_SCENE := preload("res://scenes/entities/vehicle/Vehicle.tscn")
 const ZOMBIE_NEST_SCENE := preload("res://scenes/entities/zombie/ZombieNest.tscn")
 const ZOMBIE_SCENE := preload("res://scenes/entities/zombie/Zombie.tscn")
@@ -35,6 +62,8 @@ const TREE_SCENE := preload("res://scenes/entities/tree/Tree.tscn")
 const CAR_WRECK_SCENE := preload("res://scenes/entities/wreck/CarWreck.tscn")
 const STONE_PILE_SCENE := preload("res://scenes/entities/pile/StonePile.tscn")
 const BRICK_PILE_SCENE := preload("res://scenes/entities/pile/BrickPile.tscn")
+const BANDIT_SCENE := preload("res://scenes/entities/bandit/Bandit.tscn")
+const BANDIT_HIDEOUT_SCENE := preload("res://scenes/entities/bandit/BanditHideout.tscn")
 
 const PAN_SPEED := 20.0
 const MOUSE_ROTATE_SENSITIVITY := 0.006
@@ -142,11 +171,27 @@ const SURVIVOR_GROUND_Y := 0.85
 # seine eigene Basis/Kolonie, nicht geteilt") — seit der Start-Basis-Wahl
 # (siehe docs/zones.md, "Start-Basis wählen") keine festen Kartenecken mehr,
 # stattdessen wird Home-Base/Survivor-Start relativ zum gewählten Gebäude
-# platziert: BASE_CHOICE_HOME_OFFSET/BASE_CHOICE_SURVIVOR_OFFSET geben den
-# Abstand vom Gebäude-Mittelpunkt an, in Richtung von der Kartenmitte weg
-# (damit die Home-Base nicht mit dem Gebäude selbst überlappt).
+# platziert. BASE_CHOICE_HOME_OFFSET/BASE_CHOICE_SURVIVOR_OFFSET sind jetzt
+# reiner ZUSATZ-Abstand ÜBER die halbe Gebäude-Diagonale hinaus (siehe
+# request_choose_start_base()), NICHT mehr der komplette Abstand vom
+# Gebäude-Mittelpunkt — bei einem großen Gebäude (z. B. Supermarkt, 18m)
+# reichten die früheren festen 4,5m nicht aus, die Home-Base landete
+# buchstäblich im Gebäude drin (Nutzer-Screenshot "startbasevfehler.PNG").
+# Die halbe Diagonale (statt nur halbe Breite/Tiefe) garantiert Abstand
+# unabhängig davon, in welche Richtung "away" tatsächlich zeigt.
 const BASE_CHOICE_HOME_OFFSET := 4.5
 const BASE_CHOICE_SURVIVOR_OFFSET := 2.0
+# Boden-Y für die Home-Base (halbe Höhe, gleiches Prinzip wie
+# WATCHTOWER_GROUND_Y/ZOMBIE_BRUTE_GROUND_Y) — 2026-08-04, Nutzer-
+# Screenshot "base versetzt.PNG" ("Modell vs. Kollision stimmt nicht"):
+# `HomeBase.tscn`s Platzhalter-Box (3×1,5×3) war ein reiner Rateswert,
+# NIE an das tatsächliche `startbasetest.glb`-Modell angepasst (echte
+# glTF-Bounding-Box: 6,4×6,93×6,4m, mehr als doppelt so groß) — Klickfläche/
+# Kollision saßen dadurch weit innerhalb des sichtbaren Modells, UND die
+# Home-Base schwebte leicht (0.75 war die halbe ALTE, zu kleine Höhe).
+# `HomeBase.tscn`s BoxMesh/BoxShape3D auf die echten Maße angepasst, hier
+# dieselbe echte halbe Höhe statt des alten Festwerts 0.75.
+const HOME_BASE_GROUND_Y := 3.464
 
 # Die früheren vier fest hinterlegten ZOMBIE_SPAWN_POINTS (Weltursprung-
 # relativ) sind mit dem Kartenumbau entfallen (siehe docs/world.md,
@@ -170,6 +215,10 @@ const VEHICLE_GROUND_Y := 0.6
 # Fallback für unbekannte Typen/ältere Spielstände.
 const VEHICLE_GROUND_Y_BY_TYPE := {"car": 0.6, "motorcycle": 0.5, "truck": 0.8}
 const ZOMBIE_NEST_GROUND_Y := 1.35
+# Bandit (Kapsel 1.7m, wie Standard-Zombie) / Hideout (Box 2.2m, wie
+# Zombie-Nest) — siehe docs/bandits.md.
+const BANDIT_GROUND_Y := 0.85
+const BANDIT_HIDEOUT_GROUND_Y := 1.1
 # Globaler Zombie-Deckel (siehe docs/zombies.md, "Zombie-Obergrenze") —
 # löst das seit dem Kartenumbau (5 Nester statt 1) verschärfte
 # unbegrenzte-Wachstum-Risiko (persistentes Memory
@@ -294,6 +343,12 @@ const BLOOD_MOON_RUNNER_COUNT := 6
 # Trigger). Catch-up über _catch_up_day_time() (zweiter Parameter),
 # Spielstand-Persistenz über _collect_save_data()/_load_game_state().
 var _day_count: int = 0
+# Wetter (siehe WEATHER_*-Konstanten oben) — _next_weather ist der schon
+# vorgewürfelte Zustand fürs Wettervorhersage-Tab ("was kommt als Nächstes"),
+# nicht erst beim tatsächlichen Wechsel gewürfelt.
+var _weather: String = "clear"
+var _weather_timer: float = WEATHER_MIN_DURATION
+var _next_weather: String = "clear"
 
 # Tag/Nacht-Zyklus (Nutzerwunsch: Horde-Nächte an einen echten Spieltag
 # koppeln statt an ein reines Echtzeit-Intervall, später ergänzt um eine
@@ -327,6 +382,21 @@ const NIGHT_END_TIME := NIGHT_END_HOUR / HOURS_PER_DAY * CYCLE_LENGTH
 const DUSK_LENGTH := 20.0
 const DAY_LIGHT_ENERGY := 1.0
 const NIGHT_LIGHT_ENERGY := 0.15
+# Wetter-System (2026-08-04, Nutzer-Skizze "ui skizze.jpg", Wettervorhersage-
+# Tab) — Punkt 3 der Skizze, echtes neues Gameplay-System statt reiner
+# Kosmetik: Regen reduziert den Fog-of-War-Aufdeckungsradius (siehe
+# _update_fog_of_war()). Gleiches Verteilungs-/Sync-Prinzip wie Tag/Nacht:
+# _weather_timer läuft lokal auf JEDEM Peer runter (für eine flüssige
+# "Nächster Wechsel in ~Xs"-Anzeige im Wettervorhersage-Tab), NUR der Host
+# würfelt tatsächlich den nächsten Zustand und broadcastet ihn — anders als
+# _day_time (rein deterministisch aus vergangener Zeit) ist ein Zufalls-
+# Ergebnis ohne Broadcast auf jedem Peer unterschiedlich.
+const WEATHER_TYPES := ["clear", "rain"]
+const RAIN_CHANCE := 0.3
+const WEATHER_MIN_DURATION := 90.0
+const WEATHER_MAX_DURATION := 220.0
+const WEATHER_VISION_MULTIPLIER := 0.6
+const WEATHER_DISPLAY_NAMES := {"clear": "Klar", "rain": "Regen"}
 const DAY_LIGHT_COLOR := Color(1.0, 0.98, 0.9)
 const NIGHT_LIGHT_COLOR := Color(0.4, 0.45, 0.75)
 const DAY_SKY_COLOR := Color(0.55, 0.75, 0.95)
@@ -455,20 +525,22 @@ const BUILDING_TYPES: Array[Dictionary] = [
 		# höher raus (First bis 9m statt 7m geplant), Collision folgt der
 		# echten Größe statt der Planung.
 		"size": Vector3(9.1, 9.0, 8.2),
-		# Für eine zweite/dritte Wohnhaus-Variante (mehr Abwechslung, siehe
-		# _pick_model_path()): "model_path" hier entfernen, stattdessen
-		# "model_paths": [WOHNHAUS_MODEL_PATH, WOHNHAUS_VARIANT_2_PATH, ...]
-		# eintragen — braucht sonst KEINE weitere Code-Änderung.
-		"model_path": WOHNHAUS_MODEL_PATH,
+		# Vier Varianten seit 2026-08-04 (siehe WOHNHAUS_VARIANT_*_PATH oben)
+		# statt nur einem "model_path" — _pick_model_path() wählt pro Instanz
+		# zufällig eine davon, keine weitere Code-Änderung nötig (Infra stand
+		# schon, siehe docs/building.md, "Gebäude-Varianten pro Typ").
+		"model_paths": [WOHNHAUS_MODEL_PATH, WOHNHAUS_VARIANT_2_PATH, WOHNHAUS_VARIANT_3_PATH, WOHNHAUS_VARIANT_4_PATH],
 		# "Masse"-Häuser prozedural statt per Hand (2026-08-04, Nutzerwunsch:
 		# "für die masse die häuser generieren, spezial POI base
-		# krankenhaus etc mach ich") — 50 % jeder Wohnhaus-Instanz wird
-		# stattdessen generiert (Box + Satteldach, siehe
-		# _random_house_proc_params()/_build_procedural_house()), 50 %
-		# bleibt das echte wohnhaustest.glb-Asset. Wert tunen, sobald sich
-		# das Verhältnis im Spiel angeschaut wurde — 0.0 = nie prozedural,
-		# 1.0 = immer.
-		"procedural_chance": 0.5,
+		# krankenhaus etc mach ich") — Anteil jeder Wohnhaus-Instanz, der
+		# stattdessen generiert wird (Box + Satteldach, siehe
+		# _random_house_proc_params()/_build_procedural_house()), Rest
+		# verteilt sich zufällig auf die vier echten Varianten oben.
+		# 0.5 → 0.3 (2026-08-04, seit es vier statt einer echten Variante
+		# gibt — bei weiterhin 50% Prozedural-Anteil würde die neue
+		# Abwechslung kaum auffallen, jetzt überwiegen die echten Varianten
+		# im Bild). 0.0 = nie prozedural, 1.0 = immer.
+		"procedural_chance": 0.3,
 		"default_color": Color(0.45, 0.38, 0.3),
 		"main_loot": {"resource": "food", "amount": Vector2i(1, 2)},
 		"secondary_loot": [
@@ -478,7 +550,16 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Supermarkt",
-		"size": Vector3(3.2, 3.7, 2.6),
+		# Zweites echtes Gebäude-Asset (siehe docs/building.md, "Supermarkt"
+		# — supermarkttest.glb, 2026-08-04, noch ohne Material/Farbe, nur
+		# grobe Fenster/Türen). Maße aus der echten glTF-Bounding-Box
+		# ausgelesen (18,1 × 4,2 × 12,2m) statt der Vision-Zielwerte (18×
+		# 4,5×12m) — praktisch identisch, gleiches Kalibrierungs-Prinzip wie
+		# beim Wohnhaus.
+		"size": Vector3(18.1, 4.2, 12.2),
+		# Drei Varianten seit 2026-08-04 (siehe SUPERMARKT_VARIANT_*_PATH
+		# oben), gleiches Muster wie beim Wohnhaus.
+		"model_paths": [SUPERMARKT_MODEL_PATH, SUPERMARKT_VARIANT_2_PATH, SUPERMARKT_VARIANT_3_PATH],
 		"default_color": Color(0.5, 0.42, 0.32),
 		"main_loot": {"resource": "food", "amount": Vector2i(12, 20)},
 		"secondary_loot": [
@@ -487,7 +568,12 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Apotheke",
-		"size": Vector3(1.8, 3.4, 2),
+		# Echtes Asset (2026-08-04, siehe docs/building.md, "Apotheke") — Maße
+		# aus der echten glTF-Bounding-Box (7,1×8,2×6,1m), Höhe deutlich über
+		# dem Checklisten-Zielwert (4,5m) — gleiches Muster wie beim Wohnhaus
+		# (auch dort kam die Höhe höher raus als geplant).
+		"size": Vector3(7.1, 8.2, 6.1),
+		"model_path": APOTHEKE_MODEL_PATH,
 		"default_color": Color(0.4, 0.35, 0.28),
 		"main_loot": {"resource": "medicine", "amount": Vector2i(10, 18)},
 		"secondary_loot": [
@@ -497,7 +583,12 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Waffenladen/Polizeistation",
-		"size": Vector3(2.4, 3.7, 2.6),
+		# Größe auf Checklisten-Zielwert vorgezogen (2026-08-04, Nutzerwunsch
+		# "platzhalterboxen so groß wie die eigentlichen gebäude", siehe
+		# Infos/03 Asset-Checkliste.md: 5×10×8, H×B×T) — noch Platzhalter-Box,
+		# kein echtes Modell, gleiches Vorziehen-Prinzip wie beim Supermarkt
+		# vor dessen Asset-Lieferung.
+		"size": Vector3(10.0, 5.0, 8.0),
 		"default_color": Color(0.46, 0.36, 0.26),
 		"main_loot": {"resource": "weapon", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -518,7 +609,11 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	# Ressourcenarten, nur mit anderer Gewichtung/Menge.
 	{
 		"name": "Klinik",
-		"size": Vector3(2.0, 3.6, 2.2),
+		# Kein eigener Checklisten-Eintrag (siehe Infos/05 Assets im Spiel.md)
+		# — Grundfläche aus dem dortigen eigenen Vorschlag (~9×7m), Höhe
+		# geschätzt (kein Zielwert vorhanden), an Waffenladen/Apotheke-
+		# Größenordnung angelehnt.
+		"size": Vector3(9.0, 5.0, 7.0),
 		"default_color": Color(0.55, 0.55, 0.58),
 		"main_loot": {"resource": "medicine", "amount": Vector2i(15, 25)},
 		"secondary_loot": [
@@ -528,7 +623,10 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Militärbasis",
-		"size": Vector3(2.8, 4.0, 3.0),
+		# Checkliste nennt nur "Map-abhängig", kein fester Wert — Grundfläche
+		# aus Infos/05s eigenem Vorschlag (~14×10m), Höhe geschätzt
+		# (einstöckiger, breiter Zweckbau).
+		"size": Vector3(14.0, 5.0, 10.0),
 		"default_color": Color(0.3, 0.35, 0.22),
 		"main_loot": {"resource": "weapon", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -540,7 +638,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Privatbunker",
-		"size": Vector3(2.0, 3.0, 2.0),
+		# Checkliste: 5×8×6 (H×B×T).
+		"size": Vector3(8.0, 5.0, 6.0),
 		"default_color": Color(0.2, 0.2, 0.22),
 		"main_loot": {"resource": "weapon", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -551,7 +650,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Feuerwehrstation",
-		"size": Vector3(2.6, 3.8, 2.8),
+		# Checkliste: 5×12×8 (H×B×T).
+		"size": Vector3(12.0, 5.0, 8.0),
 		"default_color": Color(0.6, 0.15, 0.12),
 		"main_loot": {"resource": "armor", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -561,7 +661,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Restaurant/Kneipe",
-		"size": Vector3(2.2, 3.2, 2.4),
+		# Checkliste: 4×8×7 (H×B×T).
+		"size": Vector3(8.0, 4.0, 7.0),
 		"default_color": Color(0.55, 0.3, 0.2),
 		"main_loot": {"resource": "food", "amount": Vector2i(3, 6)},
 		"secondary_loot": [
@@ -570,16 +671,24 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Tankstelle",
-		"size": Vector3(1.6, 2.8, 1.6),
+		# Checkliste: 3×6×5 (H×B×T).
+		"size": Vector3(6.0, 3.0, 5.0),
 		"default_color": Color(0.65, 0.55, 0.15),
-		"main_loot": {"resource": "food", "amount": Vector2i(2, 4)},
+		# Treibstoff (siehe docs/vehicle.md, "Treibstoff") — Hauptloot von
+		# food auf fuel umgestellt, seit es die Ressource gibt ("die
+		# Tankstelle ... passt thematisch perfekt als Quelle", siehe
+		# Infos/07 Backlog-Umsetzungspläne.md). Vorheriges food-Secondary
+		# bleibt als kleiner Snack-Anteil erhalten.
+		"main_loot": {"resource": "fuel", "amount": Vector2i(15, 30)},
 		"secondary_loot": [
 			{"resource": "medicine", "chance": 0.3, "amount": Vector2i(2, 4)},
+			{"resource": "food", "chance": 0.4, "amount": Vector2i(2, 4)},
 		],
 	},
 	{
 		"name": "Bibliothek",
-		"size": Vector3(2.4, 3.6, 2.6),
+		# Checkliste: 6×10×8 (H×B×T).
+		"size": Vector3(10.0, 6.0, 8.0),
 		"default_color": Color(0.42, 0.3, 0.2),
 		"main_loot": {"resource": "book", "amount": Vector2i(1, 2)},
 		"secondary_loot": [
@@ -589,7 +698,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Universität",
-		"size": Vector3(3.0, 4.2, 3.2),
+		# Checkliste: 7×12×10 (H×B×T).
+		"size": Vector3(12.0, 7.0, 10.0),
 		"default_color": Color(0.5, 0.42, 0.3),
 		"main_loot": {"resource": "book", "amount": Vector2i(1, 2)},
 		"secondary_loot": [
@@ -598,7 +708,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Garten-Center",
-		"size": Vector3(2.2, 3.0, 2.4),
+		# Checkliste: 4×10×8 (H×B×T).
+		"size": Vector3(10.0, 4.0, 8.0),
 		"default_color": Color(0.3, 0.5, 0.25),
 		"main_loot": {"resource": "melee_weapon", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -607,7 +718,8 @@ const BUILDING_TYPES: Array[Dictionary] = [
 	},
 	{
 		"name": "Camping-Laden",
-		"size": Vector3(1.8, 2.8, 2.0),
+		# Checkliste: 3×7×5 (H×B×T).
+		"size": Vector3(7.0, 3.0, 5.0),
 		"default_color": Color(0.35, 0.45, 0.35),
 		"main_loot": {"resource": "leg_armor", "amount": Vector2i(1, 1)},
 		"secondary_loot": [
@@ -635,6 +747,7 @@ const LOOT_CATEGORY_BY_RESOURCE := {
 	"leg_armor": "equipment",
 	"ammo": "equipment",
 	"book": "books",
+	"fuel": "equipment",
 }
 
 
@@ -723,8 +836,17 @@ const CITY_ZONE_RADIUS_SMALL := 150.0
 # `_catch_up_buildings_bulk()`), die selbst bei ~193 von 1755 Gebäuden
 # schon zum Abbruch führte. Bündelung behebt die Ursache strukturell,
 # diese Rücknahme ist die zusätzliche Sicherheitsmarge obendrauf.
-const BUILDINGS_PER_LARGE_ZONE := 100
-const BUILDINGS_PER_SMALL_ZONE := 50
+# 2026-08-04, moderat von 100/50 auf 130/65 angehoben (Nutzerwunsch "paar
+# mehr Gebäude zum Testen") — die ursprüngliche Rücknahme (siehe Kommentar
+# oben, "1750 Gebäude") betraf einen strukturellen Netzwerk-Absturz beim
+# Beitritt, der seitdem UNABHÄNGIG von der Gebäudezahl behoben ist
+# (Bündel-RPCs + `_create_building_local()`, siehe docs/networking.md,
+# "Nachtrag ... was ist der Plan für später") — die Faustregel dort sagt
+# ausdrücklich, jede Erhöhung nochmal ECHT zu zweit zu testen, was mit dem
+# geplanten Freundes-Test jetzt ohnehin passiert. Neue Summe: 2×130 + 3×65
+# = 455 statt 350, deutlich unter der alten 1750er-Krisenzahl.
+const BUILDINGS_PER_LARGE_ZONE := 130
+const BUILDINGS_PER_SMALL_ZONE := 65
 const VEHICLES_PER_ZONE := 2
 # Differenzierte Fahrzeugtypen (Punkt 19 der Gesamtliste) — String-Keys aus
 # Vehicle.VEHICLE_STATS, siehe dort für Werte/Begründung. Zufällig pro
@@ -753,14 +875,37 @@ const ZOMBIE_SPAWN_RING_OFFSET := 60.0
 # 2026-08-04 von 6.0 auf 10.0 erhöht — erstes echtes Gebäude-Asset
 # (Wohnhaus, siehe docs/building.md) ist 9,1m breit, mit dem alten Wert
 # hätten sich zwei Wohnhäuser in derselben Reihe sichtbar überlappt (siehe
-# Nutzerfrage "Supermarkt ist 18×12, unsere Tiles nur 12×12"). Gilt
-# einheitlich für ALLE Typen (auch die noch kleinen Platzhalter) — erste
-# Kalibrierungsrunde am ersten gelieferten Asset, wie in
-# `05 Assets im Spiel.md` angekündigt. Größere Typen wie Supermarkt (18m)
-# brauchen bei ihrer eigenen Kalibrierung später vermutlich MEHRERE
-# Reihenplätze/eine eigene Slot-Breite pro Typ — hier bewusst noch nicht
-# vorgebaut, siehe docs/world.md, "Straßen-Raster", "Bekannte Grenzen".
-const BUILDING_MIN_SPACING := 10.0
+# Nutzerfrage "Supermarkt ist 18×12, unsere Tiles nur 12×12").
+# 2026-08-04, wieder auf 5.0 halbiert — Nutzer-Feedback nach dem Supermarkt-
+# Screenshot: das Spiel wirkt gegenüber Infection Free Zone "3x größer",
+# weil hier ECHTE Maße (Gebäude UND Straßen) statt IFZ-typisch gestauchter
+# Spiel-Maßstäbe verwendet werden. Straßenbreite bleibt unverändert (an
+# echte, unveränderbare Straßen-Kachel-Assets gebunden, siehe
+# STREET_TILE_SIZE), aber der Abstand ZWISCHEN Gebäuden in einer Reihe
+# lässt sich ohne Asset-Änderungen verkleinern — zusammen mit dem jetzt
+# tiefenabhängigen BUILDING_STREET_MARGIN (siehe unten) macht das die
+# Stadt spürbar dichter, unabhängig von der Gesamt-Gebäudezahl (siehe
+# BUILDINGS_PER_LARGE_ZONE/_SMALL_ZONE-Kommentar dort für deren separate,
+# seit 2026-08-04 wieder moderat angehobene Historie). Der Mehrfach-
+# Reihenplätze-Mechanismus (siehe
+# _generate_street_slots()/_generate_city_zone()) skaliert automatisch mit
+# — bei kleinerem Abstand brauchen jetzt auch mittelgroße Typen (~6-9m)
+# mehr als einen Slot, das ist beabsichtigt und rechnerisch korrekt (span
+# wird aus der tatsächlichen Breite abgeleitet, keine Überlappung).
+const BUILDING_MIN_SPACING := 5.0
+# Mehrfach-Reihenplätze (2026-08-04, siehe docs/world.md, "Mehrfach-
+# Reihenplätze") — erledigt die oben ursprünglich als offen vermerkte
+# Lücke: Gebäudetypen, deren Breite ENTLANG der Reihe BUILDING_MIN_SPACING
+# überschreitet (z. B. Supermarkt, 18m), reservieren jetzt automatisch
+# zusätzliche, benachbarte Slots in _generate_city_zone() statt zu
+# überlappen. MAX_BUILDING_SLOT_SPAN begrenzt das nach oben (Sicherheitsnetz
+# gegen einen versehentlich riesigen Wert in einem künftigen Typ, der sonst
+# unbegrenzt viele Slots am Stück verlangen könnte). 5 statt 3, seit
+# BUILDING_MIN_SPACING auf 5.0 halbiert wurde (2026-08-04) — der Supermarkt
+# (18,1m) braucht bei 5.0m Abstand jetzt ceili(18.1/5.0) = 4 Slots, 3 hätte
+# ihn fälschlich gekappt (echte Überlappungsgefahr, nicht nur ein
+# Rundungsfehler).
+const MAX_BUILDING_SLOT_SPAN := 5
 # Straßen-Raster (2026-08-01, Kartenplanungs-Session — Vorbild Infection
 # Free Zone: echte Häuserreihen entlang klarer Straßen statt Zufallsstreuen,
 # siehe docs/world.md, "Straßen-Raster"). STREET_BLOCK_SIZE ist die
@@ -784,13 +929,15 @@ const BLOCK_TILES := 2
 const STREET_BLOCK_SIZE := float(BLOCK_TILES) * STREET_TILE_SIZE
 const STREET_WIDTH := STREET_TILE_SIZE
 const STREET_CELL_SIZE := STREET_BLOCK_SIZE + STREET_WIDTH
-# Wie weit eine Gebäude-Reihe von der Blockkante (= Straßenrand) nach innen
-# versetzt ist, damit Gebäude nicht auf der Straße selbst stehen.
-# 2026-08-04 von 2.0 auf 5.0 erhöht, gleicher Grund wie BUILDING_MIN_SPACING
-# oben — das Wohnhaus ist bis zu 9,1m breit/8,2m tief, die Hälfte davon
-# (~4,55m) ragt vom Reihen-Mittelpunkt nach außen; bei altem INSET (2.0)
-# hätte das Gebäude über die Blockkante hinaus auf die Straße geragt.
-const BUILDING_ROW_INSET := 5.0
+# Straßenabstand tiefenabhängig (2026-08-04, siehe docs/world.md) — ersetzt
+# den früheren festen BUILDING_ROW_INSET (5.0), der auf die Wohnhaus-Tiefe
+# (8,2m) kalibriert war und beim tieferen Supermarkt (12,2m) über die
+# Blockkante hinaus auf die Straße ragte (Nutzer-Screenshot "supermarkt in
+# game.PNG", Front stand fast auf der Fahrbahnmarkierung). Jetzt EIN
+# kleiner, fester Abstand zwischen der tatsächlichen Gebäude-AUSSENKANTE
+# (nicht dem Reihen-Mittelpunkt) und dem Straßenrand, gilt gleich eng für
+# JEDE Gebäudetiefe — siehe _generate_city_zone(), "perp_base"/"perp_sign".
+const BUILDING_STREET_MARGIN := 1.5
 # Sichtbare Straßen-Geometrie: seit 2026-08-02 echte Kachel-Meshes über
 # $StreetGridMap statt eigener BoxMesh-Streifen (siehe
 # _build_zone_street_tiles()), deshalb hier keine STREET_GROUND_Y/
@@ -879,6 +1026,28 @@ const BANDIT_LOOT_RESOURCES := ["food", "medicine", "ammo"]
 const BANDIT_LOOT_MIN := 3
 const BANDIT_LOOT_MAX := 8
 var _bandit_restock_timer: float = 0.0
+# Echte Banditen-NPCs (siehe docs/bandits.md, Ideen-Backlog "Banditen-
+# Fraktion als echte NPC-Gegner") — NICHT zu verwechseln mit dem
+# Banditen-Restloot oben (das bleibt unverändert eine reine Loot-Mechanik
+# an bestehenden Gebäuden). HIDEOUT_COUNT bewusst klein — wenige, aber
+# gefährliche Camps in der Wildnis statt einer flächendeckenden dritten
+# Fraktion. Loot-Tisch beim Einzel-Kill nutzt bewusst dieselbe
+# Waffen/Munitions-Gewichtung wie das Waffenladen-Gebäude (thematisch
+# passend: bewaffnete Menschen statt Zombie-Beute).
+const BANDIT_HIDEOUT_COUNT := 3
+# Duplikat von BanditHideout.MAX_ACTIVE_BANDITS — World.gd kennt
+# BanditHideout.gd bewusst nicht als Typ (gleiches Prinzip wie
+# Zombie.ZombieType, siehe docs/zombies.md), ein Skript-Konstanten-Zugriff
+# über preload() wäre hier unnötig indirekt. Bei Änderung BEIDE Stellen
+# anpassen.
+const BANDIT_HIDEOUT_MAX_ACTIVE_BANDITS := 3
+const BANDIT_KILL_LOOT_DROP_CHANCE := 0.6
+const BANDIT_KILL_LOOT_TABLE := ["ammo", "weapon", "armor", "helmet"]
+const BANDIT_KILL_LOOT_AMOUNT := {"ammo": 8, "weapon": 1, "armor": 1, "helmet": 1}
+# Einmaliger Bonus-Loot beim Klären eines ganzen Hideouts (siehe
+# BanditHideout.gd) — deutlich großzügiger als ein Einzel-Kill, soll sich
+# wie ein echter Erfolg anfühlen, analog einem gut gefüllten Gebäude.
+const BANDIT_HIDEOUT_CLEAR_LOOT := {"ammo": 20, "weapon": 1, "armor": 1, "medicine": 8}
 # Schutzsuchende (2026-08-04, Rekrutierungs-Erweiterung, siehe
 # docs/mechanics-review.md, "Spieler-Kapazität") — periodisch (gleiche
 # Größenordnung wie BANDIT_RESTOCK_INTERVAL) taucht mit einer Chance ein
@@ -951,6 +1120,26 @@ const STORAGE_COST := {"wood": 30}
 # die Vision-Beträge sind für das dortige größere Ressourcensystem
 # kalibriert, nicht 1:1 auf dieses schlankere übertragbar.
 const OUTPOST_COST := {"wood": 15, "stone": 10}
+# Boden-Y (2026-08-04, Nutzerwunsch "Platzhalterboxen so groß wie die
+# eigentlichen Gebäude") — Außenposten-Box auf den Checklisten-Zielwert
+# (3×3×3) vergrößert, siehe WATCHTOWER_GROUND_Y-Kommentar unten für die
+# Begründung: bei den ursprünglichen 1,5³-Bautypen fiel das "rohe
+# Boden-Raycast-Y ohne Ausgleich" kaum auf, bei 3m Höhe (halbe Höhe 1,5m)
+# würde die Box sichtbar zur Hälfte im Boden stecken.
+const OUTPOST_GROUND_Y := 1.5
+# Halbe Zielhöhe der vier "Ausbauten" (siehe MedicalStation/Workshop/
+# Storage/Bed.tscn, 2026-08-04 auf Checklisten-Maße vergrößert) — Fund
+# beim Vergrößern: finish_construction() übernahm bisher blind
+# `building.position.y` des GEPLÜNDERTEN Gebäudes (dessen Box-Zentrum,
+# `dessen_size.y / 2`) als Position der NEUEN Struktur. Bei ähnlich
+# kleinen Platzhaltern (überall ~1,5m) fiel die Differenz kaum auf, bei
+# einem großen Gebäude (z. B. Wohnhaus, 9m hoch, Zentrum bei 4,5) UND
+# der jetzt größeren neuen Struktur wäre das deutlich sichtbar daneben —
+# jede der vier bekommt jetzt ihre EIGENE halbe Zielhöhe statt der alten.
+const MEDICAL_STATION_GROUND_Y := 2.0
+const WORKSHOP_GROUND_Y := 1.5
+const STORAGE_GROUND_Y := 1.5
+const BED_GROUND_Y := 1.5
 # Wachturm (Punkt 25 der Gesamtliste, siehe Infos/02 Item-Liste.md:
 # "12× Holz + 8× Stahlrahmen + Buch 'Verteid.' + Buch 'Elektrik'",
 # ~2500-3000). Stahlrahmen gibt's nicht, auf Metall umgehängt (gleiche
@@ -977,13 +1166,32 @@ const WATCHTOWER_MESH_SIZE := Vector3(1.2, 5.0, 1.2)
 # Gebäudes berechnet (siehe docs/building.md, "Lager") — an
 # Infos/03 Asset-Checkliste.md kalibriert: ein "Wohnhaus" (~500 m³) soll
 # grob 500 Kapazität geben, ein "Hochhaus"/eine "alte Schule" (~1000 m³)
-# grob 1000. Die aktuellen Platzhalter-Gebäude sind mit ~14–23 m³ VIEL
-# kleiner als echte Gebäude aus der Vision (reine Platzhalter-Boxen), der
-# Faktor ist deshalb entsprechend hochskaliert, damit einzelne Lager schon
-# jetzt sinnvolle Werte (~550–920) liefern. Sobald echte, größenmäßig
-# unterschiedliche Gebäude-Assets die Platzhalter ersetzen, MUSS dieser
-# Faktor neu kalibriert werden.
-const STORAGE_CAPACITY_PER_VOLUME := 40.0
+# grob 1000, also ungefähr 1 Kapazität pro m³.
+# 2026-08-04, NEU KALIBRIERT: bis dahin gab es nur Platzhalter-Boxen
+# (~14-23 m³), der Faktor war deshalb künstlich auf 40 hochskaliert, damit
+# einzelne Lager trotzdem sinnvolle Werte (~550-920) lieferten — mit einem
+# Kommentar, dass das SOBALD echte Assets die Platzhalter ersetzen, neu
+# kalibriert werden MUSS. Jetzt der Fall (Wohnhaus 671 m³, Supermarkt
+# 927 m³): beim alten Faktor 40 hätte ein Lager aus dem Supermarkt 37.080
+# Kapazität ergeben — bei einer Home-Base-Basiskapazität von nur 150 ein
+# kompletter Balance-Bruch. Zurück auf den ursprünglich beabsichtigten
+# ~1:1-Maßstab.
+const STORAGE_CAPACITY_PER_VOLUME := 1.0
+# Gebäude-HP/Abriss-Ertrag größenabhängig (2026-08-04, Systematik-Review,
+# Fund 3, siehe docs/building.md) — waren bis dahin für JEDE Vorlage
+# gleich (100 HP, 20 Stein/10 Ziegel, `Building.DEFAULT_MAX_HP/
+# DEFAULT_YIELD`), unabhängig von der tatsächlichen Größe. An der
+# kleinsten aktuell bekannten echten Gebäudegröße verankert (Tankstelle,
+# ~90 m³ laut Infos/05 Assets im Spiel.md) — MIN_BUILDING_*-Werte treffen
+# dort ungefähr die alten Flachwerte, größere Gebäude (bis Supermarkt,
+# ~927 m³) skalieren linear nach oben. Reine Startwerte, nach Testen
+# nachjustierbar, wie die übrigen Ausbau-Faktoren.
+const BUILDING_HP_PER_VOLUME := 0.5
+const MIN_BUILDING_HP := 50
+const BUILDING_STONE_YIELD_PER_VOLUME := 0.2
+const BUILDING_BRICK_YIELD_PER_VOLUME := 0.1
+const MIN_BUILDING_STONE_YIELD := 15
+const MIN_BUILDING_BRICK_YIELD := 8
 # Rabatt auf ALLE anderen Bautypen, solange der Spieler eine eigene
 # Werkstatt besitzt (siehe docs/building.md, "Werkstatt") — gilt nicht auf
 # die Werkstatt selbst (keine Kettenreaktion beim Bau der ersten).
@@ -991,15 +1199,22 @@ const WORKSHOP_DISCOUNT := 0.8
 # Bau-Markier-Modus (Punkt 28 der Gesamtliste, siehe docs/building.md,
 # "Baustellen") — Bauzeit in Trupp-Sekunden (Building.
 # CONSTRUCTION_WORK_PER_TROOP verringert das pro zugewiesenem Bautrupp und
-# Sekunde um 1). Lager skaliert mit dem Gebäude-Volumen wie schon seine
-# Kapazität (STORAGE_CAPACITY_PER_VOLUME), die anderen drei haben einen
-# festen Startwert (nach Testen nachjustierbar).
-const CONSTRUCTION_WORK: Dictionary = {
-	BuildType.BED: 20.0,
-	BuildType.MEDICAL_STATION: 30.0,
-	BuildType.WORKSHOP: 35.0,
-}
-const STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 1.5
+# Sekunde um 1).
+# 2026-08-04: ALLE VIER Ausbauten skalieren jetzt mit dem Gebäude-Volumen
+# (_construction_work_required()), nicht mehr nur das Lager — dieselbe
+# Rekalibrierung wie bei STORAGE_CAPACITY_PER_VOLUME oben war fällig, sonst
+# hätte ein Supermarkt-Ausbau je nach Zieltyp 1000+ Trupp-Sekunden gedauert,
+# ein Tankstellen-Ausbau nur ein paar. *_WORK_PER_VOLUME so gewählt, dass
+# ein Wohnhaus (671 m³) ungefähr den bisherigen Flachwert trifft (Bett
+# 20.1s, Krankenstation 30.2s, Werkstatt 33.6s) — größere Gebäude dauern
+# proportional länger, kleinere kürzer, statt eines für alle Gebäudegrößen
+# gleichen Werts. NUR die Bauzeit skaliert, nicht die Ressourcenkosten
+# (`_cost_for_build_type()` bleibt flach) — gleiches Prinzip wie beim Lager
+# selbst (dort skaliert auch nur Zeit+Kapazität, nicht der Holzpreis).
+const BED_CONSTRUCTION_WORK_PER_VOLUME := 0.03
+const MEDICAL_STATION_CONSTRUCTION_WORK_PER_VOLUME := 0.045
+const WORKSHOP_CONSTRUCTION_WORK_PER_VOLUME := 0.05
+const STORAGE_CONSTRUCTION_WORK_PER_VOLUME := 0.05
 const CONSTRUCTION_TARGET_NAMES: Dictionary = {
 	BuildType.MEDICAL_STATION: "Krankenstation",
 	BuildType.WORKSHOP: "Werkstatt",
@@ -1059,6 +1274,7 @@ const RESOURCE_DISPLAY_NAMES := {
 	"melee_weapon": "Nahkampfwaffen",
 	"leg_armor": "Beinschutz",
 	"book_research": "Forschungsbuch",
+	"fuel": "Treibstoff",
 }
 # Ressourcen-Panel in Kategorien unterteilt (2026-08-01, Nutzerwunsch nach
 # dem UI-Overhaul: "rechts die Ressourcen sind ein bisschen zu viele") —
@@ -1071,7 +1287,7 @@ const RESOURCE_DISPLAY_NAMES := {
 # innerhalb der Kategorie.
 const RESOURCE_CATEGORIES: Array[Dictionary] = [
 	{"name": "Baurohstoffe", "keys": ["wood", "metal", "stone", "brick"]},
-	{"name": "Überleben", "keys": ["food", "medicine", "ammo"]},
+	{"name": "Überleben", "keys": ["food", "medicine", "ammo", "fuel"]},
 	{"name": "Ausrüstung", "keys": ["weapon", "armor", "helmet", "melee_weapon", "leg_armor"]},
 	{"name": "Forschungsbücher", "keys": ["book_research"]},
 ]
@@ -1091,6 +1307,11 @@ const WALL_GHOST_SIZE := Vector3(2, 2, 0.4)
 # Field.tscn). Eigene, passend große Ghost-Mesh statt der Wachposten-Box,
 # gleiches Muster wie WATCHTOWER_MESH_SIZE.
 const FIELD_GHOST_SIZE := Vector3(2.5, 0.2, 2.5)
+# Deckt sich mit der BoxMesh/BoxShape3D-Größe in Outpost.tscn (2026-08-04
+# auf den Checklisten-Zielwert vergrößert) — eigene Ghost-Größe statt der
+# generischen 1,5³-Box, sonst würde die Vorschau kleiner wirken als die
+# tatsächlich platzierte Struktur.
+const OUTPOST_GHOST_SIZE := Vector3(3.0, 3.0, 3.0)
 # Deckt sich mit WALL_GHOST_SIZE.x — Abstand zwischen gezogenen
 # Mauer-/Tor-Segmenten, damit sie lückenlos aneinander anschließen (siehe
 # docs/walls.md, "Ziehen").
@@ -1139,13 +1360,35 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 	$ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung/GearResourcesLabel,
 	$ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher/BooksResourcesLabel,
 ]
-@onready var clock_label: Label = $ResourcesUI/Panel/VBoxContainer/ClockLabel
-# Zeitraffer (siehe _time_scale-Kommentar oben) — nur für den Host sichtbar,
-# gleiches Muster wie PauseMenu.pause_game_button.
-@onready var speed_row: HBoxContainer = $ResourcesUI/Panel/VBoxContainer/SpeedRow
-@onready var speed_1x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed1xButton
-@onready var speed_2x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed2xButton
-@onready var speed_3x_button: Button = $ResourcesUI/Panel/VBoxContainer/SpeedRow/Speed3xButton
+# UI-Redesign Runde 4 (2026-08-05, Nutzerwunsch "oben mittig ein kleiner
+# Balken, links ein paar Tabs von oben nach unten") — Kalender/Uhr/
+# Zeitraffer/Pause in einer schmalen, horizontal zentrierten TopBarUI
+# oben, die 9 Tab-Buttons in einer eigenen linken Spalte ($TabColumnUI/
+# Panel, löst die vorherige TabButtonsRow ab). MainTabsUI/Panel bleibt der
+# bei Bedarf aufklappende Overlay-Inhalt (siehe _on_tab_button_pressed()).
+# get_node_or_null() + if-Guards (statt striktem $Pfad) bewusst
+# BEIBEHALTEN aus der vorherigen Absturz-Diagnose (siehe status.md) — der
+# genaue damalige Auslöser wurde nie zweifelsfrei bestätigt (der leere
+# Minimalstand wurde nie im Spiel gegengetestet), deshalb hier
+# vorsichtshalber weiter defensiv statt blind auf strikte Pfade
+# zurückzuwechseln. Zurückbauen, sobald bestätigt ist, dass dieser Stand
+# im Spiel lädt.
+@onready var day_label: Label = get_node_or_null("TopBarUI/Panel/HBoxContainer/DayLabel")
+@onready var clock_label: Label = get_node_or_null("TopBarUI/Panel/HBoxContainer/ClockLabel")
+@onready var speed_row: HBoxContainer = get_node_or_null("TopBarUI/Panel/HBoxContainer/SpeedRow")
+@onready var speed_1x_button: Button = get_node_or_null("TopBarUI/Panel/HBoxContainer/SpeedRow/Speed1xButton")
+@onready var speed_2x_button: Button = get_node_or_null("TopBarUI/Panel/HBoxContainer/SpeedRow/Speed2xButton")
+@onready var speed_3x_button: Button = get_node_or_null("TopBarUI/Panel/HBoxContainer/SpeedRow/Speed3xButton")
+@onready var pause_button: Button = get_node_or_null("TopBarUI/Panel/HBoxContainer/PauseButton")
+@onready var weather_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/WeatherTabButton")
+@onready var research_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/ResearchTabButton")
+@onready var crafting_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/CraftingTabButton")
+@onready var build_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/BuildTabButton")
+@onready var units_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/UnitsTabButton")
+@onready var unit_detail_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/UnitDetailTabButton")
+@onready var map_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/MapTabButton")
+@onready var event_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/EventTabButton")
+@onready var trade_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/TradeTabButton")
 @onready var zombie_count_label: Label = $ResourcesUI/Panel/VBoxContainer/ZombieCountLabel
 @onready var survivor_spawner: MultiplayerSpawner = $SurvivorSpawner
 @onready var survivors_container: Node3D = $Survivors
@@ -1179,6 +1422,10 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var outposts_container: Node3D = $Outposts
 @onready var watchtower_spawner: MultiplayerSpawner = $WatchtowerSpawner
 @onready var watchtowers_container: Node3D = $Watchtowers
+@onready var bandit_spawner: MultiplayerSpawner = $BanditSpawner
+@onready var bandits_container: Node3D = $Bandits
+@onready var bandit_hideout_spawner: MultiplayerSpawner = $BanditHideoutSpawner
+@onready var bandit_hideouts_container: Node3D = $BanditHideouts
 # Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") sind Gebäude/
 # Fahrzeuge/Zombie-Nester Spawner-Entities wie alles andere, keine festen
 # .tscn-Kind-Nodes mehr.
@@ -1202,6 +1449,22 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 # Panels. Macht auch für künftige UI-lastige Features (Handel etc.) sofort
 # einen Platz frei, ohne wieder eine neue Ecke suchen zu müssen.
 @onready var main_tabs: TabContainer = $MainTabsUI/Panel/TabContainer
+# Overlay-Panel selbst (siehe _on_tab_button_pressed()) — sichtbar/
+# unsichtbar ist jetzt die eigentliche "geöffnet/geschlossen"-Information,
+# main_tabs.current_tab bestimmt nur noch WELCHER Inhalt drin zu sehen ist.
+@onready var main_tabs_panel: Panel = $MainTabsUI/Panel
+# Parallele Arrays (siehe _ready()), gleicher Index = zusammengehöriges
+# Button/Tab-Paar — "Karte" ist bewusst NICHT enthalten (eigener Button,
+# öffnet direkt die Vollbild-Karte statt dieses Overlay, siehe _ready()).
+var _tab_buttons: Array = []
+var _tab_controls: Array = []
+# Referenzen auf die Tabs SELBST (nicht nur ihre Kind-Buttons) — nur für
+# main_tabs.move_child() bei der Tab-Reihenfolge nötig (siehe _ready(),
+# UI-Redesign 2026-08-04), vorher nicht gebraucht, weil Bauen/Einheiten/
+# Handel nie ausgeblendet wurden (anders als crafting_tab/unit_detail_tab).
+@onready var build_tab: Control = $MainTabsUI/Panel/TabContainer/Bauen
+@onready var units_tab: Control = $MainTabsUI/Panel/TabContainer/Einheiten
+@onready var trade_tab: Control = $MainTabsUI/Panel/TabContainer/Handel
 @onready var build_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/BuildButton
 @onready var wall_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/WallButton
 @onready var gate_button: Button = $MainTabsUI/Panel/TabContainer/Bauen/GateButton
@@ -1251,6 +1514,17 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 # nicht mehr ein ganzes CanvasLayer.
 @onready var crafting_tab: Control = $MainTabsUI/Panel/TabContainer/Herstellen
 @onready var crafting_recipe_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Herstellen/RecipeList
+# UI-Redesign (2026-08-04) — vier neue Tabs neben den bestehenden fünf.
+@onready var weather_tab: Control = $MainTabsUI/Panel/TabContainer/Wetter
+@onready var weather_now_label: Label = $MainTabsUI/Panel/TabContainer/Wetter/WeatherNowLabel
+@onready var weather_next_label: Label = $MainTabsUI/Panel/TabContainer/Wetter/WeatherNextLabel
+@onready var research_tab: Control = $MainTabsUI/Panel/TabContainer/Forschung
+@onready var research_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Forschung/ResearchList
+@onready var map_tab: Control = $MainTabsUI/Panel/TabContainer/Karte
+@onready var open_map_button: Button = $MainTabsUI/Panel/TabContainer/Karte/OpenMapButton
+@onready var event_tab: Control = $MainTabsUI/Panel/TabContainer/Ereignisse
+@onready var event_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Ereignisse/EventList
+@onready var info_box_label: Label = $InfoBoxUI/Panel/Label
 # Handel (siehe docs/trading.md — Punkt 14 der Gesamtliste): Schenken
 # (sofortige einseitige Übergabe) UND echtes Tausch-Angebot (Annehmen/
 # Ablehnen nötig) in einem gemeinsamen Tab, ein einziges Ziel-Spieler-
@@ -1370,6 +1644,13 @@ var _next_storage_id: int = 0
 var _next_field_id: int = 0
 var _next_outpost_id: int = 0
 var _next_watchtower_id: int = 0
+# _next_bandit_id ist bewusst NICHT Teil des Spielstands (siehe
+# docs/bandits.md, "Bewusste Lücke") — einzelne Bandits werden nicht
+# gespeichert, nur die Hideouts selbst, die über die Zeit von selbst
+# wieder auffüllen. Nur innerhalb einer laufenden Session eindeutig, reicht
+# für Node-Namen/Catch-up-Dedupe.
+var _next_bandit_id: int = 0
+var _next_bandit_hideout_id: int = 0
 # Seit dem Kartenumbau (siehe docs/world.md, "Kartengröße") sind Gebäude/
 # Fahrzeuge/Zombie-Nester Spawner-Entities wie alles andere (vorher feste
 # .tscn-Kind-Nodes, keine eigene ID nötig).
@@ -1433,16 +1714,25 @@ var _time_scale: float = 1.0
 # mit dem gespeicherten Wert (siehe _load_game_state()).
 var _day_time: float = 62.5
 var _horde_triggered_this_night: bool = false
+# Blutmond-Vorwarnung (siehe _handle_day_night()) — -1 = noch nie gewarnt,
+# gültige _day_count-Werte sind nie negativ.
+var _blood_moon_warned_day: int = -1
 const WORKER_UI_REFRESH_INTERVAL := 0.5
 const GROUP_UI_COUNT := 3
 # Feedback bei fehlgeschlagenen Aktionen (Bauen/Arbeiter anfordern, siehe
 # _report_build_failure()) — kurze Einblendung statt stiller Ablehnung.
 const STATUS_MESSAGE_DURATION := 2.5
 var _status_message_timer: float = 0.0
+# Event-Log (siehe _show_status_message()-Hook) — lokal je Peer, bewusst
+# NICHT in _collect_save_data()/_load_game_state() (kurzlebiger
+# Sitzungs-Verlauf, gleiche Vereinfachung wie bei _trade_offers).
+const EVENT_LOG_MAX := 30
+var _event_log: Array = []
 var _guard_post_ghost_mesh: BoxMesh
 var _wall_ghost_mesh: BoxMesh
 var _watchtower_ghost_mesh: BoxMesh
 var _field_ghost_mesh: BoxMesh
+var _outpost_ghost_mesh: BoxMesh
 # Ziehen mehrerer Mauer-/Tor-Segmente in einem Zug statt Einzelklicks (siehe
 # docs/walls.md, "Ziehen") — _wall_drag_start ist der Weltpunkt vom
 # Maus-Runterdrücken, _ghost_line_meshes ein wiederverwendeter Pool von
@@ -1475,6 +1765,8 @@ func _ready() -> void:
 	field_spawner.spawn_function = _create_field
 	outpost_spawner.spawn_function = _create_outpost
 	watchtower_spawner.spawn_function = _create_watchtower
+	bandit_spawner.spawn_function = _create_bandit
+	bandit_hideout_spawner.spawn_function = _create_bandit_hideout
 	building_spawner.spawn_function = _create_building
 	vehicle_spawner.spawn_function = _create_vehicle
 	zombie_nest_spawner.spawn_function = _create_zombie_nest
@@ -1520,14 +1812,31 @@ func _ready() -> void:
 	_watchtower_ghost_mesh.size = WATCHTOWER_MESH_SIZE
 	_field_ghost_mesh = BoxMesh.new()
 	_field_ghost_mesh.size = FIELD_GHOST_SIZE
+	_outpost_ghost_mesh = BoxMesh.new()
+	_outpost_ghost_mesh.size = OUTPOST_GHOST_SIZE
 	for i in select_group_buttons.size():
 		select_group_buttons[i].pressed.connect(_handle_control_group_key.bind(i + 1, false))
 	# Zeitraffer (siehe _time_scale-Kommentar oben) — nur der Host sieht/
 	# bedient die Buttons, gleiches Muster wie PauseMenu.pause_game_button.
-	speed_row.visible = multiplayer.is_server()
-	speed_1x_button.pressed.connect(_on_speed_button_pressed.bind(1.0))
-	speed_2x_button.pressed.connect(_on_speed_button_pressed.bind(2.0))
-	speed_3x_button.pressed.connect(_on_speed_button_pressed.bind(3.0))
+	# if-Guard bewusst beibehalten (siehe TopBarUI-onready-Kommentar oben,
+	# "Absturz-Diagnose") — Pfade sollten jetzt wieder auflösen, aber ohne
+	# Editor-Zugriff nicht gegengetestet.
+	if speed_row:
+		speed_row.visible = multiplayer.is_server()
+		speed_1x_button.pressed.connect(_on_speed_button_pressed.bind(1.0))
+		speed_2x_button.pressed.connect(_on_speed_button_pressed.bind(2.0))
+		speed_3x_button.pressed.connect(_on_speed_button_pressed.bind(3.0))
+	if pause_button:
+		pause_button.visible = multiplayer.is_server()
+		pause_button.pressed.connect(func() -> void: request_toggle_pause.rpc_id(1, multiplayer.get_unique_id()))
+	if map_tab_button:
+		map_tab_button.pressed.connect(toggle_map_view)
+	open_map_button.pressed.connect(toggle_map_view)
+	if weather_tab_button:
+		_tab_buttons = [weather_tab_button, research_tab_button, crafting_tab_button, build_tab_button, units_tab_button, unit_detail_tab_button, event_tab_button, trade_tab_button]
+		_tab_controls = [weather_tab, research_tab, crafting_tab, build_tab, units_tab, unit_detail_tab, event_tab, trade_tab]
+		for i in _tab_buttons.size():
+			_tab_buttons[i].pressed.connect(_on_tab_button_pressed.bind(i))
 	# Kein eigener Lobby-Flow hier — Host/Join/Spielerliste/Start laufen
 	# schon vorher über die echte scenes/lobby/Lobby.tscn (docs/networking.md).
 	# Diese Szene wird erst betreten, NACHDEM der Host dort "Spiel starten"
@@ -1586,9 +1895,72 @@ func _handle_day_night(delta: float) -> void:
 		_day_count += 1
 	_update_day_night_visuals()
 	_update_clock_label()
+	# Blutmond-Vorwarnung (2026-08-04, Nutzer-Skizze "ui skizze.jpg", Info-Box
+	# Punkt 12: "Blutmond nähert sich") — vorher gab es nur die Meldung BEIM
+	# tatsächlichen Nachteintritt (_trigger_horde_night()), keine Vorschau
+	# davor. _blood_moon_warned_day verhindert Mehrfachauslösung an
+	# demselben Tag (das 2-Stunden-Fenster läuft sonst jeden Frame erneut).
+	if multiplayer.is_server() and is_blood_moon_night() and not is_night() and current_game_hour() >= NIGHT_START_HOUR - 2.0 and _blood_moon_warned_day != _day_count:
+		_blood_moon_warned_day = _day_count
+		for peer_id in NetworkManager.players.keys():
+			report_status(peer_id, "Blutmond nähert sich!")
 	if multiplayer.is_server() and is_night() and not _horde_triggered_this_night:
 		_horde_triggered_this_night = true
 		_trigger_horde_night()
+
+
+func _handle_weather(delta: float) -> void:
+	# Timer läuft lokal auf JEDEM Peer runter (siehe WEATHER_*-Kommentar
+	# oben, gleiches Prinzip wie _day_time) — nur der eigentliche Würfel-
+	# Wurf + Broadcast ist host-gated, sonst würde jeder Peer sein eigenes,
+	# abweichendes Wetter würfeln.
+	_weather_timer -= delta
+	if multiplayer.is_server() and _weather_timer <= 0.0:
+		_weather = _next_weather
+		_next_weather = _roll_weather()
+		_weather_timer = randf_range(WEATHER_MIN_DURATION, WEATHER_MAX_DURATION)
+		_sync_weather.rpc(_weather, _next_weather, _weather_timer)
+	_update_weather_labels()
+
+
+func _roll_weather() -> String:
+	return "rain" if randf() < RAIN_CHANCE else "clear"
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_weather(weather: String, next_weather: String, timer: float) -> void:
+	_weather = weather
+	_next_weather = next_weather
+	_weather_timer = timer
+	_update_weather_labels()
+
+
+@rpc("authority", "reliable")
+func _catch_up_weather(weather: String, next_weather: String, timer: float) -> void:
+	_weather = weather
+	_next_weather = next_weather
+	_weather_timer = timer
+	_update_weather_labels()
+
+
+func _update_weather_labels() -> void:
+	weather_now_label.text = "Jetzt: %s" % WEATHER_DISPLAY_NAMES.get(_weather, _weather)
+	weather_next_label.text = "Nächster Wechsel in ~%ds: %s" % [int(_weather_timer), WEATHER_DISPLAY_NAMES.get(_next_weather, _next_weather)]
+
+
+func _refresh_event_log_ui() -> void:
+	# Infos/Event-Tab (volles Log) + Info-Box (nur die letzte Zeile) —
+	# beide lesen dieselbe _event_log-Quelle, siehe _show_status_message().
+	for child in event_list.get_children():
+		child.queue_free()
+	for i in range(_event_log.size() - 1, -1, -1):
+		var entry: Dictionary = _event_log[i]
+		var label := Label.new()
+		label.add_theme_font_size_override("font_size", 12)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = "%s — %s" % [entry["time"], entry["text"]]
+		event_list.add_child(label)
+	info_box_label.text = _event_log[-1]["text"] if not _event_log.is_empty() else "—"
 
 
 func is_night() -> bool:
@@ -1624,7 +1996,13 @@ func _clock_text() -> String:
 
 
 func _update_clock_label() -> void:
+	if clock_label == null:
+		return  # TEMPORÄR (2026-08-05, Absturz-Diagnose, siehe status.md).
 	clock_label.text = _clock_text()
+	# Kalender (Nutzer-Skizze "ui skizze.jpg", Punkt 1) — _day_count ist
+	# schon lange intern vorhanden (Horde-/Blutmond-Timing), war aber nie
+	# als eigenes Label sichtbar, nur indirekt über den "(Nacht)"-Zusatz.
+	day_label.text = "Tag %d" % (_day_count + 1)
 
 
 func _update_fog_of_war() -> void:
@@ -1634,18 +2012,22 @@ func _update_fog_of_war() -> void:
 	# Gruppen-Konvention) UND alle Home-Bases zählen, nicht nur die eigenen
 	# — "geteilte Aufklärung" heißt: was IRGENDEIN Spieler aufgedeckt hat,
 	# ist für alle aufgedeckt.
+	# Wetter-Effekt (2026-08-04, Nutzer-Skizze "ui skizze.jpg", Wettervorhersage-
+	# Tab) — Regen reduziert ALLE Aufdeckungsradien gleichermaßen, einziger
+	# Eingriffspunkt statt jede Einheiten-Art einzeln anzufassen.
+	var vision_factor: float = WEATHER_VISION_MULTIPLIER if _weather == "rain" else 1.0
 	for revealer in get_tree().get_nodes_in_group("living"):
 		if is_instance_valid(revealer):
-			_reveal_around(revealer.position)
+			_reveal_around(revealer.position, FOG_VISION_RADIUS * vision_factor)
 	for base in get_tree().get_nodes_in_group("home_base"):
 		if is_instance_valid(base):
-			_reveal_around(base.position)
+			_reveal_around(base.position, FOG_VISION_RADIUS * vision_factor)
 	# Wachturm (Punkt 25 der Gesamtliste, siehe docs/building.md) —
 	# deutlich größerer Radius als Einheiten/Home-Base, das ist der ganze
 	# Punkt eines Wachturms ("erweiterte Sicht auf die Map").
 	for watchtower in get_tree().get_nodes_in_group("watchtower"):
 		if is_instance_valid(watchtower):
-			_reveal_around(watchtower.position, WATCHTOWER_VISION_RADIUS)
+			_reveal_around(watchtower.position, WATCHTOWER_VISION_RADIUS * vision_factor)
 
 
 func _reveal_around(world_pos: Vector3, radius: float = FOG_VISION_RADIUS) -> void:
@@ -1740,11 +2122,13 @@ func _update_zombie_count_label() -> void:
 func _despawn_far_zombies() -> void:
 	# Läuft nur alle ZOMBIE_DESPAWN_CHECK_INTERVAL Sekunden (nicht jeden
 	# Frame nötig, ohnehin kein zeitkritischer Vorgang) — Kandidatenliste wie
-	# Zombie._find_nearest_target() ("living" + geclaimte "searchable"),
-	# PLUS "home_base" (jeder Peer hat immer genau eine, siehe docs/base.md
-	# — anders als _find_nearest_target() zählt hier auch eine Home-Base
-	# ohne Trupps in der Nähe als "hier ist jemand präsent", auch wenn
-	# Zombies sie mangels take_damage() nie als Angriffsziel wählen können).
+	# Zombie._find_nearest_target() ("living" + geclaimte "searchable" +
+	# "home_base", seit Home-Base zerstörbar ist auch dort ein echtes
+	# Zombie-Ziel, siehe docs/mechanics-review.md, "Fehlende Enden/Ziele").
+	# Hier zusätzlich als reiner Präsenz-Indikator genutzt (jeder Peer hat
+	# immer genau eine, siehe docs/base.md) — eine Home-Base ohne Trupps in
+	# der Nähe zählt trotzdem als "hier ist jemand präsent", damit die
+	# eigene Zone nicht schon beim ersten Erkunden komplett leerläuft.
 	# Einmal pro Check aufgebaut statt pro Zombie.
 	var presence := get_tree().get_nodes_in_group("living")
 	presence.append_array(get_tree().get_nodes_in_group("home_base"))
@@ -1824,6 +2208,34 @@ func _apply_zombie_batch(ids: PackedInt32Array, positions: PackedVector3Array, h
 		var zombie: Node3D = zombies_container.get_node_or_null("zombie_%d" % ids[i])
 		if zombie != null:
 			zombie.apply_synced_state(positions[i], hps[i])
+
+
+func _sync_bandits_batch(bandits: Array) -> void:
+	# Gleiches Bündel-Muster wie _sync_zombies_batch() (siehe dort) — bei der
+	# kleinen Bandit-Population kein Performance-Zwang, aber Konsistenz statt
+	# eines zweiten, abweichenden Sync-Musters.
+	if multiplayer.get_peers().is_empty():
+		return
+	var ids := PackedInt32Array()
+	var positions := PackedVector3Array()
+	var hps := PackedInt32Array()
+	for bandit in bandits:
+		if not is_instance_valid(bandit):
+			continue
+		ids.append(bandit.bandit_id)
+		positions.append(bandit.position)
+		hps.append(bandit.hp)
+	if ids.is_empty():
+		return
+	_apply_bandit_batch.rpc(ids, positions, hps)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _apply_bandit_batch(ids: PackedInt32Array, positions: PackedVector3Array, hps: PackedInt32Array) -> void:
+	for i in ids.size():
+		var bandit: Node3D = bandits_container.get_node_or_null("bandit_%d" % ids[i])
+		if bandit != null:
+			bandit.apply_synced_state(positions[i], hps[i])
 
 
 func _zombie_grid_cell(pos: Vector3) -> Vector2i:
@@ -2032,7 +2444,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 		# hätte (kein periodischer Resync für GuardPost.built).
 		_catch_up_guard_post.rpc_id(peer_id, existing.guard_post_id, existing.owner_peer_id, existing.position, existing.built)
 	for existing in walls_container.get_children():
-		_catch_up_wall.rpc_id(peer_id, existing.wall_id, existing.owner_peer_id, existing.position, existing.rotation.y, existing.is_gate)
+		_catch_up_wall.rpc_id(peer_id, existing.wall_id, existing.owner_peer_id, existing.position, existing.rotation.y, existing.is_gate, existing.hp)
 	for existing in medical_stations_container.get_children():
 		_catch_up_medical_station.rpc_id(peer_id, existing.medical_station_id, existing.owner_peer_id, existing.position, existing.is_advanced)
 	for existing in workshops_container.get_children():
@@ -2087,6 +2499,7 @@ func _spawn_for_peer(peer_id: int) -> void:
 		building_entries.append({
 			"id": existing.building_id,
 			"position": existing.position,
+			"rotation_y": existing.rotation.y,
 			"zone_center": existing.zone_center,
 			"size": (existing.get_node("Mesh").mesh as BoxMesh).size,
 			"model_path": existing.model_path,
@@ -2109,13 +2522,21 @@ func _spawn_for_peer(peer_id: int) -> void:
 	if not building_entries.is_empty():
 		_catch_up_buildings_bulk.rpc_id(peer_id, building_entries)
 	for existing in vehicles_container.get_children():
-		_catch_up_vehicle.rpc_id(peer_id, existing.vehicle_id, existing.position, existing.hp, existing.owner_peer_id, existing.vehicle_type)
+		_catch_up_vehicle.rpc_id(peer_id, existing.vehicle_id, existing.position, existing.hp, existing.owner_peer_id, existing.vehicle_type, existing.fuel)
 	for existing in zombie_nests_container.get_children():
 		_catch_up_zombie_nest.rpc_id(peer_id, existing.zombie_nest_id, existing.position, existing.hp)
+	for existing in bandit_hideouts_container.get_children():
+		_catch_up_bandit_hideout.rpc_id(peer_id, existing.bandit_hideout_id, existing.position, existing.hp)
+	for existing in bandits_container.get_children():
+		_catch_up_bandit.rpc_id(peer_id, existing.bandit_id, existing.position, existing.hp, existing.home_hideout_id)
 	# Tag/Nacht-Stand (siehe _handle_day_night()) — ohne das hier
 	# würde ein später beitretender Peer lokal bei _day_time = 0 (Taganfang)
 	# neu anfangen, unabhängig davon, wie weit die anderen schon sind.
 	_catch_up_day_time.rpc_id(peer_id, _day_time, _day_count)
+	# Wetter-Stand (siehe _handle_weather()) — ohne das hier würde ein
+	# später beitretender Peer bis zum nächsten Zufalls-Wurf beim Default
+	# "clear" bleiben, unabhängig vom tatsächlichen Stand der anderen.
+	_catch_up_weather.rpc_id(peer_id, _weather, _next_weather, _weather_timer)
 
 
 func _spawn_survivor(peer_id: int, spawn_position: Vector3, is_recruit: bool = false) -> void:
@@ -2229,6 +2650,54 @@ func grant_zombie_loot(peer_id: int, zombie_type: int) -> void:
 		report_status(peer_id, "Zombie-Beute: %s gefunden!" % RESOURCE_DISPLAY_NAMES.get(RESEARCH_BOOK_RESOURCE, RESEARCH_BOOK_RESOURCE))
 
 
+func spawn_hideout_bandit(hideout_id: int, spawn_position: Vector3) -> void:
+	# Aufgerufen von BanditHideout._process() (host-seitig), gleiches
+	# Cross-Node-Muster wie spawn_nest_zombie() — ABER mit Kappung PRO
+	# HIDEOUT statt eines globalen Deckels (siehe docs/bandits.md,
+	# BanditHideout.MAX_ACTIVE_BANDITS): mehrere Hideouts auf der Karte
+	# sollen sich nicht gegenseitig blockieren.
+	var active_count := 0
+	for bandit in bandits_container.get_children():
+		if bandit.home_hideout_id == hideout_id:
+			active_count += 1
+	if active_count >= BANDIT_HIDEOUT_MAX_ACTIVE_BANDITS:
+		return
+	var pos := Vector3(spawn_position.x, BANDIT_GROUND_Y, spawn_position.z)
+	bandit_spawner.spawn({"id": _next_bandit_id, "position": pos, "home_hideout_id": hideout_id})
+	_next_bandit_id += 1
+
+
+func grant_bandit_kill_loot(peer_id: int) -> void:
+	# Aufgerufen von Bandit.take_damage() beim Tod, gleiches Muster wie
+	# grant_zombie_loot() — eigene, waffen-/munitionsschwere Loot-Tabelle
+	# statt der Zombie-Tabelle (siehe BANDIT_KILL_LOOT_TABLE oben).
+	if peer_id == 0:
+		return
+	var home_base := _find_home_base_for_peer(peer_id)
+	if home_base == null:
+		return
+	if randf() <= BANDIT_KILL_LOOT_DROP_CHANCE:
+		var loot_type: String = BANDIT_KILL_LOOT_TABLE[randi() % BANDIT_KILL_LOOT_TABLE.size()]
+		var amount: int = BANDIT_KILL_LOOT_AMOUNT[loot_type]
+		home_base.add_resources.rpc({loot_type: amount})
+		report_status(peer_id, "Banditen-Beute: +%d %s" % [amount, RESOURCE_DISPLAY_NAMES.get(loot_type, loot_type)])
+
+
+func grant_bandit_hideout_cleared_loot(peer_id: int) -> void:
+	# Aufgerufen von BanditHideout.take_damage() bei Zerstörung — einmaliger,
+	# großzügigerer Bonus-Loot statt der kleinen Einzel-Kill-Tabelle (siehe
+	# BANDIT_HIDEOUT_CLEAR_LOOT oben), soll sich wie ein echter Erfolg
+	# anfühlen. peer_id == 0 (z. B. Zerstörung ohne bekannten Verursacher)
+	# → kein Drop.
+	if peer_id == 0:
+		return
+	var home_base := _find_home_base_for_peer(peer_id)
+	if home_base == null:
+		return
+	home_base.add_resources.rpc(BANDIT_HIDEOUT_CLEAR_LOOT)
+	report_status(peer_id, "Hideout ausgehoben — reiche Beute erhalten!")
+
+
 @rpc("authority", "reliable")
 func _catch_up_survivor(id: int, peer_id: int, spawn_position: Vector3) -> void:
 	var survivor_name := "survivor_%d" % id
@@ -2266,11 +2735,11 @@ func _catch_up_guard_post(id: int, peer_id: int, spawn_position: Vector3, built:
 
 
 @rpc("authority", "reliable")
-func _catch_up_wall(id: int, peer_id: int, spawn_position: Vector3, spawn_rotation_y: float, is_gate: bool) -> void:
+func _catch_up_wall(id: int, peer_id: int, spawn_position: Vector3, spawn_rotation_y: float, is_gate: bool, hp: int) -> void:
 	var wall_name := "wall_%d" % id
 	if walls_container.has_node(wall_name):
 		return
-	var wall := _create_wall({"id": id, "peer_id": peer_id, "position": spawn_position, "rotation_y": spawn_rotation_y, "is_gate": is_gate})
+	var wall := _create_wall({"id": id, "peer_id": peer_id, "position": spawn_position, "rotation_y": spawn_rotation_y, "is_gate": is_gate, "hp": hp})
 	walls_container.add_child(wall)
 
 
@@ -2401,7 +2870,7 @@ func _catch_up_buildings_bulk(entries: Array) -> void:
 
 
 @rpc("authority", "reliable")
-func _catch_up_vehicle(id: int, spawn_position: Vector3, hp: int, owner_peer_id: int, vehicle_type: String) -> void:
+func _catch_up_vehicle(id: int, spawn_position: Vector3, hp: int, owner_peer_id: int, vehicle_type: String, fuel: float) -> void:
 	# owner_peer_id seit Punkt 6 der Performance-Liste (Task #35) mit
 	# dabei — vorher bekam ein spät beitretender Peer nie mit, dass ein
 	# Fahrzeug schon besetzt ist (siehe docs/vehicle.md, "Bekannte
@@ -2411,10 +2880,11 @@ func _catch_up_vehicle(id: int, spawn_position: Vector3, hp: int, owner_peer_id:
 		return
 	var vehicle := _create_vehicle({"id": id, "position": spawn_position, "owner_peer_id": owner_peer_id, "vehicle_type": vehicle_type})
 	vehicles_container.add_child(vehicle)
-	# hp erst NACH add_child setzen (siehe _create_vehicle()) — sonst
-	# überschreibt Vehicle._ready() den hier übertragenen Wert wieder mit
+	# hp/fuel erst NACH add_child setzen (siehe _create_vehicle()) — sonst
+	# überschreibt Vehicle._ready() die hier übertragenen Werte wieder mit
 	# dem vollen Höchstwert des Typs.
 	vehicle.hp = hp
+	vehicle.fuel = fuel
 
 
 @rpc("authority", "reliable")
@@ -2424,6 +2894,25 @@ func _catch_up_zombie_nest(id: int, spawn_position: Vector3, hp: int) -> void:
 		return
 	var nest := _create_zombie_nest({"id": id, "position": spawn_position, "hp": hp})
 	zombie_nests_container.add_child(nest)
+
+
+@rpc("authority", "reliable")
+func _catch_up_bandit_hideout(id: int, spawn_position: Vector3, hp: int) -> void:
+	var hideout_name := "bandit_hideout_%d" % id
+	if bandit_hideouts_container.has_node(hideout_name):
+		return
+	var hideout := _create_bandit_hideout({"id": id, "position": spawn_position, "hp": hp})
+	bandit_hideouts_container.add_child(hideout)
+
+
+@rpc("authority", "reliable")
+func _catch_up_bandit(id: int, spawn_position: Vector3, hp: int, home_hideout_id: int) -> void:
+	var bandit_name := "bandit_%d" % id
+	if bandits_container.has_node(bandit_name):
+		return
+	var bandit := _create_bandit({"id": id, "position": spawn_position, "home_hideout_id": home_hideout_id})
+	bandit.hp = hp
+	bandits_container.add_child(bandit)
 
 
 @rpc("authority", "reliable")
@@ -2539,6 +3028,10 @@ func _create_wall(data: Dictionary) -> Node:
 	wall.position = data["position"]
 	wall.rotation.y = data.get("rotation_y", 0.0)
 	wall.owner_peer_id = data["peer_id"]
+	# Optional (Catch-up/Spielstand-Laden, siehe Wall.gd-Sentinel-Kommentar) —
+	# fehlt bei einer frisch gebauten Mauer, Wall._ready() setzt dann den
+	# normalen Default.
+	wall.hp = data.get("hp", -1)
 	return wall
 
 
@@ -2621,6 +3114,14 @@ func _create_building(data: Dictionary) -> Node:
 	building.name = "building_%d" % data["id"]
 	building.building_id = data["id"]
 	building.position = data["position"]
+	# Gebäude-Rotation (2026-08-04, siehe docs/world.md, "Gebäude-
+	# Rotation") — dreht Mesh/Collision/Model GEMEINSAM (rotation.y auf dem
+	# Building-Node selbst, nicht nur auf dem Model-Kind), damit die
+	# Kollisionsbox mitdreht und Klickfläche/Kollision weiterhin zum
+	# sichtbaren Modell passen. .get() mit Fallback 0.0 für Aufrufer, die
+	# das Feld nicht mitgeben (z. B. Wald-Gebäude/Schutzsuchende/Ruinen —
+	# alle bewusst ohne Reihen-Ausrichtung, brauchen keine Rotation).
+	building.rotation.y = data.get("rotation_y", 0.0)
 	building.zone_center = data["zone_center"]
 	var size: Vector3 = data["size"]
 	var box_mesh := BoxMesh.new()
@@ -2661,8 +3162,19 @@ func _create_building(data: Dictionary) -> Node:
 		# es um seine halbe Höhe über dem Boden schweben. Lokaler Y-Versatz
 		# hier verschiebt NUR das Model-Kind nach unten, Collision/Mesh-Box
 		# (beide weiterhin zentriert) bleiben unverändert korrekt.
-		model.position.y = -size.y / 2.0
+		# 2026-08-04, verallgemeinert (Ahpoteke.glb kam mit Ursprung ~7m ÜBER
+		# der Basis rein, nicht exakt bei 0 wie Wohnhaus/Supermarkt — die
+		# bisherige Annahme "Modell-Ursprung ist immer die Basis" war zu
+		# optimistisch) — `_model_min_y()` liest die TATSÄCHLICHE Unterkante
+		# aus der Mesh-AABB aus, statt sie als 0 anzunehmen. Bei einem
+		# korrekt an der Basis modellierten Asset (min_y ≈ 0) verhält sich
+		# das identisch wie vorher.
+		model.position.y = -size.y / 2.0 - _model_min_y(model)
 		building.add_child(model)
+		# Grime-Overlay-Experiment (siehe _apply_grime_overlay()) — nur auf
+		# echte Assets, nicht auf die Platzhalter-Box/Masse-Häuser, weil es
+		# konkret um den Look der gelieferten Blender-Modelle geht.
+		_apply_grime_overlay(model)
 	else:
 		var default_mat := StandardMaterial3D.new()
 		default_mat.albedo_color = building.default_color
@@ -2680,7 +3192,22 @@ func _create_building(data: Dictionary) -> Node:
 	# nicht extra aufgerufen werden).
 	building.is_looted = data.get("is_looted", false)
 	building.owner_peer_id = data.get("owner_peer_id", 0)
-	building.hp = data.get("hp", 100)  # 100 == Building.MAX_HP
+	# HP/Abriss-Ertrag größenabhängig (2026-08-04, Systematik-Review, Fund 3)
+	# — aus dem tatsächlichen Gebäude-Volumen berechnet statt der vorher für
+	# JEDE Vorlage gleichen Werte (Building.DEFAULT_MAX_HP/DEFAULT_YIELD).
+	# Immer aus `size` neu berechnet statt separat gespeichert — `size`
+	# selbst ist schon Teil von Catch-up/Speicherstand, ein zusätzliches
+	# Feld wäre redundant. `hp` bleibt wie bisher das einzige, was explizit
+	# überschrieben werden kann (beschädigter Zustand aus einem
+	# Speicherstand), Fallback ist jetzt `building.max_hp` statt der alten
+	# festen 100.
+	var volume := size.x * size.y * size.z
+	building.max_hp = maxi(int(round(volume * BUILDING_HP_PER_VOLUME)), MIN_BUILDING_HP)
+	building.YIELD = {
+		"stone": maxi(int(round(volume * BUILDING_STONE_YIELD_PER_VOLUME)), MIN_BUILDING_STONE_YIELD),
+		"brick": maxi(int(round(volume * BUILDING_BRICK_YIELD_PER_VOLUME)), MIN_BUILDING_BRICK_YIELD),
+	}
+	building.hp = data.get("hp", building.max_hp)
 	# Banditen-Restloot (siehe Building.gd, "Punkt 23 der Gesamtliste") —
 	# gleiches optionales Zusatzfeld-Muster wie is_looted/owner_peer_id/hp
 	# oben, fehlt bei normaler Zonen-Generierung, kommt nur von Catch-up/
@@ -2701,6 +3228,67 @@ func _create_building(data: Dictionary) -> Node:
 	building.is_refugee = data.get("is_refugee", false)
 	building._update_visual()
 	return building
+
+
+func _model_min_y(node: Node3D, accumulated: Transform3D = Transform3D.IDENTITY) -> float:
+	# Tatsächliche Unterkante eines geladenen Modells, relativ zu dessen
+	# EIGENEM (noch unpositioniertem) Ursprung — Ersatz für die frühere
+	# Annahme "der Modell-Ursprung IST schon die Basis" (siehe Kommentar in
+	# _create_building()), die bei einem Asset mit versetztem Ursprung
+	# (Ahpoteke.glb, ~7m daneben) zu einem massiven Einsinken geführt hätte.
+	# Läuft VOR dem Setzen von `model.position`, deshalb reiner
+	# Eltern-Transform-Aufbau ohne Rückgriff auf global_transform (das wäre
+	# hier noch nicht gültig, das Model-Kind steckt zu dem Zeitpunkt noch
+	# nicht im Baum). Rekursiv über alle Kind-MeshInstance3D, damit auch
+	# mehrteilige Modelle (mehrere Meshes unter eigenen Unter-Nodes)
+	# korrekt erfasst werden.
+	var local_transform: Transform3D = accumulated * node.transform
+	var min_y := INF
+	if node is MeshInstance3D and node.mesh != null:
+		var aabb: AABB = node.mesh.get_aabb()
+		for i in 8:
+			min_y = minf(min_y, (local_transform * aabb.get_endpoint(i)).y)
+	for child in node.get_children():
+		if child is Node3D:
+			min_y = minf(min_y, _model_min_y(child, local_transform))
+	return min_y if min_y != INF else 0.0
+
+
+# Grime-Overlay-Shader (2026-08-04, Nutzerfrage "shader statt mehr Blender-
+# Detail an den Meshes") — Experiment zum Vergleich mit SSAO (siehe
+# Environment_day_night in World.tscn), NICHT final entschieden. Legt eine
+# fleckige, dunkle Schmutz-Textur als `next_pass` über JEDES vorhandene
+# Material, verändert die eigentliche Blender-Farbe also nicht. Eigene
+# ShaderMaterial-INSTANZ pro Aufruf (nicht eine gemeinsame Resource) nur
+# wegen des `seed`-Parameters — sonst hätten alle Gebäude desselben Typs
+# exakt dasselbe Fleckenmuster, sichtbar repetitiv bei mehreren Kopien
+# desselben Assets in einer Stadt-Zone.
+const GRIME_SHADER := preload("res://assets/shaders/grime_overlay.gdshader")
+
+
+func _apply_grime_overlay(node: Node) -> void:
+	if node is MeshInstance3D and node.mesh != null:
+		for surface_idx in node.mesh.get_surface_count():
+			var base_material: Material = node.get_surface_override_material(surface_idx)
+			if base_material == null:
+				base_material = node.mesh.surface_get_material(surface_idx)
+			# .duplicate() Pflicht — ein importiertes glTF-Material ist
+			# zwischen ALLEN Instanzen desselben Modells geteilt (gleiche
+			# Resource), ein direktes `.next_pass =` auf dem Original hätte
+			# also für JEDES Gebäude dieses Typs denselben next_pass
+			# (inkl. desselben Zufalls-Seeds) gesetzt — analog zur
+			# BoxMesh-Resource-Falle, siehe Kommentar in _create_building().
+			var grime := ShaderMaterial.new()
+			grime.shader = GRIME_SHADER
+			grime.set_shader_parameter("seed", randf() * 1000.0)
+			if base_material != null:
+				var own_material: Material = base_material.duplicate()
+				own_material.next_pass = grime
+				node.set_surface_override_material(surface_idx, own_material)
+			else:
+				node.set_surface_override_material(surface_idx, grime)
+	for child in node.get_children():
+		_apply_grime_overlay(child)
 
 
 func _create_vehicle(data: Dictionary) -> Node:
@@ -2733,6 +3321,25 @@ func _create_zombie_nest(data: Dictionary) -> Node:
 	if data.has("hp"):
 		nest.hp = data["hp"]
 	return nest
+
+
+func _create_bandit(data: Dictionary) -> Node:
+	var bandit := BANDIT_SCENE.instantiate()
+	bandit.name = "bandit_%d" % data["id"]
+	bandit.bandit_id = data["id"]
+	bandit.position = data["position"]
+	bandit.home_hideout_id = data.get("home_hideout_id", -1)
+	return bandit
+
+
+func _create_bandit_hideout(data: Dictionary) -> Node:
+	var hideout := BANDIT_HIDEOUT_SCENE.instantiate()
+	hideout.name = "bandit_hideout_%d" % data["id"]
+	hideout.bandit_hideout_id = data["id"]
+	hideout.position = data["position"]
+	if data.has("hp"):
+		hideout.hp = data["hp"]
+	return hideout
 
 
 func _create_tree(data: Dictionary) -> Node:
@@ -2857,6 +3464,7 @@ func _generate_world() -> void:
 		_forest_zone_centers.append(center)
 		_generate_forest_zone(center)
 	_spawn_wilderness_resources()
+	_spawn_bandit_hideouts()
 
 
 func _pick_zone_center(radius: float) -> Vector3:
@@ -3017,11 +3625,26 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 	# dem dort gewürfelten Typ (siehe BUILDING_TYPES) — reproduziert
 	# "ein Rekrut pro Stadt-Zone" aus dem ursprünglichen Einzel-Gebäude-
 	# Design.
-	var slots: Array[Vector3] = _generate_street_slots(center, radius)
+	var slots: Array[Dictionary] = _generate_street_slots(center, radius)
 	slots.shuffle()
-	var count: int = mini(building_count, slots.size())
-	var recruit_slot: int = randi() % count if count > 0 else -1
-	for i in count:
+	# Nachbarschafts-Lookup für breite Gebäudetypen (siehe
+	# "Mehrfach-Reihenplätze" unten) — Schlüssel row_id_row_index statt
+	# Vector2i, weil beide simple Ints sind (siehe _slot_key()).
+	var slots_by_key: Dictionary = {}
+	for slot in slots:
+		slots_by_key[_slot_key(slot["row_id"], slot["row_index"])] = slot
+	var used_keys: Dictionary = {}
+	# Erst SAMMELN, dann erst erzeugen (zweiphasig, weil has_survivor einen
+	# zufälligen Index unter den TATSÄCHLICH platzierten Gebäuden braucht —
+	# bei breiten Typen kann die Anzahl der Platzierungen kleiner als
+	# building_count ausfallen, siehe unten, deshalb erst hinterher zählbar).
+	var placements: Array[Dictionary] = []
+	for slot in slots:
+		if placements.size() >= building_count:
+			break
+		var key := _slot_key(slot["row_id"], slot["row_index"])
+		if used_keys.has(key):
+			continue
 		var template: Dictionary = BUILDING_TYPES[randi() % BUILDING_TYPES.size()]
 		var size: Vector3 = template["size"]
 		var model_path := ""
@@ -3037,17 +3660,80 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 			size = Vector3(proc_params["width"], proc_params["wall_height"] + proc_params["roof_height"], proc_params["depth"])
 		else:
 			model_path = _pick_model_path(template)
-		var slot: Vector3 = slots[i]
-		var pos := Vector3(slot.x, size.y / 2.0, slot.z)
-		_create_building_local({
-			"id": _next_building_id,
+		# Mehrfach-Reihenplätze (2026-08-04, siehe docs/world.md) — ein
+		# Gebäudetyp, dessen Breite (size.x, siehe "Gebäude-Rotation" unten
+		# — seit der Rotation IMMER die Entlang-der-Reihe-Achse, unabhängig
+		# von "along_x") die BUILDING_MIN_SPACING-Lücke zwischen zwei Slots
+		# überschreitet (z. B. Supermarkt, 18m), reserviert zusätzliche,
+		# direkt benachbarte Slots IN DERSELBEN REIHE (row_id gleich,
+		# row_index um genau 1 versetzt) — die Bauposition wird dann der
+		# Mittelpunkt aller reservierten Slots statt eines einzelnen
+		# Punkts.
+		var along_row_size: float = size.x
+		var span: int = clampi(ceili(along_row_size / BUILDING_MIN_SPACING), 1, MAX_BUILDING_SLOT_SPAN)
+		var span_keys: Array[String] = [key]
+		var span_position_sum: Vector3 = slot["position"]
+		var fits := true
+		for extra in range(1, span):
+			var neighbor_key := _slot_key(slot["row_id"], slot["row_index"] + extra)
+			if used_keys.has(neighbor_key) or not slots_by_key.has(neighbor_key):
+				# Kein Platz für diesen breiten Typ an dieser Stelle (Rand
+				# der Reihe erreicht oder Nachbar-Slot schon vergeben) —
+				# dieser Slot bleibt unbebaut liegen (siehe Kommentar oben,
+				# "unbebaute Lücke"), KEIN Retry mit einem schmaleren Typ auf
+				# demselben Slot (würde die schon organisch wirkende
+				# Zufallsverteilung verkomplizieren, für einen einzigen
+				# breiten Typ nicht nötig).
+				fits = false
+				break
+			span_keys.append(neighbor_key)
+			span_position_sum += slots_by_key[neighbor_key]["position"]
+		if not fits:
+			continue
+		for used_key in span_keys:
+			used_keys[used_key] = true
+		var slot_center: Vector3 = span_position_sum / span_keys.size()
+		# Straßenabstand tiefenabhängig (siehe BUILDING_STREET_MARGIN oben) —
+		# die Position auf der REIHEN-SENKRECHTEN Achse (Z bei Süd/Nord, X
+		# bei West/Ost) wird erst hier aus der tatsächlichen Gebäudetiefe
+		# (size.z, siehe "Gebäude-Rotation" unten — seit der Rotation IMMER
+		# die Senkrecht-zur-Reihe-Achse) berechnet, statt des früheren
+		# festen BUILDING_ROW_INSET. `perp_base`/`perp_sign` sind für alle
+		# Slots in span_keys identisch (dieselbe Reihe/Blockkante), der
+		# Wert des ZUERST betrachteten Slots reicht deshalb.
+		var perp_extent: float = size.z / 2.0 + BUILDING_STREET_MARGIN
+		var perp_coord: float = slot["perp_base"] + slot["perp_sign"] * perp_extent
+		var final_x: float = slot_center.x if slot["along_x"] else perp_coord
+		var final_z: float = perp_coord if slot["along_x"] else slot_center.z
+		var pos := Vector3(final_x, size.y / 2.0, final_z)
+		# Gebäude-Rotation (siehe row_candidates/"rotation_y" in
+		# _generate_street_slots()) — dreht das Gebäude so, dass seine per
+		# Blender-Konvention modellierte Front zur jeweiligen Straßenseite
+		# zeigt. Ab hier gilt: size.x ist IMMER die Entlang-der-Reihe-Achse,
+		# size.z IMMER die Senkrecht-Achse (unabhängig von "along_x"), weil
+		# die Rotation genau das sicherstellt.
+		placements.append({
 			"position": pos,
+			"rotation_y": slot["rotation_y"],
 			"size": size,
 			"model_path": model_path,
 			"proc_params": proc_params,
+			"template": template,
+		})
+	var recruit_index: int = randi() % placements.size() if not placements.is_empty() else -1
+	for i in placements.size():
+		var placement: Dictionary = placements[i]
+		var template: Dictionary = placement["template"]
+		_create_building_local({
+			"id": _next_building_id,
+			"position": placement["position"],
+			"rotation_y": placement["rotation_y"],
+			"size": placement["size"],
+			"model_path": placement["model_path"],
+			"proc_params": placement["proc_params"],
 			"loot": _roll_building_loot(template),
 			"default_color": template["default_color"],
-			"has_survivor": i == recruit_slot,
+			"has_survivor": i == recruit_index,
 			"zone_center": center,
 			"loot_category": _loot_category_for_template(template),
 		})
@@ -3096,7 +3782,7 @@ func _generate_city_zone(center: Vector3, zone_index: int, radius: float, buildi
 		zombie_spawner.spawn({"index": index, "position": Vector3(ring_pos.x, ZOMBIE_GROUND_Y, ring_pos.z)})
 
 
-func _generate_street_slots(center: Vector3, radius: float) -> Array[Vector3]:
+func _generate_street_slots(center: Vector3, radius: float) -> Array[Dictionary]:
 	# Baut ALLE möglichen Gebäude-Reihenplätze entlang eines Straßen-Rasters
 	# innerhalb von radius um center (deutlich mehr als gebraucht, siehe
 	# _generate_city_zone(), das nur eine zufällige Teilmenge davon
@@ -3105,30 +3791,78 @@ func _generate_street_slots(center: Vector3, radius: float) -> Array[Vector3]:
 	# damit Performance) zu erhöhen. Raster ist PRO ZONE um center zentriert
 	# (nicht global über die ganze Karte ausgerichtet) — jede Zone bleibt
 	# dadurch optisch in sich geschlossen, unabhängig von ihrer Position.
-	var slots: Array[Vector3] = []
+	#
+	# Strukturierte Slots statt roher Vector3 (2026-08-04, siehe
+	# docs/world.md, "Mehrfach-Reihenplätze") — "row_id" identifiziert die
+	# konkrete Reihe (eine von vier pro Block: Süd/Nord entlang X, West/Ost
+	# entlang Z), "row_index" die Position innerhalb dieser Reihe (0, 1, 2,
+	# ...), "along_x" ob die Reihe entlang X oder Z verläuft. Damit kann
+	# _generate_city_zone() für breite Gebäudetypen (z. B. Supermarkt, 18m)
+	# gezielt den NÄCHSTEN Slot in derselben Reihe (row_id gleich, row_index
+	# ±1) als zusätzlich reservierten Platz finden, statt nur einen
+	# einzelnen Punkt ohne Nachbarschafts-Information zu liefern.
+	var slots: Array[Dictionary] = []
 	var half_block: float = STREET_BLOCK_SIZE / 2.0
 	var block_range: int = ceili(radius / STREET_CELL_SIZE) + 1
+	var next_row_id := 0
 	for bi in range(-block_range, block_range + 1):
 		for bj in range(-block_range, block_range + 1):
 			var block_x: float = center.x + bi * STREET_CELL_SIZE
 			var block_z: float = center.z + bj * STREET_CELL_SIZE
 			if Vector2(block_x, block_z).distance_to(Vector2(center.x, center.z)) > radius:
 				continue
+			var row_ids: Array[int] = [next_row_id, next_row_id + 1, next_row_id + 2, next_row_id + 3]
+			next_row_id += 4
 			var edge_start: float = -half_block + BUILDING_MIN_SPACING / 2.0
 			var edge_end: float = half_block - BUILDING_MIN_SPACING / 2.0
 			var s: float = edge_start
+			var row_index := 0
 			while s <= edge_end:
-				var row_candidates: Array[Vector3] = [
-					Vector3(block_x + s, 0.0, block_z - half_block + BUILDING_ROW_INSET),
-					Vector3(block_x + s, 0.0, block_z + half_block - BUILDING_ROW_INSET),
-					Vector3(block_x - half_block + BUILDING_ROW_INSET, 0.0, block_z + s),
-					Vector3(block_x + half_block - BUILDING_ROW_INSET, 0.0, block_z + s),
+				# perp_base/perp_sign (2026-08-04, siehe docs/world.md,
+				# "Straßenabstand tiefenabhängig") — die tatsächliche
+				# Position auf der Reihen-SENKRECHTEN Achse (Z bei Süd/Nord,
+				# X bei West/Ost) wird NICHT mehr hier fest vorgegeben
+				# (vorher `BUILDING_ROW_INSET`, ein globaler Wert, der beim
+				# Wohnhaus passte, beim tieferen Supermarkt aber über die
+				# Blockkante in die Straße hinausragte), sondern erst in
+				# _generate_city_zone() ausgerechnet, sobald die tatsächliche
+				# Gebäudetiefe bekannt ist. `perp_base` ist die rohe
+				# Blockkante auf dieser Achse, `perp_sign` (+1/-1) sagt, in
+				# welche Richtung "nach innen" zeigt. `"position"` behält
+				# trotzdem einen Platzhalter-Wert auf dieser Achse (nur für
+				# die Mehrfach-Reihenplätze-Mittelpunktsbildung relevant,
+				# siehe unten — wird für die tatsächliche Bauposition immer
+				# überschrieben).
+				# rotation_y (2026-08-04, siehe docs/world.md, "Gebäude-
+				# Rotation") — dreht das Gebäude so, dass seine per
+				# Blender-Konvention modellierte FRONT (Fassade mit Fenstern/
+				# Tür, zeigt unrotiert nach -Z, siehe `Infos/05 Assets im
+				# Spiel.md`, "Blender-Achsen-Konvention") zur jeweiligen
+				# Straßenseite zeigt, statt immer in dieselbe Weltrichtung.
+				# 0° (Süd, Straße bei -Z: Front zeigt schon richtig) / 180°
+				# (Nord, Straße bei +Z) / +90° (West, Straße bei -X) / -90°
+				# (Ost, Straße bei +X). Gilt auch für Platzhalter-Boxen/
+				# prozedurale Häuser (schadet dort nicht, siehe
+				# _build_procedural_house()) — EIN Regelsatz für alle drei
+				# Fälle statt einer Sonderbehandlung nur für echte Assets.
+				var row_candidates: Array[Dictionary] = [
+					{"position": Vector3(block_x + s, 0.0, block_z - half_block + BUILDING_STREET_MARGIN), "row_id": row_ids[0], "along_x": true, "perp_base": block_z - half_block, "perp_sign": 1.0, "rotation_y": 0.0},
+					{"position": Vector3(block_x + s, 0.0, block_z + half_block - BUILDING_STREET_MARGIN), "row_id": row_ids[1], "along_x": true, "perp_base": block_z + half_block, "perp_sign": -1.0, "rotation_y": PI},
+					{"position": Vector3(block_x - half_block + BUILDING_STREET_MARGIN, 0.0, block_z + s), "row_id": row_ids[2], "along_x": false, "perp_base": block_x - half_block, "perp_sign": 1.0, "rotation_y": PI / 2.0},
+					{"position": Vector3(block_x + half_block - BUILDING_STREET_MARGIN, 0.0, block_z + s), "row_id": row_ids[3], "along_x": false, "perp_base": block_x + half_block, "perp_sign": -1.0, "rotation_y": -PI / 2.0},
 				]
 				for candidate in row_candidates:
-					if Vector2(candidate.x, candidate.z).distance_to(Vector2(center.x, center.z)) <= radius:
+					var pos: Vector3 = candidate["position"]
+					if Vector2(pos.x, pos.z).distance_to(Vector2(center.x, center.z)) <= radius:
+						candidate["row_index"] = row_index
 						slots.append(candidate)
 				s += BUILDING_MIN_SPACING
+				row_index += 1
 	return slots
+
+
+func _slot_key(row_id: int, row_index: int) -> String:
+	return "%d_%d" % [row_id, row_index]
 
 
 @rpc("any_peer", "reliable")
@@ -3216,6 +3950,7 @@ func _world_gen_containers() -> Array[Dictionary]:
 		{"container": stone_piles_container, "key": "StonePileSpawner"},
 		{"container": brick_piles_container, "key": "BrickPileSpawner"},
 		{"container": zombie_nests_container, "key": "ZombieNestSpawner"},
+		{"container": bandit_hideouts_container, "key": "BanditHideoutSpawner"},
 	]
 
 
@@ -3276,6 +4011,7 @@ func _current_world_gen_totals() -> Dictionary:
 		"StonePileSpawner": _next_stone_pile_id,
 		"BrickPileSpawner": _next_brick_pile_id,
 		"ZombieNestSpawner": _next_zombie_nest_id,
+		"BanditHideoutSpawner": _next_bandit_hideout_id,
 	}
 
 
@@ -3382,15 +4118,19 @@ func _zone_street_tiles(center: Vector3, radius: float) -> Dictionary:
 
 
 func _build_zone_street_tiles(center: Vector3, radius: float) -> void:
-	var in_zone: Dictionary = _compute_zone_blocks(center, radius)
-	for key in in_zone:
-		var bi: int = key.x
-		var bj: int = key.y
-		var tile_i: int = bi * (BLOCK_TILES + 1)
-		var tile_j: int = bj * (BLOCK_TILES + 1)
-		for gi in BLOCK_TILES:
-			for gj in BLOCK_TILES:
-				_place_grid_tile(center, Vector2i(tile_i + gi, tile_j + gj), "grass", 0)
+	# Gras-Kacheln (2026-08-04, Nutzer-Report "grüne Fläche flackert/wirkt
+	# fleckig", Screenshot bilder/fehler in grünen feld.PNG) vorerst
+	# ENTFERNT — Ursache war unabhängig von SSAO reproduzierbar (mit
+	# ssao_enabled=false immer noch da), also echte Geometrie-
+	# Überschneidung zwischen einzelnen Gras-Kacheln, nicht nur ein
+	# SSAO-Artefakt. Statt die genaue Ursache ohne Editor-Zugriff zu
+	# vermessen: die separate Gras-Kachel-Ebene komplett weglassen, die
+	# ohnehin grüne `Ground`-Box (siehe World.tscn) scheint darunter
+	# durch. `_find_mesh_library_item()`/`_place_grid_tile()` waren schon
+	# defensiv für den Fall "grass"-Item fehlt (siehe dortiger
+	# Kommentar), das Weglassen bricht also nichts. Bei Bedarf später
+	# wieder einkommentieren, sobald das Kachel-Geometrie-Problem in
+	# Blender behoben ist.
 	var street_tiles: Dictionary = _zone_street_tiles(center, radius)
 	for tile in street_tiles:
 		_place_street_tile(center, tile, street_tiles)
@@ -3548,7 +4288,7 @@ func find_vehicle_path(from: Vector3, to: Vector3) -> Array:
 		world_path.append(Vector3(pos.x, to.y, pos.y))
 	# Letztes Stück vom nächsten Straßen-Knoten zum eigentlichen Ziel
 	# (z. B. ein Gebäude leicht abseits der Straße, siehe
-	# BUILDING_ROW_INSET) bleibt Luftlinie — Fahrzeuge kollidieren ohnehin
+	# BUILDING_STREET_MARGIN) bleibt Luftlinie — Fahrzeuge kollidieren ohnehin
 	# nur mit Mauern/Toren, nicht mit Gebäuden (siehe
 	# Vehicle._is_path_blocked(), OBSTACLE_LAYER), ein kurzer letzter
 	# Diagonal-Schlenker ist hier kein Problem.
@@ -3671,6 +4411,20 @@ func _spawn_wilderness_resources() -> void:
 		var pos := _random_wilderness_position(BRICK_PILE_GROUND_Y)
 		_create_brick_pile_local({"id": _next_brick_pile_id, "position": pos})
 		_next_brick_pile_id += 1
+
+
+func _spawn_bandit_hideouts() -> void:
+	# BANDIT_HIDEOUT_COUNT bewusst klein (siehe docs/bandits.md) — anders als
+	# TREES_TOTAL & Co. über den direkten bandit_hideout_spawner.spawn()
+	# statt der _local()-Variante, gleiches Muster wie das
+	# Zombie-Nest (zombie_nest_spawner.spawn() in _generate_city_zone()):
+	# bei so wenigen Instanzen ist die sofortige Replikation harmlos, die
+	# Massen-Optimierung (siehe Kommentar bei _create_building_local())
+	# lohnt sich hier nicht.
+	for i in BANDIT_HIDEOUT_COUNT:
+		var pos := _random_wilderness_position(BANDIT_HIDEOUT_GROUND_Y)
+		bandit_hideout_spawner.spawn({"id": _next_bandit_hideout_id, "position": pos})
+		_next_bandit_hideout_id += 1
 
 
 func _regrow_resources() -> void:
@@ -3835,7 +4589,7 @@ func _spaced_position(center: Vector3, radius: float, ground_y: float, min_spaci
 
 
 func _is_far_enough_from_others(candidate: Vector3, min_spacing: float = MIN_RESOURCE_SPACING) -> bool:
-	for group_name in ["harvestable", "searchable", "vehicle", "zombie_nest"]:
+	for group_name in ["harvestable", "searchable", "vehicle", "zombie_nest", "bandit_hideout"]:
 		for other in get_tree().get_nodes_in_group(group_name):
 			if not is_instance_valid(other):
 				continue
@@ -3861,6 +4615,9 @@ func _collect_save_data() -> Dictionary:
 	var data: Dictionary = {}
 	data["day_time"] = _day_time
 	data["day_count"] = _day_count
+	data["weather"] = _weather
+	data["next_weather"] = _next_weather
+	data["weather_timer"] = _weather_timer
 	data["next_ids"] = {
 		"survivor": _next_survivor_id,
 		"nest_zombie": _next_nest_zombie_id,
@@ -3880,6 +4637,7 @@ func _collect_save_data() -> Dictionary:
 		"building": _next_building_id,
 		"vehicle": _next_vehicle_id,
 		"zombie_nest": _next_zombie_nest_id,
+		"bandit_hideout": _next_bandit_hideout_id,
 	}
 	data["city_zone_centers"] = _city_zone_centers.duplicate()
 	data["forest_zone_centers"] = _forest_zone_centers.duplicate()
@@ -3949,6 +4707,7 @@ func _collect_save_data() -> Dictionary:
 			"position": wall.position,
 			"rotation_y": wall.rotation.y,
 			"is_gate": wall.is_gate,
+			"hp": wall.hp,
 		})
 	data["walls"] = walls
 
@@ -4019,6 +4778,7 @@ func _collect_save_data() -> Dictionary:
 		buildings.append({
 			"id": building.building_id,
 			"position": building.position,
+			"rotation_y": building.rotation.y,
 			"zone_center": building.zone_center,
 			"size": (building.get_node("Mesh").mesh as BoxMesh).size,
 			"model_path": building.model_path,
@@ -4042,13 +4802,23 @@ func _collect_save_data() -> Dictionary:
 
 	var vehicles: Array = []
 	for vehicle in vehicles_container.get_children():
-		vehicles.append({"id": vehicle.vehicle_id, "position": vehicle.position, "hp": vehicle.hp, "vehicle_type": vehicle.vehicle_type})
+		vehicles.append({"id": vehicle.vehicle_id, "position": vehicle.position, "hp": vehicle.hp, "vehicle_type": vehicle.vehicle_type, "fuel": vehicle.fuel})
 	data["vehicles"] = vehicles
 
 	var zombie_nests: Array = []
 	for nest in zombie_nests_container.get_children():
 		zombie_nests.append({"id": nest.zombie_nest_id, "position": nest.position, "hp": nest.hp})
 	data["zombie_nests"] = zombie_nests
+
+	# Nur die Hideouts selbst werden gespeichert, NICHT die einzelnen
+	# Bandits (bewusste Lücke, siehe docs/bandits.md — analog der
+	# akzeptierten Lücke bei Baustellen-Trupps): ein geladenes Hideout füllt
+	# sich über SPAWN_INTERVAL von selbst wieder auf, kein Fortschrittsverlust
+	# bei der Sache, um die es wirklich geht (das Hideout klären).
+	var bandit_hideouts: Array = []
+	for hideout in bandit_hideouts_container.get_children():
+		bandit_hideouts.append({"id": hideout.bandit_hideout_id, "position": hideout.position, "hp": hideout.hp})
+	data["bandit_hideouts"] = bandit_hideouts
 
 	return data
 
@@ -4060,6 +4830,11 @@ func _load_game_state(data: Dictionary) -> void:
 	# Daten aus der Save-Datei statt frisch generierten Positionen.
 	_day_time = data.get("day_time", 0.0)
 	_day_count = data.get("day_count", 0)
+	# .get()-Fallback für Spielstände von vor dem Wetter-System
+	# (2026-08-04) — Default "clear" verhält sich wie ein frischer Start.
+	_weather = data.get("weather", "clear")
+	_next_weather = data.get("next_weather", "clear")
+	_weather_timer = data.get("weather_timer", WEATHER_MIN_DURATION)
 	var next_ids: Dictionary = data.get("next_ids", {})
 	_next_survivor_id = next_ids.get("survivor", 0)
 	_next_nest_zombie_id = next_ids.get("nest_zombie", CITY_ZONE_COUNT * ZOMBIES_PER_ZONE)
@@ -4079,6 +4854,7 @@ func _load_game_state(data: Dictionary) -> void:
 	_next_building_id = next_ids.get("building", 0)
 	_next_vehicle_id = next_ids.get("vehicle", 0)
 	_next_zombie_nest_id = next_ids.get("zombie_nest", 0)
+	_next_bandit_hideout_id = next_ids.get("bandit_hideout", 0)
 	_city_zone_centers.clear()
 	for zone_center in data.get("city_zone_centers", []):
 		_city_zone_centers.append(zone_center)
@@ -4132,7 +4908,10 @@ func _load_game_state(data: Dictionary) -> void:
 		guard_post_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "built": entry["built"]})
 
 	for entry in data.get("walls", []):
-		wall_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "rotation_y": entry["rotation_y"], "is_gate": entry["is_gate"]})
+		# .get() mit -1-Fallback für Spielstände von vor dem hp-Fix
+		# (2026-08-04, Systematik-Review) — Wall._ready() setzt dann den
+		# normalen Default, exakt wie bei einer frisch gebauten Mauer.
+		wall_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "rotation_y": entry["rotation_y"], "is_gate": entry["is_gate"], "hp": entry.get("hp", -1)})
 
 	for entry in data.get("medical_stations", []):
 		medical_station_spawner.spawn({"id": entry["id"], "peer_id": entry["peer_id"], "position": entry["position"], "is_advanced": entry.get("is_advanced", false)})
@@ -4180,15 +4959,20 @@ func _load_game_state(data: Dictionary) -> void:
 		building_spawner.spawn(entry)
 
 	for entry in data.get("vehicles", []):
-		# hp wird erst NACH dem Spawnen gesetzt (siehe _create_vehicle()) —
-		# Vehicle._ready() berechnet hp = _max_hp abhängig vom vehicle_type,
-		# ein vorher gesetzter Wert würde sofort überschrieben.
+		# hp/fuel werden erst NACH dem Spawnen gesetzt (siehe
+		# _create_vehicle()) — Vehicle._ready() berechnet beide abhängig vom
+		# vehicle_type, vorher gesetzte Werte würden sofort überschrieben.
+		# .get() mit Fallback für Spielstände von vor dem Treibstoff-Feature.
 		var vehicle := vehicle_spawner.spawn(entry)
 		if is_instance_valid(vehicle):
 			vehicle.hp = entry["hp"]
+			vehicle.fuel = entry.get("fuel", vehicle.fuel_capacity())
 
 	for entry in data.get("zombie_nests", []):
 		zombie_nest_spawner.spawn(entry)
+
+	for entry in data.get("bandit_hideouts", []):
+		bandit_hideout_spawner.spawn(entry)
 
 
 func _on_speed_button_pressed(scale: float) -> void:
@@ -4201,6 +4985,8 @@ func _update_speed_buttons() -> void:
 	# siehe speed_row.visible), damit z. B. ein später beitretender Host-
 	# Wechsel (falls je relevant) den richtigen Stand zeigen würde. Rein
 	# kosmetisch, kein eigener Netzwerk-Zustand nötig.
+	if speed_1x_button == null:
+		return  # TEMPORÄR (2026-08-05, Absturz-Diagnose, siehe status.md).
 	speed_1x_button.button_pressed = is_equal_approx(_time_scale, 1.0)
 	speed_2x_button.button_pressed = is_equal_approx(_time_scale, 2.0)
 	speed_3x_button.button_pressed = is_equal_approx(_time_scale, 3.0)
@@ -4343,7 +5129,8 @@ func request_build_structure(type: BuildType, build_position: Vector3, requestin
 			field_spawner.spawn({"id": _next_field_id, "peer_id": requesting_peer_id, "position": build_position})
 			_next_field_id += 1
 		BuildType.OUTPOST:
-			outpost_spawner.spawn({"id": _next_outpost_id, "peer_id": requesting_peer_id, "position": build_position})
+			var outpost_position := Vector3(build_position.x, OUTPOST_GROUND_Y, build_position.z)
+			outpost_spawner.spawn({"id": _next_outpost_id, "peer_id": requesting_peer_id, "position": outpost_position})
 			_next_outpost_id += 1
 		BuildType.WATCHTOWER:
 			var watchtower_position := Vector3(build_position.x, WATCHTOWER_GROUND_Y, build_position.z)
@@ -4355,12 +5142,25 @@ func request_build_structure(type: BuildType, build_position: Vector3, requestin
 
 
 func _construction_work_required(upgrade_type: BuildType, building: Node3D) -> float:
-	if upgrade_type == BuildType.STORAGE:
-		# Skaliert mit dem Gebäude-Volumen wie schon die Lagerkapazität
-		# selbst (siehe STORAGE_CAPACITY_PER_VOLUME) — ein größeres Gebäude
-		# braucht länger, um zum Lager umgebaut zu werden.
-		return _building_volume(building) * STORAGE_CONSTRUCTION_WORK_PER_VOLUME
-	return CONSTRUCTION_WORK.get(upgrade_type, 30.0)
+	# Alle vier Ausbauten skalieren mit dem Gebäude-Volumen (siehe
+	# BED_CONSTRUCTION_WORK_PER_VOLUME-Kommentar oben) — ein größeres
+	# Gebäude braucht länger, um umgebaut zu werden, egal in welche
+	# Zielstruktur. Andere BuildType-Werte (Wachposten/Mauer/Tor/Feld/
+	# Außenposten/Wachturm) laufen NICHT über diesen Bau-Markier-Modus
+	# (siehe request_start_construction()-Aufrufstellen, nur die vier
+	# Ausbauten-Buttons), 30.0-Fallback deshalb rein defensiv.
+	var volume := _building_volume(building)
+	match upgrade_type:
+		BuildType.STORAGE:
+			return volume * STORAGE_CONSTRUCTION_WORK_PER_VOLUME
+		BuildType.BED:
+			return volume * BED_CONSTRUCTION_WORK_PER_VOLUME
+		BuildType.MEDICAL_STATION:
+			return volume * MEDICAL_STATION_CONSTRUCTION_WORK_PER_VOLUME
+		BuildType.WORKSHOP:
+			return volume * WORKSHOP_CONSTRUCTION_WORK_PER_VOLUME
+		_:
+			return 30.0
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -4424,19 +5224,27 @@ func finish_construction(building: Node3D) -> void:
 		if is_instance_valid(worker):
 			worker.order_stop(requesting_peer_id)
 	building.take_damage(building.hp)
+	# Y-Ausgleich (siehe GROUND_Y-Konstanten-Kommentar oben) — NICHT mehr
+	# `build_position` (= altes Gebäude-Zentrum) direkt übernehmen, jede
+	# Struktur bekommt ihre eigene halbe Zielhöhe auf X/Z des alten
+	# Gebäudes.
 	match upgrade_type:
 		BuildType.WORKSHOP:
-			workshop_spawner.spawn({"id": _next_workshop_id, "peer_id": requesting_peer_id, "position": build_position})
+			var workshop_position := Vector3(build_position.x, WORKSHOP_GROUND_Y, build_position.z)
+			workshop_spawner.spawn({"id": _next_workshop_id, "peer_id": requesting_peer_id, "position": workshop_position})
 			_next_workshop_id += 1
 		BuildType.STORAGE:
 			var capacity := int(round(volume * STORAGE_CAPACITY_PER_VOLUME))
-			storage_spawner.spawn({"id": _next_storage_id, "peer_id": requesting_peer_id, "position": build_position, "capacity": capacity})
+			var storage_position := Vector3(build_position.x, STORAGE_GROUND_Y, build_position.z)
+			storage_spawner.spawn({"id": _next_storage_id, "peer_id": requesting_peer_id, "position": storage_position, "capacity": capacity})
 			_next_storage_id += 1
 		BuildType.BED:
-			bed_spawner.spawn({"id": _next_bed_id, "peer_id": requesting_peer_id, "position": build_position})
+			var bed_position := Vector3(build_position.x, BED_GROUND_Y, build_position.z)
+			bed_spawner.spawn({"id": _next_bed_id, "peer_id": requesting_peer_id, "position": bed_position})
 			_next_bed_id += 1
 		_:
-			medical_station_spawner.spawn({"id": _next_medical_station_id, "peer_id": requesting_peer_id, "position": build_position})
+			var medical_station_position := Vector3(build_position.x, MEDICAL_STATION_GROUND_Y, build_position.z)
+			medical_station_spawner.spawn({"id": _next_medical_station_id, "peer_id": requesting_peer_id, "position": medical_station_position})
 			_next_medical_station_id += 1
 
 
@@ -4667,7 +5475,13 @@ func _refresh_crafting_ui() -> void:
 	# gemeinsamen MainTabsUI-TabContainer statt eines eigenen CanvasLayer —
 	# blendet den ganzen TAB aus statt eines Panels.
 	main_tabs.set_tab_hidden(main_tabs.get_tab_idx_from_control(crafting_tab), not has_workshop)
+	# UI-Redesign (2026-08-05) — der zugehörige Top-Bar-Button muss
+	# denselben Sichtbarkeits-Status zeigen, sonst bliebe ein Button ohne
+	# Wirkung übrig, sobald die eigene Werkstatt wegfällt (z. B. abgerissen).
+	if crafting_tab_button:
+		crafting_tab_button.visible = has_workshop  # TEMPORÄR abgesichert, siehe status.md
 	if not has_workshop:
+		_close_overlay_if_showing(crafting_tab)
 		return
 	for child in crafting_recipe_list.get_children():
 		child.queue_free()
@@ -4686,6 +5500,61 @@ func _refresh_crafting_ui() -> void:
 			button.disabled = not has_book
 			button.pressed.connect(_on_research_pressed.bind(recipe_id))
 		crafting_recipe_list.add_child(button)
+
+
+func _on_tab_button_pressed(index: int) -> void:
+	# IFZ-Stil-Overlay (2026-08-05, siehe TopBarUI-Kommentar) — Klick auf
+	# den schon offenen Tab schließt das Panel wieder, jeder andere Klick
+	# wechselt nur den Inhalt (Panel bleibt offen, falls schon offen).
+	var target_control: Control = _tab_controls[index]
+	var target_idx: int = main_tabs.get_tab_idx_from_control(target_control)
+	var already_open: bool = main_tabs_panel.visible and main_tabs.current_tab == target_idx
+	for button in _tab_buttons:
+		button.button_pressed = false
+	if already_open:
+		main_tabs_panel.visible = false
+		return
+	main_tabs.current_tab = target_idx
+	main_tabs_panel.visible = true
+	_tab_buttons[index].button_pressed = true
+
+
+func _close_overlay_if_showing(control: Control) -> void:
+	# Verhindert, dass das Overlay offen + auf einem gerade unsichtbar
+	# gewordenen Tab-Inhalt (siehe _refresh_crafting_ui()/
+	# _update_unit_detail_panel()) stehen bleibt.
+	if main_tabs_panel.visible and main_tabs.current_tab == main_tabs.get_tab_idx_from_control(control):
+		main_tabs_panel.visible = false
+		for button in _tab_buttons:
+			button.button_pressed = false
+
+
+func _refresh_research_ui() -> void:
+	# Neuer Forschungs-Tab (UI-Redesign 2026-08-04, Nutzer-Skizze) — rein
+	# lesende Übersicht über ALLE Forschungsbücher-Freischaltungen an einem
+	# Ort, statt verstreut zwischen Herstellen-Tab (CRAFTING_RECIPES) und
+	# Bauen-Tab (BUILDING_RESEARCH/AdvancedMedicalButton). Kein neues
+	# Datenmodell, kein eigener Erforschen-Button hier — die bestehenden
+	# Buttons in Herstellen/Bauen bleiben die einzigen Auslöser, damit
+	# nichts an request_research()/request_upgrade_medical_station() doppelt
+	# verdrahtet werden muss.
+	for child in research_list.get_children():
+		child.queue_free()
+	var base := _find_own_home_base()
+	for recipe in CRAFTING_RECIPES:
+		_add_research_status_row(recipe["id"], recipe["name"], base)
+	for recipe in BUILDING_RESEARCH:
+		_add_research_status_row(recipe["id"], recipe["name"], base)
+
+
+func _add_research_status_row(recipe_id: String, display_name: String, base: Node3D) -> void:
+	var unlocked: bool = base != null and base.unlocked_recipes.get(recipe_id, false)
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", 13)
+	label.text = "%s: %s" % [display_name, "Erforscht ✓" if unlocked else "Noch nicht erforscht"]
+	if not unlocked:
+		label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	research_list.add_child(label)
 
 
 func _craft_button_label(recipe: Dictionary) -> String:
@@ -5152,11 +6021,16 @@ func _update_unit_detail_panel() -> void:
 	var tab_idx: int = main_tabs.get_tab_idx_from_control(unit_detail_tab)
 	if selected.size() != 1 or not is_instance_valid(selected[0]) or not selected[0].has_method("is_sheltered"):
 		main_tabs.set_tab_hidden(tab_idx, true)
+		if unit_detail_tab_button:  # TEMPORÄR abgesichert, siehe status.md
+			unit_detail_tab_button.visible = false
+		_close_overlay_if_showing(unit_detail_tab)
 		_unit_detail_survivor = null
 		return
 	var survivor: Node3D = selected[0]
 	_unit_detail_survivor = survivor
 	main_tabs.set_tab_hidden(tab_idx, false)
+	if unit_detail_tab_button:
+		unit_detail_tab_button.visible = true
 	var type_label := _troop_type_label(survivor)
 	var carried: int = _carried_total(survivor.carried_loot)
 	unit_detail_stats_label.text = "Trupp %d (%s)\nHP: %d/%d\nHunger: %d\nMüdigkeit: %d\nMoral: %d\nLoot: %d/%d" % [
@@ -5294,6 +6168,12 @@ func _process(delta: float) -> void:
 		var zombies := get_tree().get_nodes_in_group("zombie")
 		_rebuild_zombie_grid(zombies)
 		_sync_zombies_batch(zombies)
+		# Bandit-Population bleibt winzig (siehe BANDIT_HIDEOUT_MAX_ACTIVE_
+		# BANDITS), ein eigenes Spatial Grid lohnt sich hier nicht — aber
+		# dieselbe gebündelte RPC-Sync wie bei Zombies, statt eines Sync pro
+		# Bandit (Performance-Prinzip 1:1 übernommen, auch wenn die Zahlen
+		# hier klein sind).
+		_sync_bandits_batch(get_tree().get_nodes_in_group("bandit"))
 		_zombie_despawn_timer += delta
 		if _zombie_despawn_timer >= ZOMBIE_DESPAWN_CHECK_INTERVAL:
 			_zombie_despawn_timer = 0.0
@@ -5325,6 +6205,7 @@ func _process(delta: float) -> void:
 		# Uhr weiter, während der Host (und die eigentliche Simulation)
 		# steht.
 		_handle_day_night(delta)
+		_handle_weather(delta)
 	_fog_update_timer += delta
 	if _fog_update_timer >= FOG_UPDATE_INTERVAL:
 		_fog_update_timer = 0.0
@@ -5341,6 +6222,7 @@ func _process(delta: float) -> void:
 		_update_zombie_count_label()
 		_refresh_crafting_ui()
 		_refresh_trade_ui()
+		_refresh_research_ui()
 	if status_label.visible:
 		_status_message_timer -= delta
 		if _status_message_timer <= 0.0:
@@ -5387,7 +6269,12 @@ func _update_build_ghost() -> void:
 		build_ghost.visible = false
 		return
 	build_ghost.visible = true
-	build_ghost.position = Vector3(hit_position.x, WATCHTOWER_GROUND_Y, hit_position.z) if _build_type == BuildType.WATCHTOWER else hit_position
+	if _build_type == BuildType.WATCHTOWER:
+		build_ghost.position = Vector3(hit_position.x, WATCHTOWER_GROUND_Y, hit_position.z)
+	elif _build_type == BuildType.OUTPOST:
+		build_ghost.position = Vector3(hit_position.x, OUTPOST_GROUND_Y, hit_position.z)
+	else:
+		build_ghost.position = hit_position
 	# Wall/Gate laufen zwar übers Ziehen und erreichen diesen Zweig nie
 	# (siehe _wall_drag_active oben), die Mesh-Auswahl bleibt trotzdem
 	# generisch für alle Einzelklick-Bautypen (Wachposten/Krankenstation/
@@ -5398,6 +6285,8 @@ func _update_build_ghost() -> void:
 		build_ghost.mesh = _watchtower_ghost_mesh
 	elif _build_type == BuildType.FIELD:
 		build_ghost.mesh = _field_ghost_mesh
+	elif _build_type == BuildType.OUTPOST:
+		build_ghost.mesh = _outpost_ghost_mesh
 	elif _build_type in [BuildType.WALL, BuildType.GATE]:
 		build_ghost.mesh = _wall_ghost_mesh
 	else:
@@ -5657,9 +6546,29 @@ func request_choose_start_base(building_path: NodePath, requesting_peer_id: int)
 	# Building.zone_center).
 	var away := Vector3(building.position.x - building.zone_center.x, 0, building.position.z - building.zone_center.z)
 	away = away.normalized() if away.length() > 0.01 else Vector3(1, 0, 0)
-	var home_base_position := Vector3(building.position.x, 0.75, building.position.z) + away * BASE_CHOICE_HOME_OFFSET
-	var survivor_position := Vector3(building.position.x, SURVIVOR_GROUND_Y, building.position.z) + away * BASE_CHOICE_SURVIVOR_OFFSET
-	home_base_spawner.spawn({"peer_id": requesting_peer_id, "position": home_base_position})
+	# Größenabhängiger Abstand (siehe BASE_CHOICE_HOME_OFFSET-Kommentar oben)
+	# — halbe Gebäude-DIAGONALE statt halber Breite/Tiefe, weil "away" in
+	# eine beliebige Richtung zeigen kann (nicht nur entlang einer der
+	# beiden Gebäude-Achsen); die Diagonale ist der größte Abstand von der
+	# Mitte zu einer Ecke, deckt also jede Richtung sicher ab. Gleicher
+	# Lesezugriff auf die Mesh-Box-Größe wie in _collect_save_data() — bleibt
+	# auch bei einem echten Modell (Mesh unsichtbar, aber korrekt groß)
+	# gültig.
+	var building_size: Vector3 = (building.get_node("Mesh").mesh as BoxMesh).size
+	var half_diagonal: float = Vector2(building_size.x, building_size.z).length() / 2.0
+	var home_base_position := Vector3(building.position.x, HOME_BASE_GROUND_Y, building.position.z) + away * (half_diagonal + BASE_CHOICE_HOME_OFFSET)
+	var survivor_position := Vector3(building.position.x, SURVIVOR_GROUND_Y, building.position.z) + away * (half_diagonal + BASE_CHOICE_SURVIVOR_OFFSET)
+	var home_base := home_base_spawner.spawn({"peer_id": requesting_peer_id, "position": home_base_position})
+	# Fund 4 der Systematik-Review (2026-08-04, siehe docs/zones.md) — das
+	# gewählte Gebäude wird oben schon als geplündert markiert, sein
+	# vorgewürfelter `loot` (siehe World._roll_building_loot(), lag längst
+	# fest) wurde bis dahin aber nie eingesammelt, einfach verworfen. Direkt
+	# der neuen Home-Base gutschreiben statt neu zu würfeln — kleiner
+	# thematischer Bonus je nach zufällig gewähltem Starttyp (Supermarkt =
+	# etwas mehr Nahrung, Waffenladen = eine Waffe, ...), ohne die festen
+	# Startressourcen (HomeBase.START_RESOURCES) anzufassen.
+	if is_instance_valid(home_base) and not building.loot.is_empty():
+		home_base.add_resources.rpc(building.loot)
 	# Alle Start-Trupps seitlich zu "away" versetzt (90°, XZ-Ebene), NICHT
 	# mit einem festen Welt-Vektor — der könnte je nach Gebäuderichtung
 	# zurück Richtung/in das Gebäude-Mesh zeigen (Bug, vom Nutzer gemeldet:
@@ -5883,6 +6792,17 @@ func _show_status_message(message: String) -> void:
 	status_label.text = message
 	status_label.visible = true
 	_status_message_timer = STATUS_MESSAGE_DURATION
+	# Event-Log (2026-08-04, Nutzer-Skizze "ui skizze.jpg", Infos/Event-Tab
+	# + Info-Box) — EINZIGER Hook-Punkt, erfasst automatisch JEDE
+	# bestehende Meldung (Horde/Blutmond, SOS, Home-Base verloren,
+	# Rettungs-Anfrage, Handel, Baufehler etc.), ohne jeden report_status()-
+	# Aufrufer einzeln anzufassen. Lokal je Peer, nicht repliziert — jeder
+	# Peer bekommt seine Meldungen ohnehin schon einzeln über genau diese
+	# RPC, kein zweiter Netzwerkweg nötig.
+	_event_log.append({"time": _clock_text(), "text": message})
+	if _event_log.size() > EVENT_LOG_MAX:
+		_event_log.pop_front()
+	_refresh_event_log_ui()
 
 
 func _update_hud() -> void:
@@ -5898,6 +6818,11 @@ func _update_hud() -> void:
 	for unit in selected:
 		if is_instance_valid(unit) and unit.has_method("request_exit"):
 			lines.append("F: Aussteigen")
+			# Treibstoff-Anzeige (siehe docs/vehicle.md, "Treibstoff") — nur
+			# dieser Zweig behandelt tatsächlich Fahrzeug-Nodes (has_method(
+			# "request_exit") ist hier die "ist das ein Fahrzeug?"-
+			# Unterscheidung, gleiches Duck-Typing-Prinzip wie anderswo).
+			lines.append("Treibstoff: %d/%d" % [int(unit.fuel), int(unit.fuel_capacity())])
 			break
 	hud_label.text = "\n".join(lines)
 	# Panel nur sichtbar, solange es tatsächlich etwas zu zeigen gibt (siehe
@@ -6322,14 +7247,24 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 					order_method = &"order_demolish_building"
 			if unit.has_method(order_method):
 				var target := base_target + _formation_offset(i, selected.size())
-				unit.rpc_id(1, order_method, target, building.get_path(), multiplayer.get_unique_id())
+				if order_method == &"order_search":
+					# Multi-Ziel-Pfadfindung beim Plündern (siehe
+					# docs/scavenging.md) — additive (Shift-Klick) hängt statt
+					# eines Sofort-Befehls ein weiteres Suchziel an die
+					# bestehende Warteschlange an, order_claim_building()/
+					# order_demolish_building() kennen dieses Konzept bewusst
+					# nicht (Claimen/Abreißen ist immer ein einzelner Sofort-
+					# Befehl, kein Auftrag mit mehreren Zielen).
+					unit.rpc_id(1, order_method, target, building.get_path(), multiplayer.get_unique_id(), additive)
+				else:
+					unit.rpc_id(1, order_method, target, building.get_path(), multiplayer.get_unique_id())
 		return
-	if result and not selected.is_empty() and (result.collider.is_in_group("zombie") or result.collider.is_in_group("zombie_nest")):
+	if result and not selected.is_empty() and (result.collider.is_in_group("zombie") or result.collider.is_in_group("zombie_nest") or result.collider.is_in_group("bandit") or result.collider.is_in_group("bandit_hideout")):
 		# Angriffsbefehl (siehe docs/survivor.md, "Angriffsbefehl") — Klick
-		# auf einen Zombie oder ein Zombie-Nest (siehe docs/zombies.md) statt
-		# auf Boden/Gebäude. has_method-Check filtert Fahrzeuge aus der
-		# Auswahl heraus (die haben keinen eigenen Angriff, siehe
-		# docs/vehicle.md).
+		# auf einen Zombie, ein Zombie-Nest (siehe docs/zombies.md), einen
+		# Bandit oder ein Bandit-Hideout (siehe docs/bandits.md) statt auf
+		# Boden/Gebäude. has_method-Check filtert Fahrzeuge aus der Auswahl
+		# heraus (die haben keinen eigenen Angriff, siehe docs/vehicle.md).
 		# Ziele verteilen sich auf alle Feinde in der Nähe des angeklickten
 		# (Bugfix 2026-08-03, Nutzer-Feedback "greifen nur ein zombie an wenn
 		# sie in einer gruppe sind") — vorher bekamen ALLE ausgewählten
@@ -6405,6 +7340,12 @@ func _nearby_enemies(anchor: Node3D, radius: float) -> Array[Node3D]:
 	for nest in zombie_nests_container.get_children():
 		if nest != anchor and is_instance_valid(nest) and nest.global_position.distance_to(anchor_pos) <= radius:
 			result.append(nest)
+	for bandit in bandits_container.get_children():
+		if bandit != anchor and is_instance_valid(bandit) and bandit.global_position.distance_to(anchor_pos) <= radius:
+			result.append(bandit)
+	for hideout in bandit_hideouts_container.get_children():
+		if hideout != anchor and is_instance_valid(hideout) and hideout.global_position.distance_to(anchor_pos) <= radius:
+			result.append(hideout)
 	return result
 
 

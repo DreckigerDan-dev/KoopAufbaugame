@@ -46,7 +46,50 @@ getroffener Seite/Dach der Box diese Höhe schwankt.
    - Falls `building.has_survivor == true`:
      `get_tree().current_scene.spawn_recruit(owner_peer_id, position)` —
      siehe [`docs/recruitment.md`](recruitment.md).
-   - `_return_to_base()` — automatischer Rückweg, siehe unten.
+   - `_advance_search_queue_or_return_to_base()` — siehe "Multi-Ziel-
+     Pfadfindung" unten; ohne Warteschlange identisch zum vorherigen
+     `_return_to_base()`.
+
+## Multi-Ziel-Pfadfindung (2026-08-04, Ideen-Backlog)
+
+Shift-Klick auf weitere `"searchable"`-Gebäude, während ein Feldtrupp schon
+einen laufenden Such-/Bewegungsauftrag hat, hängt sie als weitere Ziele an,
+statt den aktuellen Auftrag zu ersetzen — ein Befehl für eine ganze Route
+statt eines erneuten Klicks nach jedem einzelnen Gebäude.
+
+- **`order_search(target, building_path, requesting_peer_id, additive :=
+  false)`** — neuer vierter Parameter, gleiches Konzept wie der `additive`-
+  Parameter von `order_move()`. `World._select_at()` reicht `shift_pressed`
+  durch (dieselbe Variable, die auch die Bewegungs-Wegpunkt-Schlange
+  steuert), aber NUR für `order_search` — `order_claim_building()`/
+  `order_demolish_building()` bleiben immer Sofort-Befehle, Claimen/
+  Abreißen ist konzeptionell ein einzelner Vorgang, keine Route.
+- **`Survivor._search_queue: Array[Dictionary]`** — jeder Eintrag `{"target":
+  Vector3, "building_path": NodePath}`, exakt das Paar, das `order_search()`
+  sonst direkt bekommt. Additive Klicks hängen NUR an diese Warteschlange
+  an, ohne den gerade laufenden Auftrag (`_waypoints`/`_pending_building_
+  path`/`_searching`) anzufassen — Ausnahme: ein **untätiger** Trupp
+  (`is_idle()`) startet sofort, statt eine Warteschlange aufzubauen, die
+  nie abgearbeitet würde.
+- **`_advance_search_queue_or_return_to_base()`** — ersetzt die frühere,
+  immer bedingungslose `_return_to_base()` am Ende von `_finish_search()`
+  (an allen drei Ausstiegspunkten: normaler Loot, Banditen-Restloot,
+  zwischenzeitlich schon von einem anderen Trupp geplündert). Ist die
+  Warteschlange leer, unverändertes Verhalten (Rückweg zur Basis/zum
+  nächsten Außenposten). Sonst: nimmt den vordersten Eintrag, setzt
+  `_waypoints`/`_pending_building_path` darauf — der Trupp läuft DIREKT
+  zum nächsten Gebäude weiter, OHNE zwischendurch zur Basis
+  zurückzukehren. Getragener Loot bleibt bis zur `CARRY_CAPACITY`-Grenze
+  einfach weiter im Rucksack (kein Zwischen-Abliefern) — bekanntes,
+  unverändertes Verhalten, siehe [`survivor.md`](survivor.md), "Rucksack".
+- **`_cancel_search()` leert `_search_queue` mit** — jeder komplett neue
+  Befehl (Bewegen ohne Shift, Angriff, Stationieren, Stopp) verwirft eine
+  noch offene Route genauso wie den aktuell laufenden Auftrag.
+- **Nicht persistiert** — `_search_queue` ist reiner Laufzeit-Zustand wie
+  `_waypoints`, taucht bewusst nicht in `_collect_save_data()` auf (gleiche
+  Kategorie wie die Bewegungs-Wegpunkte, die auch nie gespeichert wurden).
+
+**Noch nicht vom Nutzer getestet.**
 
 ## Gebäude-Typen + Loot-Tabellen (2026-08-02, Punkt 17 der Gesamtliste)
 
@@ -68,8 +111,11 @@ wird bei jedem Gebäude-Spawn aus einer echten Loot-TABELLE gewürfelt.
   Militärbasis + Privatbunker (beide wie Waffenladen, aber mit höheren
   Sekundär-Chancen — keine echte Seltenheits-Stufe, da unser System keine
   Waffen-Tiers kennt), Feuerwehrstation (Rüstung statt "Feuerwehr-Anzug",
-  der als eigene Ressource nicht existiert), Restaurant/Kneipe + Tankstelle
-  (beide Nahrungs-Varianten, kleiner als Supermarkt), Bibliothek +
+  der als eigene Ressource nicht existiert), Restaurant/Kneipe (kleine
+  Nahrungs-Variante, kleiner als Supermarkt) — **Tankstelle liefert seit
+  2026-08-04 Treibstoff statt Nahrung als Hauptloot** (siehe
+  [`vehicle.md`](vehicle.md), "Treibstoff", Nahrung bleibt als kleinerer
+  Nebenloot-Anteil erhalten), Bibliothek +
   Universität (NEU: erster Typ mit garantiertem Buch als Hauptloot, vorher
   gab's Bücher nur als Nebenloot-Chance irgendwo), Garten-Center
   (Nahkampfwaffe statt "Axt/Machete", die als eigene Werkzeug-Ressource
