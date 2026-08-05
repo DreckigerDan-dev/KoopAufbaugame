@@ -28,12 +28,13 @@ Sieg — reines Sandbox-Überleben, das über die Zeit schwieriger wird.
 | Taste / Maus | Wirkung |
 |---|---|
 | **W A S D** oder Pfeiltasten | Kamera bewegen (schwenken) |
+| **Mittlere Maustaste + Ziehen** | Kamera schwenken (Alternative zu WASD) |
 | **Linksklick** | Eigenen Trupp/Fahrzeug auswählen |
 | **Linksklick (mit Auswahl) auf Boden** | Bewegungsbefehl |
 | **Shift + Linksklick** | Auswahl erweitern / Ziel an bestehende Route anhängen (z. B. mehrere Gebäude nacheinander plündern) |
 | **Rechtsklick + Ziehen** | Kamera drehen/neigen |
 | **Rechtsklick (ohne Ziehen)** | Ausgewählte Einheiten stoppen |
-| **Mausrad** | Zoom |
+| **Mausrad** | Zoom (zoomt zur Mausposition hin) |
 | **1–9** | Kontrollgruppe auswählen |
 | **Strg + 1–9** | Aktuelle Auswahl als Kontrollgruppe speichern |
 | **F** | Aus Fahrzeug aussteigen (Fahrer + alle Mitfahrer) |

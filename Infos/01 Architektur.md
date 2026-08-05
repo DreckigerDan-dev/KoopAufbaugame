@@ -221,6 +221,14 @@ zuerst nachschauen, bevor mit einem Punkt begonnen wird.
 - Automatische Multi-Ziel-Pfadfindung beim Plündern (ein Befehl, mehrere
   Ziele nacheinander).
 
+**Netzwerk/Lobby (2026-08-05, Nutzerwunsch vor dem Freundes-Playtest):**
+- Beitreten per Lobby-Code statt/zusätzlich zur rohen IP-Eingabe —
+  einfacherer Einstieg für weniger technisch versierte Mitspieler. Wichtig:
+  **Späteres Beitreten in eine schon laufende Partie funktioniert bereits**
+  (Catch-up-Mechanismus, siehe `koop-game/docs/networking.md`) — hier
+  geht's NUR um den Verbindungsweg selbst (Code statt IP), nicht um die
+  Late-Join-Fähigkeit an sich.
+
 **Karte/Welt (2026-08-05, nach Recherche-Session zu Performance/OSM):**
 - Zonen-/Chunk-Streaming: Welt wird nicht mehr komplett vorab generiert UND
   komplett an jeden Peer gesynkt, sondern nach Spielernähe geladen/entladen

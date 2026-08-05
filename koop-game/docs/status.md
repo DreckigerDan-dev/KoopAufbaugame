@@ -153,6 +153,148 @@ Font-Size, keine separate Theme-Resource, gleiches risikoarme Muster wie
 schon bei einzelnen Labels im Ressourcen-Panel verwendet). **Noch nicht
 getestet.**
 
+## Loot-Ziel-Linie: Ankunfts-Distanz größenabhängig gemacht (2026-08-06)
+
+Nutzer-Bestätigung "ist besser" fürs Schweben, direkt danach neuer Report:
+bei 3 per Shift-Klick angehängten Häusern rückt die Loot-Ziel-Linie nie
+zum nächsten Ziel vor. Ursache: die "angekommen"-Prüfung maß gegen den
+GEBÄUDE-MITTELPUNKT mit einer festen 4m-Schwelle — ein Trupp durchsucht
+ein Gebäude aber von dessen Rand aus, bei großen Gebäuden (Supermarkt
+~18m) blieb er dadurch dauerhaft weiter als 4m vom Mittelpunkt entfernt.
+Neue `World._loot_arrival_distance(building)` berechnet die Schwelle jetzt
+aus der halben Gebäude-Diagonale + Puffer statt eines festen Werts.
+Details in [`scavenging.md`](scavenging.md). **Noch nicht getestet.**
+
+## Schweben-Bug, zweiter Teil: der zentrale Wegpunkt-Folger (2026-08-06)
+
+Code-Review-Runde ("geh nochmal den ganzen Code durch") deckte auf: der
+erste Schweben-Fix (2026-08-05) deckte nur `_process_attack()`/
+`_process_harvest()` ab. Nutzer-Report direkt danach ("loot ein Haus, komm
+raus, bin in der Luft, laufe so zur Startbase, auf die Straße geschickt
+gehen sie wieder auf den Boden") zeigte den ECHTEN Kern: der von JEDEM
+Bewegungsbefehl genutzte `Survivor._handle_movement()` hatte dieselbe
+Bugklasse. `_return_to_base()` (automatischer Rückweg nach jeder Suche)
+setzt `_waypoints` direkt aus `home_base.position`/`outpost.position` —
+beide sitzen wie Gebäude auf halber Höhe, nicht am Boden. Der Nutzer-
+Hinweis "schickt man sie auf die Straße, gehen sie wieder auf den Boden"
+erklärt sich genau daraus: `order_move()`-Ziele sind schon korrekt
+bodennah, das Hinlaufen dorthin zieht die Y-Höhe over move_toward() also
+wieder runter.
+
+Fix diesmal EINMAL zentral in `_handle_movement()` (nicht mehr pro
+Aufrufstelle) — die Y-Höhe jedes Wegpunkt-Ziels wird für Bewegung UND
+Ankunfts-Prüfung komplett ignoriert, eigene Höhe bleibt immer bestehen.
+Deckt dadurch automatisch auch `order_station()` und die Baustellen-
+Zuweisung ab (beide setzen `_waypoints` ebenfalls teils direkt aus einer
+Gebäude-Position), ohne dass die dortigen Bugs überhaupt einzeln gemeldet
+werden mussten. Details in [`survivor.md`](survivor.md). **Noch nicht
+getestet.**
+
+## Nachbesserungen nach erstem Retest (2026-08-06)
+
+Nutzer-Retest der letzten Runde: Maus-Zoom, Maus-Ziehen und die Loot-Ziel-
+Anzeige bestätigt funktionierend, aber drei Nachbesserungen nötig:
+
+1. **Horde kam trotz doppelter Tageslänge wieder an Tag 1.** Die
+   CYCLE_LENGTH-Verdopplung (siehe unten) schiebt zwar JEDE Nacht später,
+   ändert aber nichts daran, dass laut Design jede Nacht (auch die erste)
+   eine Horde auslöst. Fix: `_handle_day_night()` löst die Horde jetzt erst
+   ab `_day_count > 0` aus — die allererste Nacht bleibt garantiert ruhig,
+   ab der zweiten Nacht wieder wie gehabt jede Nacht.
+2. **Loot-Ziel-Linie zeigte bei Shift-Klick-Mehrfachzielen nur das
+   ZULETZT geklickte Gebäude** — `_loot_routes` speicherte pro Trupp nur
+   einen einzelnen Wert, jeder weitere Shift-Klick überschrieb ihn. Jetzt
+   eine Liste pro Trupp (spiegelt `Survivor._search_queue`, rein lokal
+   nachgebildet), additive Klicks hängen an, `_update_loot_route_lines()`
+   zeigt/verarbeitet immer nur den vordersten (aktuellen) Eintrag und
+   rückt beim Ankommen automatisch zum nächsten vor.
+3. **Linie verschwand nicht, wenn der Trupp einen ANDEREN Befehl bekam**
+   (Bewegen, Stoppen, Angreifen, Einsteigen, Claimen/Abreißen) — vorher
+   nur über die Ankunfts-Distanz entfernt. Neue `_clear_loot_route(unit)`
+   jetzt an jeder befehlsgebenden Stelle aufgerufen, die NICHT Teil einer
+   Such-Route ist.
+
+Details in [`scavenging.md`](scavenging.md), "Loot-Ziel-Anzeige". Alle
+drei **noch nicht erneut getestet**.
+
+## Kamera-/Karten-Steuerung erweitert + Einstellungen (2026-08-05)
+
+Restliche vier Punkte aus [`bugliste.md`](bugliste.md):
+
+1. **Kartenansicht (Taste M) per Maus-Halten+Ziehen verschiebbar** —
+   `MapView.gd`s Rechtsklick-Verhalten von "Klick springt Ausschnitt
+   sofort dahin" auf echtes Ziehen umgebaut.
+2. **Kamera im Hauptspiel zusätzlich zu WASD per Maus-Ziehen schwenkbar**
+   — neue mittlere Maustaste (links/rechts schon belegt), "Karte greifen"-
+   Gefühl (Cursor-Weltpunkt bleibt unterm Cursor), ergänzt WASD statt es
+   zu ersetzen.
+3. **Zoom zur Mausposition** — `World._zoom()` verschiebt beim Zoomen den
+   Pivot zusätzlich so, dass der Weltpunkt unter dem Cursor ungefähr dort
+   bleibt (Vorher/Nachher-Raycast-Vergleich), statt immer nur um den
+   festen Pivot-Punkt herum zu zoomen.
+4. **Beides über Einstellungen umschaltbar** — zwei neue Häkchen im
+   `SettingsMenu` ("Kamera per Maus ziehen", "Zoom zur Mausposition"),
+   beide standardmäßig an. Details in [`settings.md`](settings.md).
+
+Alle vier **noch nicht getestet**.
+
+## Erste drei Punkte der Bugliste abgearbeitet (2026-08-05)
+
+Aus [`bugliste.md`](bugliste.md), Nutzerwunsch "kannst sonst anfangen":
+
+1. **Loot-Ziel-Anzeige** — dünne gelbe Linie vom Trupp zum Zielgebäude
+   während der Anlauf-Phase, rein lokal/kosmetisch. Details in
+   [`scavenging.md`](scavenging.md), "Loot-Ziel-Anzeige".
+2. **Zeit lief zu schnell:** `CYCLE_LENGTH` 300s → 600s (Tag-Länge
+   verdoppelt) — schiebt Nachteintritt UND jede Horde proportional mit
+   nach hinten, behebt damit direkt auch "Horde kam an Tag 1" mit.
+3. **Forschungs-Tab zeigte nur "noch nicht erforscht" ohne Details:**
+   `_add_research_status_row()` zeigt jetzt zusätzlich Herstellungskosten
+   (Crafting-Rezepte) bzw. eine Kurzbeschreibung (Gebäude-Ausbaustufen,
+   neues `"desc"`-Feld bei `BUILDING_RESEARCH`).
+
+Alle drei **noch nicht getestet**. Als Nächstes: Kamera-/Karten-Steuerung
+(Maus-Ziehen, Zoom-zur-Maus, Einstellungen) — größerer, noch offener Block.
+
+## Bugliste angelegt (2026-08-05)
+
+Nutzer sammelt beim Freundes-Playtest laufend Bugs/Wünsche, bevor im Detail
+einzeln darauf eingegangen wird — neue Datei
+[`bugliste.md`](bugliste.md) dafür angelegt (getrennt von
+`pending-tests.md`, das sind Checklisten zu SCHON umgesetzten Features,
+hier stehen NEU gemeldete, noch nicht angegangene Punkte). Aktueller
+Stand: 8 offene Punkte (Loot-Ziel-Anzeige, Zeittempo, Horde an Tag 1,
+Karten-/Kamera-Steuerung, Forschungs-Tab zeigt keine Rezepte), 5 bestätigt
+funktionierende Punkte aus derselben Runde.
+
+## Einheiten schwebten nach Gebäude-Angriff/-Abriss in der Luft (2026-08-05)
+
+Nutzer-Report ("erster Bug beim Test"): bestehende Einheiten schweben nach
+einem Haus-Abriss in der Luft. Ursache gefunden: `World._create_building()`
+positioniert Gebäude mit `position.y = size.y / 2` (Box-Mittelpunkt, nicht
+Boden — oft mehrere Meter hoch bei echten Assets). `Survivor._process_
+attack()`/`_process_harvest()` (und identisch `Zombie._process_chase()`/
+`Bandit._process_chase()`) bewegten sich per `position.move_toward(target.
+position, ...)` auf die VOLLE 3D-Position des Ziels zu — eine Einheit, die
+sich einem hohen Gebäude näherte, "kletterte" dabei sichtbar Richtung
+Gebäude-Mittelhöhe und blieb nach dessen Zerstörung (`queue_free()`) genau
+dort hängen, weil nichts die Y-Position danach zurücksetzt.
+
+Fix in allen vier Funktionen: Bewegung nutzt jetzt nur noch die
+horizontale (X/Z) Distanz zum Ziel, eigene Y-Höhe bleibt unverändert.
+**Wichtiger Nebenfix, ohne den der Hauptfix Gebäude-Angriffe/-Abriss vollständig
+gebrochen hätte:** die Reichweiten-Prüfung (`dist <= HARVEST_RANGE`/
+`ATTACK_RANGE`) nutzte ebenfalls volle 3D-Distanz — vorher "funktionierte"
+das nur, WEIL die Einheit in Y mitkletterte und sich so überhaupt der vollen
+3D-Position annähern konnte (`HARVEST_RANGE` ist mit 1,2m kleiner als die
+Höhendifferenz zu praktisch jedem echten Gebäude). Ohne das Mitklettern
+hätte keine Einheit mehr nah genug "rangekommen", um überhaupt anzugreifen/
+abzureißen. Beide Distanzberechnungen ebenfalls auf reine X/Z-Distanz
+umgestellt. Details in [`survivor.md`](survivor.md). **Noch nicht
+getestet** — bitte gezielt einen Bautrupp ein Gebäude abreißen lassen UND
+einen Zombie ein geclaimtes Gebäude angreifen lassen, beides sollte wie
+gehabt funktionieren, nur ohne das Schweben danach.
+
 ## Trupp-Farben: fest pro Spieler + Trupp-Art (2026-08-05)
 
 Nutzerwunsch vor dem geplanten Freundes-Test: Trupps sollen nicht mehr pro

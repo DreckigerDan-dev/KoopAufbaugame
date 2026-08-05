@@ -38,6 +38,27 @@ gelten, ob man sich gerade im Hauptmenü oder mitten im Spiel befindet.
 Rein lokale Client-UI, keine Netzwerk-Relevanz — läuft identisch für Host
 und Client.
 
+## Steuerungs-Präferenzen (2026-08-05, Nutzerwunsch "am besten über Einstellungen kann man das alles umstellen wie man will")
+
+Zwei weitere `CheckButton`s, gleiches Auf-Platte-speichern-bei-jedem-Klick-
+Prinzip wie oben:
+
+- **`pan_with_mouse`** (Standard AN) — steuert BEIDES: `World.gd`s
+  Kamera-Schwenk per mittlerer Maustaste halten+ziehen (siehe
+  `MOUSE_PAN_SENSITIVITY`) UND `MapView.gd`s Rechtsklick-Ziehen zum
+  Verschieben des Kartenausschnitts. Ein gemeinsamer Schalter statt zwei
+  getrennter, da beide dieselbe Nutzerpräferenz ausdrücken ("Maus-Ziehen
+  zum Navigieren an/aus").
+- **`zoom_to_cursor`** (Standard AN) — steuert, ob `World._zoom()` beim
+  Reinzoomen den Weltpunkt unter dem Mauscursor ungefähr an Ort und Stelle
+  hält (siehe dortiger Kommentar) oder auf das alte, feste
+  Pivot-zentrierte Zoomen zurückfällt.
+
+Beide bewusst standardmäßig AN (neue Komfort-Features, aber unauffällig
+genug für Opt-out statt Opt-in) — WASD-Kamera-Schwenk UND die alte
+Rechtsklick-Dreh-Steuerung bleiben in jedem Fall unverändert bestehen,
+unabhängig von diesen beiden Schaltern.
+
 ## Testen
 
 Vollbild-Haken umschalten → Fenstermodus sollte sofort wechseln. Spiel

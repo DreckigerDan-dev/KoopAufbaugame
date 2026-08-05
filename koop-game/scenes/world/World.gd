@@ -68,6 +68,12 @@ const BANDIT_HIDEOUT_SCENE := preload("res://scenes/entities/bandit/BanditHideou
 const PAN_SPEED := 20.0
 const MOUSE_ROTATE_SENSITIVITY := 0.006
 const MOUSE_TILT_SENSITIVITY := 0.006
+# Kamera-Schwenk per Maus-Halten+Ziehen (2026-08-05, Nutzerwunsch "statt
+# WASD auch mit Maus ziehen über die Map") — mittlere Maustaste statt
+# links/rechts (beide schon belegt: links = Auswahl/Bauen, rechts =
+# Drehen/Stoppen), siehe _unhandled_input(). Ergänzt WASD, ersetzt es
+# nicht.
+const MOUSE_PAN_SENSITIVITY := 0.045
 const TILT_MIN := 0.26  # ~15°, flacher Blickwinkel, kurz vorm Durchblicken am Boden
 const TILT_MAX := 1.4  # ~80°, fast senkrecht von oben
 const ZOOM_STEP_FACTOR := 0.15
@@ -370,7 +376,13 @@ var _next_weather: String = "clear"
 # Peers bekommen den aktuellen Stand per _catch_up_day_time()
 # nachgeliefert (siehe _spawn_for_peer()), sonst würden sie bei 0 (=00:00)
 # neu starten.
-const CYCLE_LENGTH := 300.0
+# 300s → 600s (2026-08-05, Nutzer-Feedback "Zeit geht zu schnell" +
+# "Horde kam an Tag 1") — bei 300s traf die erste Horde (NIGHT_START_TIME,
+# 22 Uhr) schon nach 4:35 Minuten ein, kaum genug Zeit für erste
+# Verteidigung. Verdopplung schiebt Nachteintritt + jede folgende Horde
+# proportional mit nach hinten (beide hängen direkt an CYCLE_LENGTH), ohne
+# NIGHT_START_HOUR/NIGHT_END_HOUR selbst anzufassen.
+const CYCLE_LENGTH := 600.0
 const HOURS_PER_DAY := 24.0
 const NIGHT_START_HOUR := 22.0
 const NIGHT_END_HOUR := 4.0
@@ -1252,7 +1264,7 @@ const CRAFTING_RECIPES: Array[Dictionary] = [
 # Garten-Anlage, Palisaden/Fallen) bewusst zurückgestellt — Wachturm ist
 # ein eigener Listenpunkt (25).
 const BUILDING_RESEARCH: Array[Dictionary] = [
-	{"id": "medical_upgrade", "name": "Erweiterte Krankenstation"},
+	{"id": "medical_upgrade", "name": "Erweiterte Krankenstation", "desc": "heilt dann dreifach statt doppelt so schnell"},
 ]
 const MEDICAL_UPGRADE_COST := {"brick": 15, "medicine": 3}
 const BUILD_MODE_ACTIVE_TEXT := "Baumodus aktiv — in die Welt klicken"
@@ -1602,6 +1614,7 @@ var _zoom_distance: float = 40.0
 var _tilt_angle: float = 0.5404
 var _rotating: bool = false
 var _right_click_dragged: bool = false
+var _mmb_dragging: bool = false
 # Gamepad-Steuerung (siehe GAMEPAD_*-Konstanten oben) — Vorframe-Zustand
 # der digitalen Buttons, um "gerade gedrückt"/"gerade losgelassen" selbst
 # zu erkennen (Input.is_joy_button_pressed() ist Level-getriggert, kein
@@ -1750,6 +1763,21 @@ var _outpost_ghost_mesh: BoxMesh
 var _wall_drag_active: bool = false
 var _wall_drag_start: Vector3 = Vector3.ZERO
 var _ghost_line_meshes: Array = []
+const LOOT_ROUTE_ARRIVAL_DISTANCE := 4.0
+const LOOT_ROUTE_LINE_WIDTH := 0.08
+const LOOT_ROUTE_LINE_COLOR := Color(1.0, 0.85, 0.3, 0.6)
+# Loot-Ziel-Anzeige (2026-08-05, Nutzerwunsch "fehlt eine Anzeige wo die
+# Units die looten hinlaufen") — rein lokal/kosmetisch auf dem Peer, der den
+# Suchbefehl selbst erteilt hat (kein Sync-RPC nötig: der Klick, der
+# order_search() auslöst, kennt Trupp UND Zielgebäude bereits lokal, bevor
+# der Host überhaupt geantwortet hat). survivor -> Array[Node3D] (Warteliste
+# von Zielgebäuden, Index 0 = aktuelles/nächstes Ziel — spiegelt Shift-Klick-
+# Mehrfachziele, siehe docs/scavenging.md, "Loot-Ziel-Anzeige"), siehe
+# _select_at()/order_search-Zweig fürs Eintragen, _update_loot_route_lines()
+# fürs Zeichnen/Aufräumen, _clear_loot_route() fürs Entfernen bei JEDEM
+# anderen Befehl (Bewegen/Stoppen/Angreifen/Einsteigen/Claimen/Abreißen).
+var _loot_routes: Dictionary = {}
+var _loot_route_lines: Dictionary = {}
 
 
 func _ready() -> void:
@@ -1914,7 +1942,12 @@ func _handle_day_night(delta: float) -> void:
 		_blood_moon_warned_day = _day_count
 		for peer_id in NetworkManager.players.keys():
 			report_status(peer_id, "Blutmond nähert sich!")
-	if multiplayer.is_server() and is_night() and not _horde_triggered_this_night:
+	# Erste Nacht (_day_count == 0) bewusst OHNE Horde (2026-08-06, Nutzer-
+	# Report "Horde kam wieder Tag 1", auch nach der CYCLE_LENGTH-
+	# Verdopplung noch als zu früh empfunden) — garantiert eine ruhige erste
+	# Aufbauphase, ab der zweiten Nacht kommt wieder JEDE Nacht eine Horde
+	# wie gehabt.
+	if multiplayer.is_server() and is_night() and not _horde_triggered_this_night and _day_count > 0:
 		_horde_triggered_this_night = true
 		_trigger_horde_night()
 
@@ -5552,16 +5585,32 @@ func _refresh_research_ui() -> void:
 		child.queue_free()
 	var base := _find_own_home_base()
 	for recipe in CRAFTING_RECIPES:
-		_add_research_status_row(recipe["id"], recipe["name"], base)
+		_add_research_status_row(recipe["id"], recipe["name"], _cost_text(recipe["cost"]), base)
 	for recipe in BUILDING_RESEARCH:
-		_add_research_status_row(recipe["id"], recipe["name"], base)
+		_add_research_status_row(recipe["id"], recipe["name"], recipe.get("desc", ""), base)
 
 
-func _add_research_status_row(recipe_id: String, display_name: String, base: Node3D) -> void:
+func _cost_text(cost: Dictionary) -> String:
+	var parts: Array = []
+	for key in cost:
+		parts.append("%d %s" % [cost[key], RESOURCE_DISPLAY_NAMES.get(key, key)])
+	return ", ".join(parts)
+
+
+func _add_research_status_row(recipe_id: String, display_name: String, detail: String, base: Node3D) -> void:
+	# Bugfix/Nachbesserung (2026-08-05, Nutzer-Feedback "Forschung stand nur
+	# dran das es noch nicht erforscht ist ohne Rezepte") — vorher zeigte
+	# jede Zeile NUR Name + Status, keinerlei Info dazu, WAS man dafür
+	# bekommt/braucht (anders als der Herstellen-Tab mit vollen Kosten/
+	# Ertrag). `detail` liefert jetzt entweder die Herstellungskosten
+	# (Crafting-Rezepte) oder eine Kurzbeschreibung (Gebäude-Ausbaustufen,
+	# haben kein cost/yield).
 	var unlocked: bool = base != null and base.unlocked_recipes.get(recipe_id, false)
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
-	label.text = "%s: %s" % [display_name, "Erforscht ✓" if unlocked else "Noch nicht erforscht"]
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var status := "Erforscht ✓" if unlocked else "Noch nicht erforscht"
+	label.text = "%s: %s (%s)" % [display_name, status, detail] if detail != "" else "%s: %s" % [display_name, status]
 	if not unlocked:
 		label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	research_list.add_child(label)
@@ -6208,6 +6257,7 @@ func _process(delta: float) -> void:
 	_handle_gamepad_input(delta)
 	_update_hud()
 	_update_build_ghost()
+	_update_loot_route_lines()
 	if not _game_paused:
 		# Läuft lokal auf JEDEM Peer (siehe _handle_day_night()), muss also
 		# hier und nicht nur im is_server()-Block oben gegatet werden —
@@ -6341,6 +6391,70 @@ func _update_wall_drag_ghost() -> void:
 func _clear_ghost_line() -> void:
 	for mesh_instance in _ghost_line_meshes:
 		mesh_instance.visible = false
+
+
+func _loot_arrival_distance(building: Node3D) -> float:
+	# Größenabhängige "angekommen"-Schwelle statt eines festen Werts (siehe
+	# Bugfix-Kommentar in _update_loot_route_lines()) — halbe Gebäude-
+	# Diagonale (gleiche Herleitung wie HOME_BASE_HALF_DIAGONAL/
+	# request_choose_start_base()) plus fester Puffer, deckt auch große
+	# Gebäude wie den Supermarkt ab, an denen ein Trupp weit vom
+	# Mittelpunkt entfernt durchsucht.
+	var mesh_node: Node = building.get_node_or_null("Mesh")
+	if mesh_node == null or not (mesh_node.mesh is BoxMesh):
+		return LOOT_ROUTE_ARRIVAL_DISTANCE
+	var size: Vector3 = (mesh_node.mesh as BoxMesh).size
+	return Vector2(size.x, size.z).length() / 2.0 + LOOT_ROUTE_ARRIVAL_DISTANCE
+
+
+func _update_loot_route_lines() -> void:
+	# Rein lokal/kosmetisch (siehe _loot_routes-Kommentar oben) — läuft auf
+	# JEDEM Peer, zeigt aber nur die eigenen, selbst erteilten Suchbefehle
+	# (nur der befehlende Client trägt beim Klick in _loot_routes ein).
+	# Ziel-Punkt ist X/Z vom Gebäude, aber Y von der EIGENEN aktuellen
+	# Trupp-Höhe (nicht building.global_position.y, das sitzt auf halber
+	# Gebäudehöhe, siehe Bugfix "Units schweben in der Luft") — sonst würde
+	# die Linie schräg in die Gebäudemitte statt flach über den Boden zeigen.
+	for unit in _loot_routes.keys().duplicate():
+		if not is_instance_valid(unit):
+			_clear_loot_route(unit)
+			continue
+		var queue: Array = _loot_routes[unit]
+		# Vorne aus der Warteschlange entfernen, sobald angekommen (oder das
+		# Gebäude ungültig wurde) — bei einer Mehrfachziel-Route (Shift-Klick,
+		# siehe oben) rückt danach einfach das nächste Ziel nach, statt die
+		# ganze Route zu löschen. Bugfix (2026-08-06, Nutzer-Report "bei 3
+		# Häusern wird die Linie nie aktualisiert"): die Ankunfts-Prüfung lief
+		# gegen den GEBÄUDE-MITTELPUNKT, ein Trupp durchsucht ein Gebäude aber
+		# von dessen Rand/Oberfläche aus — bei größeren Gebäuden (z. B.
+		# Supermarkt, ~18m) blieb der Trupp dadurch dauerhaft weiter als die
+		# feste Distanz vom Mittelpunkt entfernt, die Linie rückte NIE zum
+		# nächsten Ziel vor. Jetzt größenabhängig über _loot_arrival_distance().
+		while not queue.is_empty() and (not is_instance_valid(queue[0]) or Vector2(unit.global_position.x, unit.global_position.z).distance_to(Vector2(queue[0].global_position.x, queue[0].global_position.z)) < _loot_arrival_distance(queue[0])):
+			queue.pop_front()
+		if queue.is_empty():
+			_clear_loot_route(unit)
+			continue
+		var building: Node3D = queue[0]
+		var line: MeshInstance3D = _loot_route_lines.get(unit)
+		if line == null:
+			line = MeshInstance3D.new()
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = LOOT_ROUTE_LINE_COLOR
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.emission_enabled = true
+			mat.emission = LOOT_ROUTE_LINE_COLOR
+			line.set_surface_override_material(0, mat)
+			add_child(line)
+			_loot_route_lines[unit] = line
+		var from: Vector3 = unit.global_position
+		var to := Vector3(building.global_position.x, from.y, building.global_position.z)
+		var box := BoxMesh.new()
+		box.size = Vector3(LOOT_ROUTE_LINE_WIDTH, LOOT_ROUTE_LINE_WIDTH, from.distance_to(to))
+		line.mesh = box
+		line.global_position = (from + to) / 2.0
+		line.look_at(to, Vector3.UP)
 
 
 func _compute_wall_line(start: Vector3, end: Vector3) -> Dictionary:
@@ -6939,6 +7053,21 @@ func _stop_selected_units() -> void:
 	for unit in selected:
 		if is_instance_valid(unit) and unit.has_method("order_stop"):
 			unit.order_stop.rpc_id(1, multiplayer.get_unique_id())
+			_clear_loot_route(unit)
+
+
+func _clear_loot_route(unit) -> void:
+	# Nutzer-Report (2026-08-06, direkt nach der Loot-Ziel-Anzeige): "der
+	# Streifen geht nicht weg wenn ich was anderes angeklickt habe" — die
+	# Linie verschwand bisher NUR über die Ankunfts-Distanz (siehe
+	# _update_loot_route_lines()), nicht wenn der Suchauftrag durch einen
+	# ANDEREN Befehl (Bewegen, Stoppen, Angreifen, Einsteigen, Claimen/
+	# Abreißen) ersetzt wird. Jetzt an jeder Stelle aufgerufen, die einem
+	# Trupp einen NICHT-Such-Befehl gibt.
+	_loot_routes.erase(unit)
+	if _loot_route_lines.has(unit):
+		_loot_route_lines[unit].queue_free()
+		_loot_route_lines.erase(unit)
 
 
 func _handle_gamepad_input(delta: float) -> void:
@@ -7063,12 +7192,19 @@ func _unhandled_input(event: InputEvent) -> void:
 					_right_click_dragged = false
 				elif not _right_click_dragged:
 					_stop_selected_units()
+			MOUSE_BUTTON_MIDDLE:
+				# Kamera-Schwenk per Maus-Halten+Ziehen (2026-08-05, siehe
+				# MOUSE_PAN_SENSITIVITY-Kommentar oben) — mittlere Maustaste,
+				# damit links (Auswahl/Bauen) und rechts (Drehen/Stoppen)
+				# unangetastet bleiben. Ergänzt WASD, ersetzt es nicht. Über
+				# Einstellungen abschaltbar (SettingsManager.pan_with_mouse).
+				_mmb_dragging = event.pressed and SettingsManager.pan_with_mouse
 			MOUSE_BUTTON_WHEEL_UP:
 				if event.pressed:
-					_zoom(-1.0)
+					_zoom(-1.0, event.position if SettingsManager.zoom_to_cursor else Vector2.INF)
 			MOUSE_BUTTON_WHEEL_DOWN:
 				if event.pressed:
-					_zoom(1.0)
+					_zoom(1.0, event.position if SettingsManager.zoom_to_cursor else Vector2.INF)
 	elif event is InputEventMouseMotion and _rotating:
 		# Rechte Maustaste halten + ziehen = rotieren (horizontal) UND neigen
 		# (vertikal, ändert den Blickwinkel der Kamera).
@@ -7077,6 +7213,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		var tilt_sign := -1.0 if SettingsManager.invert_mouse_y else 1.0
 		_tilt_angle = clamp(_tilt_angle - tilt_sign * event.relative.y * MOUSE_TILT_SENSITIVITY, TILT_MIN, TILT_MAX)
 		_apply_zoom()
+	elif event is InputEventMouseMotion and _mmb_dragging:
+		# "Karte greifen und ziehen" statt WASD-Richtungsgefühl — der
+		# Weltpunkt unter dem Cursor soll beim Ziehen unter dem Cursor
+		# bleiben, deshalb bewegt sich pivot ENTGEGENGESETZT zur
+		# Mausbewegung (gleiches Prinzip wie MapView._gui_input()s Drag).
+		var drag_dir := Vector3(-event.relative.x, 0, -event.relative.y)
+		pivot.position += drag_dir.rotated(Vector3.UP, pivot.rotation.y) * MOUSE_PAN_SENSITIVITY
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode >= KEY_1 and event.keycode <= KEY_9:
 			# Kontrollgruppen (RTS-Standard): Strg+Zifferntaste weist die
@@ -7191,6 +7334,7 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 			for unit in selected:
 				if is_instance_valid(unit) and unit.has_method("order_enter_vehicle"):
 					unit.order_enter_vehicle.rpc_id(1, target, hit.get_path(), multiplayer.get_unique_id())
+					_clear_loot_route(unit)
 					boarded_any = true
 			if boarded_any:
 				# Optimistisch schon auf das Fahrzeug umschalten, nicht erst
@@ -7269,8 +7413,23 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 					# nicht (Claimen/Abreißen ist immer ein einzelner Sofort-
 					# Befehl, kein Auftrag mit mehreren Zielen).
 					unit.rpc_id(1, order_method, target, building.get_path(), multiplayer.get_unique_id(), additive)
+					# Bugfix (2026-08-06, Nutzer-Report "wenn ich 3 Stück
+					# markiere ... wird nur das letzte Gebäude gezeigt"): Route
+					# ist jetzt eine LISTE pro Trupp statt eines Einzelwerts,
+					# damit Shift-Klick-Mehrfachziele (additive) sich anhängen
+					# statt den vorherigen Eintrag zu überschreiben — spiegelt
+					# _search_queue in Survivor.gd (siehe docs/scavenging.md,
+					# "Multi-Ziel-Pfadfindung"), aber rein lokal nachgebildet
+					# (kein Zugriff auf den echten, host-seitigen Zustand
+					# nötig/möglich). _update_loot_route_lines() zeigt jeweils
+					# nur den ERSTEN (aktuellen) Eintrag der Liste an.
+					if additive and _loot_routes.has(unit) and not _loot_routes[unit].is_empty():
+						_loot_routes[unit].append(building)
+					else:
+						_loot_routes[unit] = [building]
 				else:
 					unit.rpc_id(1, order_method, target, building.get_path(), multiplayer.get_unique_id())
+					_clear_loot_route(unit)
 		return
 	if result and not selected.is_empty() and (result.collider.is_in_group("zombie") or result.collider.is_in_group("zombie_nest") or result.collider.is_in_group("bandit") or result.collider.is_in_group("bandit_hideout")):
 		# Angriffsbefehl (siehe docs/survivor.md, "Angriffsbefehl") — Klick
@@ -7293,6 +7452,7 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 			if is_instance_valid(unit) and unit.has_method("order_attack"):
 				var target_enemy := _nearest_enemy(unit.global_position, nearby_enemies)
 				unit.order_attack.rpc_id(1, target_enemy.get_path(), multiplayer.get_unique_id())
+				_clear_loot_route(unit)
 		return
 	if result and not selected.is_empty() and result.collider.is_in_group("harvestable"):
 		# Bautrupp-Aktion (siehe docs/survivor.md, "Trupp-Arten") — Klick auf
@@ -7303,6 +7463,7 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 		for unit in selected:
 			if is_instance_valid(unit) and unit.has_method("order_harvest"):
 				unit.order_harvest.rpc_id(1, harvestable.get_path(), multiplayer.get_unique_id())
+				_clear_loot_route(unit)
 		return
 	if result and selected.is_empty() and result.collider.is_in_group("harvestable"):
 		# Markieren statt Direktbefehl, siehe docs/survivor.md, "Trupp-
@@ -7325,6 +7486,13 @@ func _select_at(screen_pos: Vector2, additive: bool) -> void:
 				# Index 0 (Anführer) läuft weiterhin sofort los.
 				var start_delay := float(i) * MOVE_STAGGER_STEP
 				unit.order_move.rpc_id(1, target, multiplayer.get_unique_id(), additive, start_delay)
+				if not additive:
+					# additive (Shift-Klick) hängt nur einen Wegpunkt an und
+					# bricht die Suche NICHT ab (siehe Survivor.order_move()),
+					# ein normaler Klick dagegen schon (_cancel_search()) —
+					# Loot-Route-Linie entsprechend nur beim normalen Klick
+					# entfernen.
+					_clear_loot_route(unit)
 		return
 	selected.clear()
 
@@ -7390,13 +7558,25 @@ func _formation_offset(index: int, count: int) -> Vector3:
 	return Vector3(cos(angle), 0.0, sin(angle)) * FORMATION_RADIUS
 
 
-func _zoom(direction: float) -> void:
+func _zoom(direction: float, cursor_screen_pos: Vector2 = Vector2.INF) -> void:
+	# Zoom-zur-Maus (2026-08-05, Nutzerwunsch "wenn ich mit der Maus drauf
+	# zeig soll da hingezoomt werden") — pivot verschiebt sich zusätzlich
+	# zur reinen Distanzänderung so, dass der Weltpunkt unter dem Cursor
+	# ungefähr unter dem Cursor bleibt, statt immer nur um den festen
+	# Pivot-Punkt herum zu zoomen. `cursor_screen_pos` optional, weil
+	# _zoom() auch ohne Mausposition läuft (Gamepad LB/RB, siehe
+	# _handle_gamepad_input()) — dann bleibt das alte, feste Verhalten.
+	var before: Variant = _raycast_position(cursor_screen_pos) if cursor_screen_pos != Vector2.INF else null
 	_zoom_distance = clamp(
 		_zoom_distance + direction * _zoom_distance * ZOOM_STEP_FACTOR,
 		ZOOM_MIN,
 		ZOOM_MAX,
 	)
 	_apply_zoom()
+	if before != null:
+		var after: Variant = _raycast_position(cursor_screen_pos)
+		if after != null:
+			pivot.position += Vector3(before.x - after.x, 0.0, before.z - after.z)
 
 
 func _apply_zoom() -> void:

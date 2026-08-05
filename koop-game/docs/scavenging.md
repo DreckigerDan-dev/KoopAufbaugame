@@ -50,6 +50,61 @@ getroffener Seite/Dach der Box diese Höhe schwankt.
      Pfadfindung" unten; ohne Warteschlange identisch zum vorherigen
      `_return_to_base()`.
 
+## Loot-Ziel-Anzeige (2026-08-05, Nutzerwunsch "fehlt eine Anzeige wo die Units die looten hinlaufen")
+
+Dünne, halbtransparente gelbe Linie vom Trupp zum Zielgebäude, solange er
+noch unterwegs ist — man sieht auf einen Blick, wohin ein plündernder
+Feldtrupp gerade läuft, ohne ihn erst anklicken zu müssen.
+
+- **Rein lokal/kosmetisch, kein Netzwerk-Sync nötig:** `World._select_at()`
+  trägt beim Erteilen von `order_search()` das Paar (Trupp, Gebäude) in
+  `_loot_routes` ein — der klickende Client kennt beide bereits selbst,
+  bevor der Host überhaupt geantwortet hat. Zeigt deshalb nur die eigenen,
+  selbst erteilten Suchbefehle (bewusste Scope-Entscheidung, kein
+  Mitspieler-weites Feature).
+- **`_loot_routes[unit]` ist eine LISTE** (2026-08-06-Korrektur, Nutzer-
+  Report "wenn ich 3 Stück markiere ... wird nur das letzte Gebäude
+  gezeigt") — ursprünglich ein Einzelwert, dabei überschrieb jeder weitere
+  Shift-Klick (additive Mehrfachziel, siehe unten) den vorherigen Eintrag.
+  Additive Klicks hängen jetzt an die bestehende Liste an (spiegelt
+  `Survivor._search_queue`, rein lokal nachgebildet, kein Zugriff auf den
+  echten host-seitigen Zustand nötig), ein normaler (nicht-additiver)
+  Klick ersetzt die Liste komplett.
+- **`World._update_loot_route_lines()`** (läuft jeden Frame auf jedem Peer):
+  baut/aktualisiert pro Trupp eine dünne `BoxMesh`-Linie zum VORDERSTEN
+  (aktuellen) Listen-Eintrag (gleiche Zeichen-Technik wie
+  `Survivor._play_shot_effect()`s Schuss-Leuchtstreif, nur dauerhaft statt
+  einmalig). Ziel-Y kommt bewusst von der EIGENEN Trupp-Höhe, nicht von
+  `building.global_position.y` (sitzt auf halber Gebäudehöhe, siehe "Units
+  schweben in der Luft"-Bugfix in `survivor.md`) — sonst würde die Linie
+  schräg in die Gebäudemitte statt flach über den Boden zeigen.
+- **Aufräumen:** Der vorderste Listen-Eintrag wird entfernt, sobald der
+  Trupp näher als `_loot_arrival_distance(building)` (horizontale Distanz)
+  ans Gebäude kommt oder es ungültig wird — bei einer Mehrfachziel-Route
+  rückt danach automatisch das nächste Ziel nach, statt die ganze Route zu
+  löschen. Läuft über reine Distanzprüfung, nicht über `_searching`/
+  `is_idle()` (beide bleiben während der ganzen Such-/Rückweg-Phase
+  "beschäftigt", würden die Linie also viel zu lange stehen lassen).
+  **Dritter Fix (2026-08-06, Nutzer-Report "bei 3 Häusern wird die Linie
+  nie aktualisiert"):** Ankunfts-Distanz war zunächst ein fester Wert
+  (`LOOT_ROUTE_ARRIVAL_DISTANCE`, 4m) gegen den GEBÄUDE-MITTELPUNKT
+  gemessen — ein Trupp durchsucht ein Gebäude aber von dessen Rand/
+  Oberfläche aus (Klickpunkt auf der Box, nicht die Box-Mitte selbst), bei
+  größeren Gebäuden (z. B. Supermarkt, ~18m) blieb er dadurch dauerhaft
+  weiter als 4m vom Mittelpunkt entfernt — die Linie rückte bei einer
+  Mehrfachziel-Route NIE zum nächsten Eintrag vor, egal wie lange man
+  wartete. `_loot_arrival_distance()` berechnet die Schwelle jetzt aus der
+  halben Gebäude-Diagonale (gleiche Herleitung wie
+  `HOME_BASE_HALF_DIAGONAL`) plus dem alten festen Puffer.
+  **Zweiter Fix (2026-08-06, Nutzer-Report "der Streifen geht nicht weg
+  wenn ich was anderes angeklickt habe"):** neue `World._clear_loot_route(
+  unit)` wird jetzt zusätzlich bei JEDEM anderen Befehl aufgerufen
+  (Bewegen — nur bei nicht-additivem Klick, da additives `order_move()`
+  die Suche laut `Survivor.gd` nicht abbricht —, Stoppen, Angreifen,
+  Einsteigen, Claimen, Abreißen), vorher verschwand die Linie NUR über die
+  Ankunfts-Distanz, blieb also stehen, wenn der Trupp stattdessen woanders
+  hin umbefohlen wurde.
+
 ## Multi-Ziel-Pfadfindung (2026-08-04, Ideen-Backlog)
 
 Shift-Klick auf weitere `"searchable"`-Gebäude, während ein Feldtrupp schon

@@ -84,6 +84,12 @@ var _zoom_level: float = MAP_ZOOM_MIN
 # toggle_map_view()), NICHT auf den Kartenmittelpunkt, sonst würde man
 # reingezoomt erstmal woanders landen als da, wo man gerade ist.
 var _view_center: Vector2 = Vector2.ZERO
+# Maus-Halten+Ziehen zum Verschieben (2026-08-05, Nutzerwunsch "große Karte
+# sollte man mit Maus halten bewegen") — ersetzt das vorherige
+# Rechtsklick-springt-sofort-dahin-Verhalten durch echtes Ziehen ("wie eine
+# Papierkarte greifen"), gleiche Maustaste (rechts), damit Linksklick
+# weiterhin exklusiv fürs Hinreisen+Schließen bleibt.
+var _drag_active: bool = false
 
 
 func zoom_in() -> void:
@@ -288,24 +294,29 @@ func _gui_input(event: InputEvent) -> void:
 	# die Minimap) UND schließt die Kartenansicht direkt wieder — "Fast
 	# Travel" statt einer Ansicht, die offen bleibt (Nutzerentscheidung für
 	# eine eigene Taste statt Auto-Trigger galt fürs ÖFFNEN, nicht fürs
-	# Offenbleiben nach der Navigation). Rechtsklick verschiebt NUR den
-	# Kartenausschnitt (kein Kamera-Sprung, kein Schließen) — sonst könnte
-	# man beim Reingezoomt-Sein gar nicht navigieren, ohne jedes Mal zu
-	# schließen. Mausrad zoomt. Funktioniert 1:1 auch per Gamepad —
-	# GamepadCursor synthetisiert A/B als Links-/Rechtsklick, LB/RB werden
-	# in World._handle_gamepad_input() auf zoom_in()/zoom_out() umgeleitet,
-	# solange die Kartenansicht offen ist.
-	if event is InputEventMouseButton and event.pressed:
-		match event.button_index:
-			MOUSE_BUTTON_LEFT:
-				_pan_to(event.position)
-				get_tree().current_scene.toggle_map_view()
-			MOUSE_BUTTON_RIGHT:
-				_view_center = _from_map(event.position)
-			MOUSE_BUTTON_WHEEL_UP:
-				zoom_in()
-			MOUSE_BUTTON_WHEEL_DOWN:
-				zoom_out()
+	# Offenbleiben nach der Navigation). Rechtsklick HALTEN+ZIEHEN
+	# verschiebt den Kartenausschnitt (kein Kamera-Sprung, kein Schließen)
+	# — sonst könnte man beim Reingezoomt-Sein gar nicht navigieren, ohne
+	# jedes Mal zu schließen. Mausrad zoomt. Funktioniert 1:1 auch per
+	# Gamepad — GamepadCursor synthetisiert A/B als Links-/Rechtsklick,
+	# LB/RB werden in World._handle_gamepad_input() auf zoom_in()/
+	# zoom_out() umgeleitet, solange die Kartenansicht offen ist.
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_pan_to(event.position)
+			get_tree().current_scene.toggle_map_view()
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_drag_active = event.pressed and SettingsManager.pan_with_mouse
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			zoom_in()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			zoom_out()
+	elif event is InputEventMouseMotion and _drag_active:
+		# Gleiche Skalierung wie _to_map()/_from_map() (visible_size je
+		# Zoomstufe) — Ziehen um X Bildschirm-Pixel soll denselben Weltpunkt
+		# unter dem Cursor halten, unabhängig vom aktuellen Zoom.
+		var visible_size: float = get_tree().current_scene.MAP_SIZE / _zoom_level
+		_view_center -= Vector2(event.relative.x / size.x, event.relative.y / size.y) * visible_size
 
 
 func _pan_to(local_position: Vector2) -> void:

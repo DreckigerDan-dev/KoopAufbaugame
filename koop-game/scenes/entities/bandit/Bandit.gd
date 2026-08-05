@@ -115,14 +115,18 @@ func _is_unoccupied_vehicle(unit: Node3D) -> bool:
 func _process_chase(delta: float) -> void:
 	var obstacle := _blocking_obstacle(global_position, _chase_target.global_position)
 	var effective_target: Node3D = obstacle if obstacle != null else _chase_target
-	var dist := global_position.distance_to(effective_target.global_position)
+	# Nur horizontale (X/Z) Distanz zählt (gleicher Bugfix wie Survivor.gd/
+	# Zombie.gd, 2026-08-05, "Units schweben in der Luft nach Haus-Abriss") —
+	# Gebäude stehen mit position.y = halbe Gebäudehöhe, nicht am Boden.
+	var dist := Vector2(global_position.x, global_position.z).distance_to(Vector2(effective_target.global_position.x, effective_target.global_position.z))
 	if dist <= ATTACK_RANGE:
 		_attack_timer += delta
 		if _attack_timer >= ATTACK_COOLDOWN:
 			_attack_timer = 0.0
 			_try_attack(effective_target)
 		return
-	position = position.move_toward(effective_target.position, CHASE_SPEED * delta)
+	var target_ground := Vector3(effective_target.position.x, position.y, effective_target.position.z)
+	position = position.move_toward(target_ground, CHASE_SPEED * delta)
 
 
 func _blocking_obstacle(from: Vector3, to: Vector3) -> Node3D:

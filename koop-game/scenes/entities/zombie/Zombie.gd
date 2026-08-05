@@ -249,14 +249,21 @@ func _process_chase(delta: float) -> void:
 	# Verfolgen/Angreifen-Muster wie beim Survivor-Kampf.
 	var obstacle := _blocking_obstacle(global_position, _chase_target.global_position)
 	var effective_target: Node3D = obstacle if obstacle != null else _chase_target
-	var dist := global_position.distance_to(effective_target.global_position)
+	# Nur horizontale (X/Z) Distanz zählt (gleicher Bugfix wie Survivor.gd,
+	# 2026-08-05, "Units schweben in der Luft nach Haus-Abriss") — Gebäude
+	# stehen mit position.y = halbe Gebäudehöhe, nicht am Boden. Volle
+	# 3D-Distanz/move_toward hätte einen Zombie beim Angriff auf ein
+	# Gebäude Richtung dessen Mittelhöhe klettern lassen und ihn nach
+	# dessen Zerstörung dort schweben lassen.
+	var dist := Vector2(global_position.x, global_position.z).distance_to(Vector2(effective_target.global_position.x, effective_target.global_position.z))
 	if dist <= ATTACK_RANGE:
 		_attack_timer += delta
 		if _attack_timer >= ATTACK_COOLDOWN:
 			_attack_timer = 0.0
 			_try_attack(effective_target)
 		return
-	position = position.move_toward(effective_target.position, _chase_speed * delta)
+	var target_ground := Vector3(effective_target.position.x, position.y, effective_target.position.z)
+	position = position.move_toward(target_ground, _chase_speed * delta)
 
 
 func _blocking_obstacle(from: Vector3, to: Vector3) -> Node3D:

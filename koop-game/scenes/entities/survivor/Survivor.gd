@@ -366,18 +366,30 @@ func _handle_movement(delta: float) -> void:
 	if _waypoints.is_empty():
 		return
 	var target: Vector3 = _waypoints[0]
-	var next_position := position.move_toward(target, _current_move_speed() * delta)
+	# Bugfix (2026-08-06, Nutzer-Report "loot ein Haus, komm raus, bin in
+	# der Luft, laufe so zur Startbase"): _waypoints kommt aus mehreren
+	# Quellen (order_move()/order_search() liefern schon bodennahe Ziele,
+	# aber z. B. _return_to_base() setzt `target.position + offset` direkt
+	# von Home-Base/Außenposten — die sitzen mit position.y auf halber
+	# Gebäudehöhe, nicht am Boden, siehe World._create_building()). Statt
+	# jede einzelne Quelle einzeln zu flicken (gleiche Bugklasse wie schon
+	# bei _process_attack()/_process_harvest()), hier EINMAL zentral: die
+	# Y-Höhe des Ziels wird für die Bewegung selbst schlicht ignoriert,
+	# eigene aktuelle Höhe bleibt bestehen — betrifft ausnahmslos JEDEN
+	# Wegpunkt-Befehl.
+	var target_ground := Vector3(target.x, position.y, target.z)
+	var next_position := position.move_toward(target_ground, _current_move_speed() * delta)
 	if _is_path_blocked(next_position):
 		# Mauer (oder fremdes Tor) direkt im Weg für DIESEN Schritt — Ausweich-
 		# Heuristik statt stehenzubleiben (siehe _sidestep_direction-Kommentar
 		# oben). Kurzes Segment (aktuelle Position → nächster Schritt, nicht
 		# bis zum Wegpunkt), damit das erst beim tatsächlichen Anstoßen an die
 		# Mauer greift, nicht schon von weitem.
-		next_position = _sidestep_position(target, delta)
+		next_position = _sidestep_position(target_ground, delta)
 		if next_position == position:
 			return  # Auch beide Ausweich-Seiten blockiert — wirklich stehen bleiben.
 	position = next_position
-	if position.distance_to(target) < ARRIVE_THRESHOLD:
+	if Vector2(position.x, position.z).distance_to(Vector2(target.x, target.z)) < ARRIVE_THRESHOLD:
 		_waypoints.pop_front()
 		# Stationierung/Durchsuchen greifen erst am LETZTEN Wegpunkt —
 		# order_station()/order_search() setzen dafür immer nur genau einen,
@@ -477,7 +489,11 @@ func _process_attack(delta: float) -> void:
 	var melee_cooldown := SECONDARY_MELEE_COOLDOWN if secondary_weapon else ATTACK_COOLDOWN
 	var attack_range := RANGED_ATTACK_RANGE if use_ranged else ATTACK_RANGE
 	var cooldown := ATTACK_COOLDOWN if use_ranged else melee_cooldown
-	var dist := global_position.distance_to(_attack_target.global_position)
+	# Nur horizontale (X/Z) Distanz zählt (siehe Bugfix-Kommentar bei
+	# _process_harvest() weiter unten) — Angriffsziele sind zwar meist schon
+	# bodennah (Zombies/Bandits/Survivors), aber die Reichweite soll so oder
+	# so unabhängig von Höhenunterschieden sein, nicht durch sie verfälscht.
+	var dist := Vector2(global_position.x, global_position.z).distance_to(Vector2(_attack_target.global_position.x, _attack_target.global_position.z))
 	if dist <= attack_range:
 		_attack_timer += delta
 		if _attack_timer >= cooldown:
@@ -500,7 +516,12 @@ func _process_attack(delta: float) -> void:
 			else:
 				_attack_target.take_damage(_effective_attack_damage(melee_damage), owner_peer_id)
 		return
-	var next_position := position.move_toward(_attack_target.position, _current_move_speed() * delta)
+	# Nur horizontal (X/Z) auf das Ziel zubewegen, EIGENE Y-Höhe beibehalten
+	# (siehe Kommentar bei _process_harvest() weiter unten für den Bug, den
+	# das behebt — Gebäude stehen mit position.y = halbe Gebäudehöhe, nicht
+	# am Boden).
+	var target_ground := Vector3(_attack_target.position.x, position.y, _attack_target.position.z)
+	var next_position := position.move_toward(target_ground, _current_move_speed() * delta)
 	if _is_path_blocked(next_position):
 		return
 	position = next_position
@@ -538,7 +559,12 @@ func _process_harvest(delta: float) -> void:
 	# Funktion statt im Ziel selbst — weder Tree.gd noch CarWreck.gd kennen
 	# (anders als eine Home-Base) einen Besitzer, dem sie etwas gutschreiben
 	# könnten, siehe docs/survivor.md, "Trupp-Arten".
-	var dist := global_position.distance_to(_harvest_target.global_position)
+	# Nur horizontale (X/Z) Distanz zählt, nicht die volle 3D-Distanz — sonst
+	# wäre ein Gebäude (position.y = halbe Gebäudehöhe, siehe Bugfix-
+	# Kommentar unten bei next_position) für einen bodennah bleibenden
+	# Bautrupp NIE in Reichweite (1,2m HARVEST_RANGE ist kleiner als die
+	# Höhendifferenz zu praktisch jedem echten Gebäude).
+	var dist := Vector2(global_position.x, global_position.z).distance_to(Vector2(_harvest_target.global_position.x, _harvest_target.global_position.z))
 	if dist <= HARVEST_RANGE:
 		_harvest_timer += delta
 		if _harvest_timer >= HARVEST_COOLDOWN:
@@ -562,7 +588,21 @@ func _process_harvest(delta: float) -> void:
 					base.add_resources.rpc(_harvest_target.YIELD)
 				_harvest_target = null
 		return
-	var next_position := position.move_toward(_harvest_target.position, _current_move_speed() * delta)
+	# Bugfix (2026-08-05, Nutzer-Report "Units schweben in der Luft nach
+	# Haus-Abriss"): Gebäude stehen mit position.y = halbe Gebäudehöhe
+	# (siehe World._create_building()-Kommentar "building.position.y ist
+	# size.y/2"), nicht am Boden. Das vorherige position.move_toward(
+	# _harvest_target.position, ...) lief über die VOLLE 3D-Distanz
+	# inklusive Y — ein Bautrupp, der sich einem hohen Gebäude näherte,
+	# "kletterte" dabei sichtbar Richtung Gebäude-Mittelhöhe und blieb nach
+	# dessen Abriss (queue_free()) genau dort in der Luft hängen, weil
+	# nichts die Y-Position danach zurücksetzt. Fix: nur horizontal (X/Z)
+	# aufs Ziel zubewegen, eigene Y-Höhe bleibt unverändert — betrifft
+	# Bäume/Autowracks nicht sichtbar (die stehen schon nahe am Boden),
+	# war aber bei Gebäuden (Abriss UND Baustellen-Anlauf) der eigentliche
+	# Auslöser.
+	var target_ground := Vector3(_harvest_target.position.x, position.y, _harvest_target.position.z)
+	var next_position := position.move_toward(target_ground, _current_move_speed() * delta)
 	if _is_path_blocked(next_position):
 		return
 	position = next_position

@@ -570,6 +570,42 @@ Markier-System (siehe unten).
   Home-Base) einen Besitzer, dem sie etwas gutschreiben könnte.
 - **`is_idle()`** prüft jetzt zusätzlich `not
   is_instance_valid(_harvest_target)`.
+- **Bugfix (2026-08-05, "Units schweben in der Luft nach Haus-Abriss"):**
+  `_process_attack()`/`_process_harvest()` bewegten sich per
+  `position.move_toward(target.position, ...)` auf die VOLLE 3D-Position
+  des Ziels zu — Gebäude stehen aber mit `position.y = size.y / 2`
+  (Box-Mittelpunkt, siehe `World._create_building()`), nicht am Boden. Ein
+  Trupp, der sich einem hohen Gebäude näherte, kletterte dabei sichtbar
+  Richtung Gebäude-Mittelhöhe und blieb nach dessen Zerstörung dort hängen
+  (nichts setzt die Y-Position danach zurück). Fix: Bewegung UND die
+  Reichweiten-Prüfung (`dist <= HARVEST_RANGE`/`ATTACK_RANGE`) laufen jetzt
+  beide nur noch über die horizontale (X/Z) Distanz, eigene Y-Höhe bleibt
+  fest. **Ohne den zweiten Teil (Reichweite) hätte der reine Bewegungs-Fix
+  Gebäude-Angriffe/-Abriss komplett gebrochen** — vorher kam eine Einheit
+  nur durch das (fehlerhafte) Mitklettern überhaupt nah genug an die volle
+  3D-Position heran, um `HARVEST_RANGE` (1,2m, kleiner als die Höhe fast
+  jedes echten Gebäudes) zu unterschreiten. Gleicher Fix identisch in
+  `Zombie._process_chase()`/`Bandit._process_chase()` angewendet (beide
+  können ebenfalls Gebäude angreifen). Noch nicht getestet.
+- **Zweiter, tieferliegender Teil desselben Bugs (2026-08-06, Nutzer-Report
+  "loot ein Haus, komm raus, bin in der Luft, laufe so zur Startbase"):**
+  der erste Fix deckte nur `_process_attack()`/`_process_harvest()` ab —
+  der eigentliche, ALLE Bewegungsbefehle durchlaufende Wegpunkt-Folger
+  (`_handle_movement()`) hatte exakt dasselbe Problem, nur eine Ebene
+  tiefer. `_waypoints[0]` kommt aus mehreren Quellen: `order_move()`/
+  `order_search()` liefern schon bodennahe Ziele (Boden-Klickpunkt bzw.
+  `SURVIVOR_GROUND_Y`), aber `_return_to_base()` setzt nach jeder Suche
+  `target.position + offset` direkt von der Home-Base/dem Außenposten —
+  beide sitzen genau wie Gebäude auf halber Höhe, nicht am Boden. Statt
+  jede einzelne Quelle separat zu flicken (auch `order_station()`/die
+  Baustellen-Zuweisung setzen `_waypoints` teils direkt aus einer
+  Gebäude-Position), jetzt EINMAL zentral in `_handle_movement()`
+  behoben: die Y-Höhe des Wegpunkt-Ziels wird für Bewegung UND
+  Ankunfts-Prüfung (`ARRIVE_THRESHOLD`) komplett ignoriert, die eigene
+  aktuelle Höhe bleibt immer bestehen — deckt dadurch automatisch JEDE
+  aktuelle und künftige Wegpunkt-Quelle ab, nicht nur die bekannten.
+  `_sidestep_position()` war davon nie betroffen (setzt `to_target.y = 0`
+  schon selbst). Noch nicht getestet.
 - **Korrektheits-Fix (2026-08-04): doppelter Ertrag verhindert** —
   `order_harvest()` hat (anders als das Markier-System unten) KEINEN
   "schon zugewiesen"-Check, mehrere Bautrupps können absichtlich oder
