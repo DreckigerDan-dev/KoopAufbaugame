@@ -170,16 +170,10 @@ const SURVIVOR_GROUND_Y := 0.85
 # Eigene, getrennte Home-Base pro Peer (ARCHITECTURE.md: "Jeder Spieler hat
 # seine eigene Basis/Kolonie, nicht geteilt") — seit der Start-Basis-Wahl
 # (siehe docs/zones.md, "Start-Basis wählen") keine festen Kartenecken mehr,
-# stattdessen wird Home-Base/Survivor-Start relativ zum gewählten Gebäude
-# platziert. BASE_CHOICE_HOME_OFFSET/BASE_CHOICE_SURVIVOR_OFFSET sind jetzt
-# reiner ZUSATZ-Abstand ÜBER die halbe Gebäude-Diagonale hinaus (siehe
-# request_choose_start_base()), NICHT mehr der komplette Abstand vom
-# Gebäude-Mittelpunkt — bei einem großen Gebäude (z. B. Supermarkt, 18m)
-# reichten die früheren festen 4,5m nicht aus, die Home-Base landete
-# buchstäblich im Gebäude drin (Nutzer-Screenshot "startbasevfehler.PNG").
-# Die halbe Diagonale (statt nur halbe Breite/Tiefe) garantiert Abstand
-# unabhängig davon, in welche Richtung "away" tatsächlich zeigt.
-const BASE_CHOICE_HOME_OFFSET := 4.5
+# stattdessen wird die Home-Base direkt am gewählten Gebäude platziert
+# (ersetzt es, siehe request_choose_start_base()). BASE_CHOICE_SURVIVOR_OFFSET
+# ist reiner ZUSATZ-Abstand ÜBER die halbe Home-Base-Diagonale hinaus, damit
+# die Start-Trupps nicht in der neuen Home-Base selbst landen.
 const BASE_CHOICE_SURVIVOR_OFFSET := 2.0
 # Boden-Y für die Home-Base (halbe Höhe, gleiches Prinzip wie
 # WATCHTOWER_GROUND_Y/ZOMBIE_BRUTE_GROUND_Y) — 2026-08-04, Nutzer-
@@ -192,6 +186,12 @@ const BASE_CHOICE_SURVIVOR_OFFSET := 2.0
 # `HomeBase.tscn`s BoxMesh/BoxShape3D auf die echten Maße angepasst, hier
 # dieselbe echte halbe Höhe statt des alten Festwerts 0.75.
 const HOME_BASE_GROUND_Y := 3.464
+# Halbe Diagonale der (überall einheitlich großen) Home-Base selbst
+# (HomeBase.tscn BoxMesh/BoxShape3D: 6,4×6,928×6,4m), NICHT die des ersetzten
+# Gebäudes — seit die Home-Base das gewählte Gebäude direkt ersetzt (siehe
+# request_choose_start_base()) ist nur noch die eigene Home-Base-Grundfläche
+# relevant, um den Start-Trupps genug Abstand zu ihr zu geben.
+const HOME_BASE_HALF_DIAGONAL := 4.525
 
 # Die früheren vier fest hinterlegten ZOMBIE_SPAWN_POINTS (Weltursprung-
 # relativ) sind mit dem Kartenumbau entfallen (siehe docs/world.md,
@@ -1356,9 +1356,9 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 # hier bleibt 1:1 zu RESOURCE_CATEGORIES.
 @onready var resource_category_labels: Array = [
 	$ResourcesUI/Panel/VBoxContainer/BuildResourcesLabel,
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Überleben/SurvivalResourcesLabel,
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Ausrüstung/GearResourcesLabel,
-	$ResourcesUI/Panel/VBoxContainer/TabContainer/Bücher/BooksResourcesLabel,
+	$MainTabsUI/Panel/TabContainer/Überleben/SurvivalResourcesLabel,
+	$MainTabsUI/Panel/TabContainer/Ausrüstung/GearResourcesLabel,
+	$MainTabsUI/Panel/TabContainer/Bücher/BooksResourcesLabel,
 ]
 # UI-Redesign Runde 4 (2026-08-05, Nutzerwunsch "oben mittig ein kleiner
 # Balken, links ein paar Tabs von oben nach unten") — Kalender/Uhr/
@@ -1389,6 +1389,13 @@ const WALL_SNAP_ENDPOINT_RADIUS := 1.0
 @onready var map_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/MapTabButton")
 @onready var event_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/EventTabButton")
 @onready var trade_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/TradeTabButton")
+# Überleben/Ausrüstung/Bücher (2026-08-05, Nutzerwunsch "kann auch nach
+# links als tabs") — vorher drei Unter-Reiter im Ressourcen-Panel oben
+# rechts, jetzt wie Wetter/Forschung/etc. eigene Buttons in der linken
+# Spalte + eigene Tabs im MainTabsUI-Overlay, siehe _ready().
+@onready var survival_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/SurvivalTabButton")
+@onready var gear_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/GearTabButton")
+@onready var books_tab_button: Button = get_node_or_null("TabColumnUI/Panel/TabButtonList/BooksTabButton")
 @onready var zombie_count_label: Label = $ResourcesUI/Panel/VBoxContainer/ZombieCountLabel
 @onready var survivor_spawner: MultiplayerSpawner = $SurvivorSpawner
 @onready var survivors_container: Node3D = $Survivors
@@ -1524,6 +1531,9 @@ var _tab_controls: Array = []
 @onready var open_map_button: Button = $MainTabsUI/Panel/TabContainer/Karte/OpenMapButton
 @onready var event_tab: Control = $MainTabsUI/Panel/TabContainer/Ereignisse
 @onready var event_list: VBoxContainer = $MainTabsUI/Panel/TabContainer/Ereignisse/EventList
+@onready var survival_tab: Control = $MainTabsUI/Panel/TabContainer/Überleben
+@onready var gear_tab: Control = $MainTabsUI/Panel/TabContainer/Ausrüstung
+@onready var books_tab: Control = $MainTabsUI/Panel/TabContainer/Bücher
 @onready var info_box_label: Label = $InfoBoxUI/Panel/Label
 # Handel (siehe docs/trading.md — Punkt 14 der Gesamtliste): Schenken
 # (sofortige einseitige Übergabe) UND echtes Tausch-Angebot (Annehmen/
@@ -1833,8 +1843,8 @@ func _ready() -> void:
 		map_tab_button.pressed.connect(toggle_map_view)
 	open_map_button.pressed.connect(toggle_map_view)
 	if weather_tab_button:
-		_tab_buttons = [weather_tab_button, research_tab_button, crafting_tab_button, build_tab_button, units_tab_button, unit_detail_tab_button, event_tab_button, trade_tab_button]
-		_tab_controls = [weather_tab, research_tab, crafting_tab, build_tab, units_tab, unit_detail_tab, event_tab, trade_tab]
+		_tab_buttons = [weather_tab_button, research_tab_button, crafting_tab_button, build_tab_button, units_tab_button, unit_detail_tab_button, event_tab_button, trade_tab_button, survival_tab_button, gear_tab_button, books_tab_button]
+		_tab_controls = [weather_tab, research_tab, crafting_tab, build_tab, units_tab, unit_detail_tab, event_tab, trade_tab, survival_tab, gear_tab, books_tab]
 		for i in _tab_buttons.size():
 			_tab_buttons[i].pressed.connect(_on_tab_button_pressed.bind(i))
 	# Kein eigener Lobby-Flow hier — Host/Join/Spielerliste/Start laufen
@@ -6546,18 +6556,16 @@ func request_choose_start_base(building_path: NodePath, requesting_peer_id: int)
 	# Building.zone_center).
 	var away := Vector3(building.position.x - building.zone_center.x, 0, building.position.z - building.zone_center.z)
 	away = away.normalized() if away.length() > 0.01 else Vector3(1, 0, 0)
-	# Größenabhängiger Abstand (siehe BASE_CHOICE_HOME_OFFSET-Kommentar oben)
-	# — halbe Gebäude-DIAGONALE statt halber Breite/Tiefe, weil "away" in
-	# eine beliebige Richtung zeigen kann (nicht nur entlang einer der
-	# beiden Gebäude-Achsen); die Diagonale ist der größte Abstand von der
-	# Mitte zu einer Ecke, deckt also jede Richtung sicher ab. Gleicher
-	# Lesezugriff auf die Mesh-Box-Größe wie in _collect_save_data() — bleibt
-	# auch bei einem echten Modell (Mesh unsichtbar, aber korrekt groß)
-	# gültig.
-	var building_size: Vector3 = (building.get_node("Mesh").mesh as BoxMesh).size
-	var half_diagonal: float = Vector2(building_size.x, building_size.z).length() / 2.0
-	var home_base_position := Vector3(building.position.x, HOME_BASE_GROUND_Y, building.position.z) + away * (half_diagonal + BASE_CHOICE_HOME_OFFSET)
-	var survivor_position := Vector3(building.position.x, SURVIVOR_GROUND_Y, building.position.z) + away * (half_diagonal + BASE_CHOICE_SURVIVOR_OFFSET)
+	# Nutzerwunsch (2026-08-05, "startbase sitzt auf der straße, soll das
+	# gebäude ersetzen"): die Home-Base steht nicht mehr NEBEN dem gewählten
+	# Gebäude (versetzt "away"), sondern direkt an dessen Position — das
+	# Gebäude selbst wird dafür weiter unten abgerissen (Building._demolish(),
+	# gleiches RPC-Muster wie beim normalen Gebäude-Abriss). Nur noch die
+	# Trupp-Startposition bleibt seitlich versetzt, jetzt relativ zur
+	# Home-Base-eigenen Grundfläche (HOME_BASE_HALF_DIAGONAL) statt zur
+	# (nach dem Abriss nicht mehr existierenden) Gebäudegröße.
+	var home_base_position := Vector3(building.position.x, HOME_BASE_GROUND_Y, building.position.z)
+	var survivor_position := Vector3(building.position.x, SURVIVOR_GROUND_Y, building.position.z) + away * (HOME_BASE_HALF_DIAGONAL + BASE_CHOICE_SURVIVOR_OFFSET)
 	var home_base := home_base_spawner.spawn({"peer_id": requesting_peer_id, "position": home_base_position})
 	# Fund 4 der Systematik-Review (2026-08-04, siehe docs/zones.md) — das
 	# gewählte Gebäude wird oben schon als geplündert markiert, sein
@@ -6569,6 +6577,11 @@ func request_choose_start_base(building_path: NodePath, requesting_peer_id: int)
 	# Startressourcen (HomeBase.START_RESOURCES) anzufassen.
 	if is_instance_valid(home_base) and not building.loot.is_empty():
 		home_base.add_resources.rpc(building.loot)
+	# Gebäude abreißen, NACHDEM sein Loot gutgeschrieben ist — die Home-Base
+	# ersetzt es jetzt komplett an seiner Position (siehe Kommentar oben bei
+	# home_base_position), ein stehenbleibendes Gebäude-Mesh an derselben
+	# Stelle wie die neue Home-Base wäre eine sichtbare Überlagerung.
+	building._demolish.rpc()
 	# Alle Start-Trupps seitlich zu "away" versetzt (90°, XZ-Ebene), NICHT
 	# mit einem festen Welt-Vektor — der könnte je nach Gebäuderichtung
 	# zurück Richtung/in das Gebäude-Mesh zeigen (Bug, vom Nutzer gemeldet:

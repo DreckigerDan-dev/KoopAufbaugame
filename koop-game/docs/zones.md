@@ -58,13 +58,15 @@ festen `HOME_BASE_POSITIONS`/`START_POSITIONS`-Kartenecken vollständig.
   `building.set_claimed_owner(peer_id)` (dasselbe Muster wie
   `claim_building()`, aber **kostenlos und ohne vorheriges Durchsuchen** —
   man startet dort, das Gebäude gilt von Anfang an als gesichert). Home-Base
-  + zwei Survivor spawnen danach in der Nähe (`BASE_CHOICE_HOME_OFFSET`/
-  `BASE_CHOICE_SURVIVOR_OFFSET`, jeweils vom Gebäude-Mittelpunkt aus in
-  Richtung von der **eigenen Zonen-Mitte** (`building.zone_center`) weg,
-  damit nichts mit dem Gebäude-Mesh überlappt — **seit dem Kartenumbau**
-  (siehe [`docs/world.md`](world.md)) zonen-relativ statt
-  weltursprung-relativ berechnet, siehe "Warum Claimen ohne
-  Abstandsprüfung" unten für den Grund dieses Fixes).
+  spawnt danach direkt an der Position des Gebäudes (siehe "Home-Base
+  ersetzt das gewählte Gebäude" unten). Die zwei Start-Survivor spawnen
+  seitlich versetzt (`BASE_CHOICE_SURVIVOR_OFFSET` + `HOME_BASE_HALF_
+  DIAGONAL`, vom Gebäude-Mittelpunkt aus in Richtung von der **eigenen
+  Zonen-Mitte** (`building.zone_center`) weg, damit nichts mit der neuen
+  Home-Base überlappt — **seit dem Kartenumbau** (siehe
+  [`docs/world.md`](world.md)) zonen-relativ statt weltursprung-relativ
+  berechnet, siehe "Warum Claimen ohne Abstandsprüfung" unten für den Grund
+  dieses Fixes).
 - **Gebäude-Loot geht an die neue Home-Base** (2026-08-04, Systematik-
   Review, Fund 4) — das gewählte Gebäude hat schon einen vorgewürfelten
   `loot` (siehe `docs/scavenging.md`, "Gebäude-Typen + Loot-Tabellen"),
@@ -75,12 +77,23 @@ festen `HOME_BASE_POSITIONS`/`START_POSITIONS`-Kartenecken vollständig.
   `HomeBase.START_RESOURCES`, nur ein kleiner thematischer Bonus je nach
   zufällig gewähltem Starttyp (z. B. etwas mehr Nahrung bei einem
   Supermarkt-Start, eine Waffe bei einem Waffenladen-Start).
-- **Home-Base bleibt ein eigener Node** neben dem gewählten Gebäude, keine
-  Verschmelzung von `Building` und `HomeBase` — das Gebäude ist optisch die
-  "Basis" (bläulich eingefärbt wie jedes andere geclaimte Gebäude), das
-  tatsächliche Ressourcen-Datenmodell (`docs/base.md`) lebt aber unverändert
-  in der separaten `HomeBase`, um den bestehenden Ressourcen-Code nicht
-  anzufassen.
+- **Home-Base ersetzt das gewählte Gebäude (2026-08-05, Nutzer-Report
+  "startbase sitzt auf der straße"):** vorher stand die Home-Base NEBEN dem
+  gewählten Gebäude (versetzt um `BASE_CHOICE_HOME_OFFSET` + halbe
+  Gebäude-Diagonale, Richtung "away" von der Zonen-Mitte) — bei vielen
+  Gebäude-/Zonen-Konstellationen landete sie dabei auf der Straße statt auf
+  freiem Baugrund. Jetzt spawnt die Home-Base exakt an der Position des
+  gewählten Gebäudes, das Gebäude selbst wird direkt danach abgerissen
+  (`building._demolish.rpc()`, gleiches RPC-Muster wie beim normalen
+  Gebäude-Abriss über `order_demolish_building()`) — keine zwei
+  überlappenden Meshes an derselben Stelle. `HOME_BASE_HALF_DIAGONAL`
+  (Konstante aus der einheitlichen `HomeBase.tscn`-Boxgröße) ersetzt dafür
+  die bisherige, gebäudespezifische `half_diagonal`-Berechnung beim
+  Trupp-Versatz, da das ursprüngliche Gebäude danach nicht mehr existiert.
+  Das Ressourcen-Datenmodell (`docs/base.md`) lebt weiterhin unverändert in
+  der separaten `HomeBase`, um den bestehenden Ressourcen-Code nicht
+  anzufassen — nur die räumliche Beziehung zum Gebäude hat sich geändert.
+  **Noch nicht getestet.**
 - **`World._spawn_for_peer()`** macht seitdem nur noch Catch-up für spät
   beitretende Peers (siehe `docs/networking.md`) — die eigene Home-Base samt
   Survivor-Start entsteht nicht mehr automatisch beim Verbinden, sondern

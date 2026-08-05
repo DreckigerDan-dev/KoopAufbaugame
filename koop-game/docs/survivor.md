@@ -437,15 +437,25 @@ Umschaltbar jederzeit über einen Button pro Trupp im Einheiten-Tab
 Basis-Bewegung (`order_move()`/`order_stop()`) bleibt für beide Typen
 uneingeschränkt.
 
-**Farblich unterscheidbar:** `_update_color()` nutzt für Bautrupps einen
-eigenen Grundton (Orange statt Weiß) statt des sonst festen
-Weiß→Rot-Verlaufs — der HP-Verlauf Richtung Rot läuft für beide Typen
-gleich, nur eben über den jeweiligen Grundton. Kein eigenes Sync-RPC
-nötig, aktualisiert sich automatisch über die ohnehin laufende
-`_sync_state()`-Replikation, sobald `set_troop_type()` den Typ ändert.
-(Historischer Absatz — seit dem Pro-Einheit-Farbton vom 2026-08-03 ist
-Trupp-Art nur noch ein Sättigung/Helligkeit-Zweitsignal, siehe
-`_unit_base_color()` unten.)
+**Farblich unterscheidbar (2026-08-05, zurück auf feste Farben je Spieler +
+Art):** `_unit_base_color()` liefert jetzt feste `Color`-Werte aus
+`PLAYER_FIELD_COLORS`/`PLAYER_BUILD_COLORS` statt des vorherigen, aus
+`trupp_id` abgeleiteten Zufalls-Farbtons (2026-08-03 – 2026-08-05,
+Nutzerwunsch damals: "unterschiedliche Farben pro Unit"). Neuer
+Nutzerwunsch: Farbe soll stattdessen SPIELER + TRUPP-ART zeigen — eigene
+Trupps immer Weiß (Feld) / Orange (Bau), Mitspieler-Trupps eines von drei
+weiteren Paaren (Blau/Gelb, Grün/Lila, Türkis/Pink), zugeordnet über
+`_player_color_index()` (0 = eigene, sonst Position in der nach Peer-ID
+sortierten Liste der anderen bekannten Spieler). `TroopType.UNASSIGNED`
+bleibt unabhängig davon einheitlich Grau. Der HP-Verlauf Richtung Rot
+(`_update_color()`) läuft weiterhin über jeden dieser Grundtöne. Kein
+eigenes Sync-RPC nötig, aktualisiert sich automatisch über die ohnehin
+laufende `_sync_state()`-Replikation. **Bekannte Einschränkung:** die
+Mitspieler-Zuordnung hängt von der eigenen Peer-ID ab (siehe Code-
+Kommentar) — ein Mitspieler kann auf verschiedenen Bildschirmen ein
+anderes Farbpaar zeigen, für eine wirklich global identische Zuordnung
+müsste der Host einen Farb-Index pro Peer verteilen. **Noch nicht
+getestet.**
 
 **Dritter Typ seit 2026-08-04: `TroopType.UNASSIGNED`** ("Zivilisten-
 Konzept") — Standardzustand jedes neuen Rekruten (nicht der Start-Trupps),

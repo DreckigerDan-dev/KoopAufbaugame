@@ -1407,30 +1407,48 @@ func become_rescue_unit(new_owner_peer_id: int) -> void:
 	_update_color()
 
 
+# Feste Farbpaare pro Spieler + Trupp-Art (2026-08-05, Nutzerwunsch "Trupps
+# nach Spieler UND Art einfärben" statt der vorherigen Zufallsfarbe pro
+# EINZELNER Einheit) — Index 0 ist immer die EIGENE Farbe, Index 1-3 gehen
+# der Reihe nach an Mitspieler (siehe _player_color_index()). Vier Paare
+# decken MAX_PLAYERS (NetworkManager.gd) komplett ab.
+const PLAYER_FIELD_COLORS: Array[Color] = [
+	Color(1.0, 1.0, 1.0),
+	Color(0.25, 0.55, 1.0),
+	Color(0.3, 0.85, 0.4),
+	Color(0.3, 0.85, 0.85),
+]
+const PLAYER_BUILD_COLORS: Array[Color] = [
+	Color(1.0, 0.6, 0.1),
+	Color(1.0, 0.9, 0.2),
+	Color(0.75, 0.35, 0.9),
+	Color(0.95, 0.35, 0.55),
+]
+
+
+func _player_color_index() -> int:
+	# 0 = eigene Trupps, sonst Position in der nach Peer-ID sortierten Liste
+	# ALLER ANDEREN aktuell bekannten Spieler (+1, damit 0 für "eigene"
+	# reserviert bleibt). Bekannte Einschränkung: hängt von der EIGENEN
+	# Peer-ID ab (welche IDs vor/nach einem selbst kommen) — ein Mitspieler
+	# kann dadurch auf verschiedenen Bildschirmen ein unterschiedliches
+	# Farbpaar bekommen. Für eine wirklich global identische Zuordnung
+	# müsste der Host einen Farb-Index pro Peer verteilen (nicht umgesetzt,
+	# reiner Kosmetik-Fix, siehe status.md).
+	var own_id := multiplayer.get_unique_id()
+	if owner_peer_id == own_id:
+		return 0
+	var others: Array = NetworkManager.players.keys().filter(func(id: int) -> bool: return id != own_id)
+	others.sort()
+	var idx := others.find(owner_peer_id)
+	return idx + 1 if idx != -1 else 0
+
+
 func _unit_base_color() -> Color:
-	# Jede Einheit bekommt eine eigene, aus trupp_id abgeleitete Farbe
-	# (Nutzerwunsch 2026-08-03: "unterschiedliche Farben pro Unit", explizit
-	# PRO EINHEIT statt pro Spieler gewählt) — rein deterministisch aus der
-	# ohnehin schon netzwerksynchronen trupp_id berechnet, kein
-	# zusätzlicher State/RPC nötig, auf allen Peers identisch. Schritt um
-	# den goldenen Schnitt sorgt für gut verteilte, unterscheidbare
-	# Farbtöne auch bei aufeinanderfolgenden IDs.
-	var hue := fmod(trupp_id * 0.6180339887, 1.0)
-	# Trupp-Art (Feld/Bau) ist ohnehin schon als Text in der Einheiten-Liste
-	# und im Detailfenster sichtbar (siehe World.gd) — Farbe hier ersetzt
-	# NICHT mehr die Trupp-Art-Unterscheidung, sondern macht zusätzlich
-	# Sättigung/Helligkeit als schwaches Zweit-Signal (Bautrupp gedeckter,
-	# bewaffneter Feldtrupp kräftiger), Haupt-Signal bleibt der Farbton
-	# selbst zur Einheiten-Unterscheidung.
-	var saturation := 0.55 if troop_type == TroopType.BUILD else 0.75
-	var value := 0.75 if troop_type == TroopType.BUILD else 0.9
 	if troop_type == TroopType.UNASSIGNED:
-		# Deutlich blasser/grauer als FIELD/BUILD — soll auf den ersten Blick
-		# als "noch nicht eingeteilt" erkennbar sein, auch ohne die
-		# Einheiten-Liste zu öffnen.
-		saturation = 0.1
-		value = 0.6
-	elif troop_type == TroopType.FIELD and is_armed:
-		saturation = 0.85
-		value = 1.0
-	return Color.from_hsv(hue, saturation, value)
+		# Deutlich blasser/grauer als FIELD/BUILD, unabhängig vom Spieler —
+		# soll auf den ersten Blick als "noch nicht eingeteilt" erkennbar
+		# sein, auch ohne die Einheiten-Liste zu öffnen.
+		return Color(0.6, 0.6, 0.6)
+	var idx := _player_color_index()
+	return PLAYER_BUILD_COLORS[idx] if troop_type == TroopType.BUILD else PLAYER_FIELD_COLORS[idx]

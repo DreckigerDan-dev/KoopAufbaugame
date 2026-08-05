@@ -13,6 +13,7 @@ size = Vector3(6.4, 6.928, 6.4)
 script = ExtResource("1")
 
 [node name="Model" parent="." instance=ExtResource("2")]
+position = Vector3(0, -3.464, 0)
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 visible = false

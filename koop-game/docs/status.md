@@ -1,3 +1,230 @@
+## Überleben/Ausrüstung/Bücher in die linke Tab-Spalte verschoben (2026-08-05)
+
+Nutzerwunsch nach dem Verschieben nach oben: Panel soll schmäler werden,
+und "Überleben"/"Ausrüstung" (Nutzer nannte diese zwei, das dritte
+eingebettete Unter-Tab "Bücher" gehört zur selben Gruppe und wurde aus
+Konsistenzgründen gleich mit verschoben — bitte melden falls das nicht so
+gewollt war) sollen als eigene Tabs in die linke Spalte wandern statt als
+Unter-Reiter im Ressourcen-Panel zu leben. Umbau:
+
+- **`ResourcesUI/Panel`**: schmäler (304px → 220px) und deutlich kürzer
+  (248px → 130px) — zeigt jetzt nur noch `Baurohstoffe` (dauerhaft) +
+  `Zombies: X/Y`, keine eingebetteten Tabs mehr.
+- **`ResourcesUI/Panel/VBoxContainer`**: von absoluten `layout_mode = 0`-
+  Offsets (`offset_top = 185`, stammte erkennbar aus einer viel älteren,
+  größeren Panel-Fassung und war seit mehreren Runden nie nachgezogen
+  worden) auf selbst-anpassendes `layout_mode = 1` mit `anchors_preset =
+  15` (Full-Rect-Füllung) umgestellt — behebt die Ursache dieser Art von
+  Veraltung strukturell, statt nur den aktuellen Zahlenwert zu korrigieren.
+- **Drei neue Buttons** in `TabColumnUI/Panel/TabButtonList`:
+  `SurvivalTabButton`/`GearTabButton`/`BooksTabButton` ("Überleben"/
+  "Ausrüstung"/"Bücher"), gleiches Muster wie die neun bestehenden.
+- **Drei neue Tabs** in `MainTabsUI/Panel/TabContainer` (`_tab_index` 9-11),
+  je ein `VBoxContainer` mit dem jeweils dorthin verschobenen Label
+  (`SurvivalResourcesLabel`/`GearResourcesLabel`/`BooksResourcesLabel`,
+  vorher unter `ResourcesUI/Panel/VBoxContainer/TabContainer/...`).
+- **`World.gd`**: neue `@onready`-Refs für alle sechs neuen Nodes, `_tab_
+  buttons`/`_tab_controls`-Arrays (siehe `_on_tab_button_pressed()`) um die
+  drei neuen Paare erweitert, `resource_category_labels`-Array-Pfade auf
+  die neue `MainTabsUI`-Position aktualisiert. Die Text-Befüllungslogik
+  selbst (`RESOURCE_CATEGORIES`-Schleife) war schon index-generisch,
+  brauchte keine Änderung.
+
+**Noch nicht getestet.**
+
+## Ressourcen-Panel nach oben verschoben, Minimap-Überlappung (2026-08-05)
+
+Nutzer-Screenshot (`bilder/rechts eck.PNG`): Ressourcen-Panel oben rechts
+(`Baurohstoffe`/`Überleben`/`Ausrüstung`-Tabs/`Zombies`-Zeile) reichte zu
+weit nach unten, überlappte mit der Minimap (unten rechts). Nutzerwunsch:
+Panel soll stattdessen ganz oben sitzen, auf gleicher Höhe wie die
+Zeit-/Pause-Leiste (`TopBarUI`, y=8–48). `ResourcesUI/Panel`s `offset_top`/
+`offset_bottom` von `141`/`389` auf `8`/`256` gesetzt (Höhe unverändert
+248px, nur nach oben verschoben) — praktisch wieder der Stand von vor
+Runde 4 (Backup hatte `offset_top = 8`). **Noch nicht getestet.**
+
+## Einheiten-Tab: linker Rand, Nachbesserung (2026-08-05)
+
+Nutzer-Retest (`bilder/einheiten.PNG`, 22:27) nach dem ersten Puffer-Fix
+(offset_left 4→16): "Gruppe 1"/"Neue Rekruten:"/"Wähl." jetzt vollständig
+sichtbar — Fix wirkt also grundsätzlich. Aber: die dynamisch per Code
+erzeugte Trupp-Zeile (`_refresh_units_ui()`, `label.text = "T%d %s
+HP%d..."`) zeigt weiterhin "0 Feld HP100..." statt "T0 Feld HP100...",
+genau ein Buchstabe fehlt. Erklärung für den Unterschied: `Button`-Nodes
+(wie "Wähl.") haben von Godot aus einen eigenen kleinen Innenabstand in
+ihrer StyleBox, zusätzlich zum gemeinsamen Panel-Puffer — reicht schon bei
++12px. Ein reines `Label` (wie diese Trupp-Zeile) hat KEINEN eigenen
+Innenabstand, Text beginnt exakt an der Container-Kante — bei +12px reicht
+das knapp nicht, um den einzelnen "T"-Buchstaben (~8-10px breit) komplett
+freizulegen. Bestätigt die grundsätzliche Diagnose (Versatz zwischen
+Panel-Clip-Bereich und Inhalt), nur die Puffergröße war noch knapp zu
+klein. Fix: `offset_left` von 16 auf 28 erhöht. **Noch nicht erneut
+getestet.**
+
+## Einheiten-Tab: linker Rand abgeschnitten, Verdachts-Fix (2026-08-05)
+
+Nutzer-Screenshot (`bilder/einheiten.PNG`, nach Rückfrage bestätigt: kein
+Zuschnitt-Artefakt, tritt im echten Fenster auf) zeigt konsequent den
+ERSTEN Buchstaben jeder Zeile abgeschnitten ("Gruppe 1" → "ruppe 1", "Neue
+Rekruten" → "eue Rekruten", "Wähl." → "ähl."). Wichtiges Unterscheidungs-
+merkmal: abgeschnitten wird der ANFANG, nicht das Ende der Texte — normales
+"Text zu lang für die Box"-Clipping (clip_text) schneidet immer am Ende,
+nie am Anfang. Spricht für einen kleinen Versatz zwischen dem sichtbaren
+Bereich von `MainTabsUI/Panel` (`clip_contents = true`) und seinem
+tatsächlichen Inhalt, nicht für zu wenig Breite insgesamt. **Kann ohne
+Editor-Zugriff nicht zweifelsfrei bestätigt werden** — Verdachts-Fix statt
+gesicherter Diagnose: `TabContainer`s `offset_left` (Innenabstand zum
+Panel-Rand) von 4 auf 16 erhöht, als Sicherheitspuffer gegen genau diesen
+Versatz. **Nutzer bitte explizit um Rückmeldung, ob das den Effekt
+tatsächlich behebt** — falls nicht, ist die eigentliche Ursache woanders zu
+suchen.
+
+## Home-Base ersetzt gewähltes Gebäude statt daneben zu stehen (2026-08-05)
+
+Nutzerwunsch nach drei gesammelten Punkten ("start gebäude muss versetzt
+werden ... startbase die sitzt auf der straße ... soll die startbase das
+gebäude ersetzen"), Priorität 1 von dreien (siehe zwei Einträge weiter
+unten für die anderen beiden, noch offen). Ursache: `request_choose_start_
+base()` platzierte die Home-Base bisher NEBEN dem gewählten Gebäude
+(`away`-Richtung von der Zonen-Mitte, `BASE_CHOICE_HOME_OFFSET` + halbe
+Gebäude-Diagonale) — landete je nach Gebäude-/Straßen-Lage sichtbar auf der
+Straße. Fix: Home-Base spawnt jetzt exakt an der Gebäude-Position, das
+Gebäude wird direkt danach abgerissen (`building._demolish.rpc()`, ersetzt
+es also wirklich statt daneben zu stehen). Trupp-Startversatz nutzt jetzt
+die neue Konstante `HOME_BASE_HALF_DIAGONAL` (aus `HomeBase.tscn`s eigener,
+einheitlicher Boxgröße) statt der gebäudespezifischen Diagonale, da das
+Gebäude danach nicht mehr existiert. `BASE_CHOICE_HOME_OFFSET`-Konstante
+entfernt (nicht mehr gebraucht). Details in [`zones.md`](zones.md),
+"Start-Basis wählen". **Noch nicht getestet** — als Nächstes: Punkt 2
+(Trupps spawnen im Haus statt davor) und Punkt 3 (Einheiten-Tab-Inhalte
+teilweise außerhalb des sichtbaren Bereichs).
+
+## Editor-Workflow-Anleitung ergänzt (2026-08-05)
+
+Nutzer meldet, der `HUD.layer = 0`-Fix (siehe Eintrag direkt unten) wirkt
+immer noch nicht — Datei-Check bestätigt: der Wert steht nach wie vor
+korrekt in `World.tscn`. Wahrscheinlichste Erklärung: `World.tscn` war
+beim externen Schreiben durch Claude im Editor offen, der Editor testet
+dann weiter seinen alten Stand im Speicher (gleiches Prinzip wie die
+"vanished parent"-Fälle, nur umgekehrt — nicht der externe Fix geht
+verloren, sondern er wird schlicht nicht geladen, bis die Szene neu
+geöffnet wird). Nutzerwunsch: eine Anleitung, um solche kleinen
+Eigenschaften-Fixes künftig selbst im Editor nachvollziehen/setzen zu
+können, statt auf Textdatei-Bearbeitung angewiesen zu sein. Neu:
+[`editor-workflow.md`](editor-workflow.md) — Faustregel zum sicheren
+Neuladen extern geänderter Szenen, plus konkrete Schritt-für-Schritt-
+Anleitung für den `HUD`/`Layer`-Fall (Inspector → CanvasLayer → Layer),
+plus allgemeines Muster für beliebige andere Node-Eigenschaften.
+
+## HUD-Text scheint durchs Tab-Overlay durch (2026-08-05)
+
+Nutzer bestätigt vorherigen Fix ("deutlich besser"), neuer Screenshot
+(`bilder/einheiten.PNG`) zeigt: im "Einheiten"-Tab (weitgehend leer, da
+noch keine Einheiten rekrutiert) scheint `HUD/BaseChoiceLabel` ("...deine
+Start-Basis — klicke auf eines der Geb...") direkt durch das
+`MainTabsUI/Panel`-Overlay durch, kaum lesbar. Ursache: alle `CanvasLayer`-
+Nodes (`HUD`, `ResourcesUI`, `TopBarUI`, `TabColumnUI`, `MainTabsUI`,
+`InfoBoxUI`) hatten nie einen expliziten `layer`-Wert, liefen also alle auf
+dem Godot-Default — die Zeichenreihenfolge zwischen gleichrangigen
+CanvasLayers ist dann nicht zuverlässig garantiert. Fix: `HUD` bekommt
+`layer = 0` (alle anderen bleiben auf Default/1), damit Hintergrund-HUD-
+Texte immer HINTER den übrigen UI-Layern liegen, nie davor. **Noch nicht
+getestet.**
+
+## Doppelte Tab-Kopfzeile + zu große Schrift im Overlay behoben (2026-08-05)
+
+Nutzer-Screenshot (`bilder/kompakt.PNG`) nach dem Balken-Fix: Balken war
+weg, aber zwei neue Probleme sichtbar. (1) Über dem Tab-Inhalt erschien
+eine zweite, eingebaute Tab-Kopfzeile ("Einheiten Handel Wetter
+Forschung") zusätzlich zur linken Tab-Spalte (`TabColumnUI`) — Ursache:
+`TabContainer.tabs_visible = false` (ursprünglich extra gesetzt, um genau
+das zu verhindern, siehe Eintrag "IFZ-Stil-Overlay" weiter unten) fehlte
+komplett in `World.tscn`, wieder dieselbe Editor-Speicher-Falle wie schon
+zweimal zuvor in dieser Session. (2) Schrift im ganzen Overlay zu groß
+(Godot-Standard 16 statt kompakt) — Ursache: das gemeinsame Kompakt-Theme
+wurde vor zwei Runden komplett entfernt (hatte einen Ladefehler
+verursacht), seitdem hat der Tab-Inhalt keine Schriftgrößen-Vorgabe mehr.
+Fix für beides: `tabs_visible = false` am `TabContainer` wieder ergänzt;
+für die Schrift diesmal KEIN gemeinsames `Theme`-Sub-Resource (Ursache des
+früheren Ladefehlers), sondern ein einfacher
+`theme_override_font_sizes/font_size = 13`-Eigenschaftswert direkt am
+`MainTabsUI/Panel`-Node (kaskadiert auf alle Kind-Controls ohne eigene
+Font-Size, keine separate Theme-Resource, gleiches risikoarme Muster wie
+schon bei einzelnen Labels im Ressourcen-Panel verwendet). **Noch nicht
+getestet.**
+
+## Trupp-Farben: fest pro Spieler + Trupp-Art (2026-08-05)
+
+Nutzerwunsch vor dem geplanten Freundes-Test: Trupps sollen nicht mehr pro
+EINZELNER Einheit zufällig eingefärbt sein (Stand seit 2026-08-03), sondern
+klar zeigen WEM ein Trupp gehört und OB er Feld- oder Bautrupp ist —
+"eigene Trupps weiß, Bautrupps orange, bei anderen Spielern z. B. blau/gelb,
+für jeden Spieler eine eigene Farbe". `Survivor._unit_base_color()`
+komplett umgebaut: feste `Color`-Paare (`PLAYER_FIELD_COLORS`/
+`PLAYER_BUILD_COLORS`) statt der bisherigen `trupp_id`-Hash-Farbe. Index 0
+(Weiß/Orange) ist immer der EIGENE Spieler, Index 1-3 gehen an Mitspieler,
+zugeordnet über die nach Peer-ID sortierte Liste aller anderen bekannten
+`NetworkManager.players` (deckt `MAX_PLAYERS := 4` komplett ab). Zivilisten
+(`UNASSIGNED`) bleiben unabhängig davon einheitlich grau. Details +
+bekannte Einschränkung (Mitspieler-Zuordnung ist nicht zwingend auf jedem
+Bildschirm identisch, reiner Kosmetik-Fix) in [`survivor.md`](survivor.md).
+**Noch nicht getestet.**
+
+## Schwarzer Balken über den ganzen Bildschirm behoben (2026-08-05)
+
+Nutzer-Screenshots (`bilder/balken.PNG`, `bilder/schwrzerbalken.PNG`) zeigten
+einen dunklen Balken quer über die volle Bildschirmbreite, genau über der
+"Wähle deine Start-Basis"-Meldung. Ursache: `ResourcesUI/Panel` (das
+Ressourcen-Panel oben rechts) hatte seit der UI-Redesign-Runde 4
+`anchors_preset = 10` ("Top Wide", volle Breite) statt `1` ("Top Right",
+Ecke oben rechts) — `anchor_left = 1.0` fehlte, war beim Umbau
+verlorengegangen (gleiche Fehlerklasse wie die bereits dokumentierten
+"vanished parent"-Probleme dieser Runde). Vergleich mit dem Stand vor
+Runde 4 (`koop-game-backup-2026-08-04.tar.gz`) bestätigte: dort war
+`anchor_left = 1.0` UND `anchor_right = 1.0` gesetzt (rechts angepinnt).
+Fix: `anchors_preset = 1`, `anchor_left = 1.0` ergänzt, `offset_left`/
+`offset_right` auf einen 304px breiten, rechts angepinnten Bereich
+korrigiert (`-312`/`-8`), `offset_top`/`offset_bottom` unverändert vom
+Nutzer-Stand übernommen. **Achtung:** Datei wurde beim Bearbeiten zwischen
+Lesen und Schreiben bereits einmal von außen verändert (vermutlich Godot-
+Editor offen) — falls `World.tscn` gerade im Editor offen ist, vor dem
+nächsten Speichern dort neu öffnen, sonst geht dieser Fix wieder verloren
+(bekannte Falle, siehe Eintrag weiter unten). **Noch nicht getestet.**
+
+## Start-Haus schwebte über der Kollisionsbox (2026-08-05)
+
+Nutzer-Report "das Start-Haus ist verschoben und in der Luft". Ursache im
+glTF selbst geprüft (Python-Skript liest die POSITION-Accessor-Min/Max-
+Werte direkt aus `startbasetest.glb`): der Modell-Ursprung liegt an der
+BASIS (lokale Y läuft 0 bis 6,928), nicht in der Mitte. `HomeBase.tscn`s
+`Model`-Kind hatte aber nie den bei allen anderen Gebäuden längst
+etablierten Ausgleich (`_model_min_y()`-Pattern aus `_create_building()`,
+siehe Apotheke/Wohnhaus/Supermarkt) — HomeBase läuft nicht über
+`_create_building()`, wurde beim Verallgemeinern übersehen. Die
+unsichtbare Mesh/Collision-Box (`BoxMesh_homebase`/`BoxShape3D_homebase`,
+zentriert) blieb dadurch korrekt am Boden (`HOME_BASE_GROUND_Y := 3.464`
+hebt die zentrierte Box exakt auf 0–6,928), aber das sichtbare `Model`
+erbte dieselbe +3,464-Verschiebung zusätzlich zu seinem eigenen
+Basis-Ursprung — schwebte dadurch komplett über der eigentlichen
+(unsichtbaren) Kollisionsbox. Fix: `Model`-Node in `HomeBase.tscn`
+bekommt `position = Vector3(0, -3.464, 0)`, exakt das Gegenstück zur
+`HOME_BASE_GROUND_Y`-Anhebung des Elternknotens. Noch nicht getestet.
+
+## UI-Redesign Runde 4: großes leeres Overlay-Panel behoben (2026-08-05)
+
+Nutzer-Screenshot (`bilder/ui überarbeitung.PNG`) nach dem ersten Test von
+Runde 4: linke Tab-Spalte sitzt korrekt, aber ein großes dunkles,
+leeres Rechteck in der Bildschirmmitte darunter. Ursache: `MainTabsUI/
+Panel` fehlte in `World.tscn` das `visible = false` — Godot-Default für
+neue Panel-Nodes ist `visible = true`, das Overlay (soll laut
+`_on_tab_button_pressed()` in `World.gd:5505` nur bei Tab-Klick
+erscheinen) war dadurch von Anfang an sichtbar, nur ohne aktiven Tab
+also leer. Fix: `visible = false` beim Panel-Node ergänzt. **Achtung
+beim nächsten Editor-Speichern:** genau dieses Attribut ging in einer
+früheren Runde schon mal durchs Editor-Speichern verloren (siehe
+Eintrag "Zweiter Nachtrag" weiter unten) — `World.tscn` vor dem
+nächsten Speichern im Editor neu öffnen. Noch nicht erneut getestet.
+
 ## AKTUELL OFFEN: UI-Redesign Runde 4 — neues Layout, noch nicht getestet (2026-08-05)
 
 **Für die nächste Session, falls der Chat geleert wurde:** Statt den
